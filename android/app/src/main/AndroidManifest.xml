@@ -1,0 +1,79 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <queries>
+        <!-- Easypaisa -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="easypaisa" />
+        </intent>
+        <package android:name="pk.com.telenor.phoenix" />
+
+        <!-- JazzCash -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="jazzcash" />
+        </intent>
+        <package android:name="com.jazzcash.wallet" />
+
+        <!-- Meezan -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="meezanbank" />
+        </intent>
+        <package android:name="com.meezanbank.mapp" />
+
+        <!-- HBL -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="hblmobilebanking" />
+        </intent>
+        <package android:name="com.hbl.android.bank" />
+
+        <!-- UBL -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="ubldigital" />
+        </intent>
+        <package android:name="com.innovate.ublinsight" />
+
+        <!-- Bank Alfalah -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="alfalahdigital" />
+        </intent>
+        <package android:name="com.bankalfalah.omni" />
+    </queries>
+
+    <application
+        android:usesCleartextTraffic="true"
+      android:name=".MainApplication"
+      android:label="@string/app_name"
+      android:icon="@mipmap/ic_launcher"
+      android:roundIcon="@mipmap/ic_launcher_round"
+      android:allowBackup="false"
+      android:theme="@style/AppTheme"
+      android:supportsRtl="true">
+      <meta-data
+        android:name="com.google.firebase.messaging.default_notification_channel_id"
+        android:value="high_priority_notifications"
+        tools:replace="android:value" />
+
+      <activity
+        android:name=".MainActivity"
+        android:label="@string/app_name"
+        android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
+        android:launchMode="singleTask"
+        android:windowSoftInputMode="adjustResize"
+        android:theme="@style/SplashTheme"
+        android:exported="true">
+        <intent-filter>
+          <action android:name="android.intent.action.MAIN" />
+          <category android:name="android.intent.category.LAUNCHER" />
+        </intent-filter>
+      </activity>
+    </application>
+
+</manifest>
