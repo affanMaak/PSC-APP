@@ -22,12 +22,93 @@ import Swiper from 'react-native-swiper';
 
 const { width } = Dimensions.get('window');
 
-const TimingTable = ({ data, title }) => {
-    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+// Helper to check if HTML content is effectively empty
+const isHtmlEmpty = (html) => {
+    if (!html) return true;
+    // Strip tags and trim to see if any actual text exists
+    const stripped = html.replace(/<[^>]*>?/gm, '').replace(/&nbsp;/g, ' ').trim();
+    return stripped.length === 0;
+};
+
+// Helper function to format currency
+const formatCurrency = (amount) => {
+    if (!amount && amount !== 0) return '0.00';
+    const num = parseFloat(amount) || 0;
+    return new Intl.NumberFormat('en-PK', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    }).format(num);
+};
+
+// Helper function to get charge type label
+const getChargeLabel = (type) => {
+    if (!type) return 'N/A';
+    const types = {
+        PER_DAY: 'Per Day',
+        PER_MONTH: 'Per Month',
+        PER_GAME: 'Per Game',
+        PER_HOUR: 'Per Hour',
+        PER_SESSION: 'Per Session',
+    };
+    return types[type] || type.replace(/_/g, ' ').toLowerCase();
+};
+
+const RatesTable = ({ data, title }) => {
+    if (!data) return null;
+
+    const rateRows = [
+        { label: 'Member', value: data.memberCharges },
+        { label: 'Spouse', value: data.spouseCharges },
+        { label: 'Children', value: data.childrenCharges },
+        { label: 'Guest', value: data.guestCharges },
+        { label: 'Affiliated Clubs', value: data.affiliatedClubCharges },
+    ];
 
     return (
         <View style={styles.tableWrapper}>
-            {title && <Text style={styles.tableMainTitle}>{title}</Text>}
+            {title && <Text style={styles.tableMainTitle}>{title.toUpperCase()}</Text>}
+            <View style={styles.tableContainer}>
+                {/* Header Row */}
+                <View style={styles.tableHeader}>
+                    <Text style={[styles.headerText, { flex: 2 }]}>CATEGORY</Text>
+                    <Text style={[styles.headerText, { flex: 1.2, textAlign: 'right' }]}>CHARGE</Text>
+                </View>
+
+                {/* Data Rows */}
+                {rateRows.map((row, index) => {
+                    const val = parseFloat(row.value) || 0;
+                    return (
+                        <View key={row.label} style={[styles.tableRow, index === rateRows.length - 1 && { borderBottomWidth: 0 }]}>
+                            <Text style={[styles.rowDayText, { flex: 2 }]}>{row.label}</Text>
+                            <Text style={[styles.rowTimeText, { flex: 1.2, textAlign: 'right', fontWeight: 'bold', color: val === 0 ? '#A3834C' : '#333' }]}>
+                                {val === 0 ? 'Free' : `PKR ${formatCurrency(row.value)}`}
+                            </Text>
+                        </View>
+                    );
+                })}
+            </View>
+        </View>
+    );
+};
+
+const TimingTable = ({ data, title }) => {
+    const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+    const dayLabels = {
+        monday: 'Mon',
+        tuesday: 'Tue',
+        wednesday: 'Wed',
+        thursday: 'Thu',
+        friday: 'Fri',
+        saturday: 'Sat',
+        sunday: 'Sun'
+    };
+
+    // Check if there's data for at least one day
+    const hasAnyData = days.some(day => data[day]);
+    if (!hasAnyData) return null;
+    return (
+        <View style={styles.tableWrapper}>
+            {title && <Text style={styles.tableMainTitle}>{title.toUpperCase()}</Text>}
             <View style={styles.tableContainer}>
                 {/* Header Row */}
                 <View style={styles.tableHeader}>
@@ -38,8 +119,7 @@ const TimingTable = ({ data, title }) => {
 
                 {/* Data Rows */}
                 {days.map((day, index) => {
-                    const dayKey = day.toLowerCase();
-                    const dayData = data[dayKey];
+                    const dayData = data[day];
                     if (!dayData) return null;
 
                     const isClosed = dayData.isClosed;
@@ -47,7 +127,7 @@ const TimingTable = ({ data, title }) => {
 
                     return (
                         <View key={day} style={[styles.tableRow, index === days.length - 1 && { borderBottomWidth: 0 }]}>
-                            <Text style={[styles.rowDayText, { flex: 1.2 }]}>{day}</Text>
+                            <Text style={[styles.rowDayText, { flex: 1.2 }]}>{dayLabels[day]}</Text>
                             <Text style={[styles.rowTimeText, { flex: 2, color: isClosed ? '#AAA' : '#333' }]}>
                                 {timeRange}
                             </Text>
@@ -85,39 +165,11 @@ const SportDetailsScreen = ({ route }) => {
     const tabs = [
         { key: 'More About', title: 'More About' },
         { key: 'overview', title: 'Overview' },
-
-        // { key: 'pricing', title: 'Pricing' },
-        // { key: 'timing', title: 'Timing' },
-        // { key: 'rules', title: 'Rules' },
     ];
 
-    // Debug log to see what data we're receiving
     useEffect(() => {
         console.log('Sport details data:', JSON.stringify(sport, null, 2));
     }, [sport]);
-
-    // Helper function to format currency
-    const formatCurrency = (amount) => {
-        if (!amount && amount !== 0) return '0.00';
-        const num = parseFloat(amount) || 0;
-        return new Intl.NumberFormat('en-PK', {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-        }).format(num);
-    };
-
-    // Helper function to get charge type label
-    const getChargeLabel = (type) => {
-        if (!type) return 'N/A';
-        const types = {
-            PER_DAY: 'Per Day',
-            PER_MONTH: 'Per Month',
-            PER_GAME: 'Per Game',
-            PER_HOUR: 'Per Hour',
-            PER_SESSION: 'Per Session',
-        };
-        return types[type] || type.replace('_', ' ').toLowerCase();
-    };
 
     // Helper function to format day name
     const formatDayName = (day) => {
@@ -172,25 +224,11 @@ const SportDetailsScreen = ({ route }) => {
 
         switch (type) {
             case 'rates':
-                // Build rates sections from backend data
-                const rateSections = [];
-                charges.forEach((charge) => {
-                    const items = [
-                        `Member - ${formatCurrency(charge.memberCharges || 0)}`,
-                        `Spouse - ${formatCurrency(charge.spouseCharges || 0)}`,
-                        `Children - ${formatCurrency(charge.childrenCharges || 0)}`,
-                        `Guest - ${formatCurrency(charge.guestCharges || 0)}`,
-                        `Affiliated Clubs - ${formatCurrency(charge.affiliatedClubCharges || 0)}`,
-                    ];
-                    rateSections.push({
-                        subtitle: getChargeLabel(charge.chargeType),
-                        items: items
-                    });
-                });
                 content = {
                     title: 'Rates',
-                    sections: rateSections.length > 0 ? rateSections : null,
-                    data: rateSections.length === 0 ? ['No rates available'] : []
+                    isRates: true,
+                    charges: charges,
+                    data: charges.length === 0 ? ['No rates available'] : []
                 };
                 break;
 
@@ -207,40 +245,30 @@ const SportDetailsScreen = ({ route }) => {
 
             case 'dressCode':
                 const dressCodeSections = [];
-
-                if (sport.dressCodeDos) {
+                if (!isHtmlEmpty(sport.dressCodeDos)) {
                     dressCodeSections.push({
                         subtitle: "Do's",
                         htmlContent: sport.dressCodeDos
                     });
                 }
-
-                if (sport.dressCodeDonts) {
-                    dressCodeSections.push({
-                        subtitle: "Don'ts",
-                        htmlContent: sport.dressCodeDonts
-                    });
-                }
-
                 content = {
                     title: 'Dress Code',
                     sections: dressCodeSections.length > 0 ? dressCodeSections : null,
                     data: dressCodeSections.length === 0 ? ['No dress code information available'] : [],
-                    isHtml: true
+                    isHtml: true,
+                    hideSubtitles: true
                 };
                 break;
 
             case 'dosAndDonts':
                 const ruleSections = [];
-
-                if (sport.dos) {
+                if (!isHtmlEmpty(sport.dos)) {
                     ruleSections.push({
                         subtitle: "Do's",
                         htmlContent: sport.dos
                     });
                 }
-
-                if (sport.donts) {
+                if (!isHtmlEmpty(sport.donts)) {
                     ruleSections.push({
                         subtitle: "Don'ts",
                         htmlContent: sport.donts
@@ -267,9 +295,9 @@ const SportDetailsScreen = ({ route }) => {
     // Render More About Tab
     const renderMoreAboutTab = () => (
         <View style={styles.moreAboutContainer}>
-            <Text style={styles.moreAboutTitle}>
+            {/* <Text style={styles.moreAboutTitle}>
                 MORE ABOUT <Text style={styles.moreAboutTitleGold}>SPORTS</Text>
-            </Text>
+            </Text> */}
 
             {/* Info Cards Grid */}
             <View style={styles.cardsContainer}>
@@ -396,6 +424,7 @@ const SportDetailsScreen = ({ route }) => {
     // Pricing Tab Content
     const renderPricingTab = () => {
         const charges = getCharges();
+        console.log('charges', charges);
 
         if (charges.length === 0) {
             return (
@@ -415,7 +444,7 @@ const SportDetailsScreen = ({ route }) => {
                             <Text style={styles.chargeType}>{getChargeLabel(charge.chargeType)}</Text>
                             <View style={styles.priceBadge}>
                                 <Text style={styles.priceBadgeText}>
-                                    PKR {formatCurrency(charge.memberCharges || 0)}
+                                    {parseFloat(charge.memberCharges) === 0 ? 'Free' : `PKR ${formatCurrency(charge.memberCharges || 0)}`}
                                 </Text>
                             </View>
                         </View>
@@ -423,23 +452,33 @@ const SportDetailsScreen = ({ route }) => {
                         <View style={styles.chargeDetails}>
                             <View style={styles.chargeRow}>
                                 <Text style={styles.chargeLabel}>Member:</Text>
-                                <Text style={styles.chargeValue}>PKR {formatCurrency(charge.memberCharges || 0)}</Text>
+                                <Text style={[styles.chargeValue, parseFloat(charge.memberCharges) === 0 && { color: '#A3834C' }]}>
+                                    {parseFloat(charge.memberCharges) === 0 ? 'Free' : `PKR ${formatCurrency(charge.memberCharges || 0)}`}
+                                </Text>
                             </View>
                             <View style={styles.chargeRow}>
                                 <Text style={styles.chargeLabel}>Spouse:</Text>
-                                <Text style={styles.chargeValue}>PKR {formatCurrency(charge.spouseCharges || 0)}</Text>
+                                <Text style={[styles.chargeValue, parseFloat(charge.spouseCharges) === 0 && { color: '#A3834C' }]}>
+                                    {parseFloat(charge.spouseCharges) === 0 ? 'Free' : `PKR ${formatCurrency(charge.spouseCharges || 0)}`}
+                                </Text>
                             </View>
                             <View style={styles.chargeRow}>
                                 <Text style={styles.chargeLabel}>Children:</Text>
-                                <Text style={styles.chargeValue}>PKR {formatCurrency(charge.childrenCharges || 0)}</Text>
+                                <Text style={[styles.chargeValue, parseFloat(charge.childrenCharges) === 0 && { color: '#A3834C' }]}>
+                                    {parseFloat(charge.childrenCharges) === 0 ? 'Free' : `PKR ${formatCurrency(charge.childrenCharges || 0)}`}
+                                </Text>
                             </View>
                             <View style={styles.chargeRow}>
                                 <Text style={styles.chargeLabel}>Guest:</Text>
-                                <Text style={styles.chargeValue}>PKR {formatCurrency(charge.guestCharges || 0)}</Text>
+                                <Text style={[styles.chargeValue, parseFloat(charge.guestCharges) === 0 && { color: '#A3834C' }]}>
+                                    {parseFloat(charge.guestCharges) === 0 ? 'Free' : `PKR ${formatCurrency(charge.guestCharges || 0)}`}
+                                </Text>
                             </View>
                             <View style={styles.chargeRow}>
                                 <Text style={styles.chargeLabel}>Affiliated Club:</Text>
-                                <Text style={styles.chargeValue}>PKR {formatCurrency(charge.affiliatedClubCharges || 0)}</Text>
+                                <Text style={[styles.chargeValue, parseFloat(charge.affiliatedClubCharges) === 0 && { color: '#A3834C' }]}>
+                                    {parseFloat(charge.affiliatedClubCharges) === 0 ? 'Free' : `PKR ${formatCurrency(charge.affiliatedClubCharges || 0)}`}
+                                </Text>
                             </View>
                         </View>
                     </View>
@@ -467,7 +506,12 @@ const SportDetailsScreen = ({ route }) => {
 
         return (
             <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
-                {hasGentsTiming && <TimingTable data={timingGents} title="Gents Timing" />}
+                {hasGentsTiming && (
+                    <TimingTable
+                        data={timingGents}
+                        title={sport.activity?.toLowerCase() === 'martial arts' ? '' : 'Gents Timing'}
+                    />
+                )}
                 {hasLadiesTiming && <TimingTable data={timingLadies} title="Ladies Timing" />}
                 {sport.closedDay && (
                     <Text style={styles.closedDayNotice}>Note: Closed on {sport.closedDay}</Text>
@@ -747,11 +791,26 @@ const SportDetailsScreen = ({ route }) => {
                             </View>
 
                             {/* Modal Content - Check if sections exist (for Rates/Dress Code/Rules) */}
-                            {moreAboutModalContent.sections ? (
+                            {moreAboutModalContent.isRates ? (
+                                <ScrollView style={styles.moreAboutModalScrollView} showsVerticalScrollIndicator={false}>
+                                    {moreAboutModalContent.charges.map((charge, index) => (
+                                        <RatesTable
+                                            key={index}
+                                            data={charge}
+                                            title={getChargeLabel(charge.chargeType)}
+                                        />
+                                    ))}
+                                    {moreAboutModalContent.charges.length === 0 && (
+                                        <Text style={{ textAlign: 'center', marginTop: 20, color: '#666' }}>No rates available</Text>
+                                    )}
+                                </ScrollView>
+                            ) : moreAboutModalContent.sections ? (
                                 <ScrollView style={styles.moreAboutModalScrollView} showsVerticalScrollIndicator={false}>
                                     {moreAboutModalContent.sections.map((section, sectionIndex) => (
                                         <View key={sectionIndex} style={styles.moreAboutSectionContainer}>
-                                            <Text style={styles.moreAboutModalSubtitle}>{section.subtitle}</Text>
+                                            {section.subtitle && !moreAboutModalContent.hideSubtitles ? (
+                                                <Text style={styles.moreAboutModalSubtitle}>{section.subtitle}</Text>
+                                            ) : null}
                                             <View style={styles.moreAboutModalContent}>
                                                 {moreAboutModalContent.isHtml ? (
                                                     <HtmlRenderer
@@ -787,7 +846,10 @@ const SportDetailsScreen = ({ route }) => {
                             ) : moreAboutModalContent.isTiming ? (
                                 <ScrollView style={styles.moreAboutModalScrollView} showsVerticalScrollIndicator={false}>
                                     {moreAboutModalContent.gentsTiming && (
-                                        <TimingTable data={moreAboutModalContent.gentsTiming} title="Gents Timing" />
+                                        <TimingTable
+                                            data={moreAboutModalContent.gentsTiming}
+                                            title={sport.activity?.toLowerCase() === 'martial arts' ? '' : 'Gents Timing'}
+                                        />
                                     )}
                                     {moreAboutModalContent.ladiesTiming && (
                                         <TimingTable data={moreAboutModalContent.ladiesTiming} title="Ladies Timing" />
@@ -1351,7 +1413,7 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: '#C4A570',
         fontWeight: '600',
-        marginBottom: 15,
+        marginBottom: 2,
     },
     moreAboutModalContent: {
         paddingLeft: 5,
@@ -1360,7 +1422,7 @@ const styles = StyleSheet.create({
         maxHeight: 400,
     },
     moreAboutSectionContainer: {
-        marginBottom: 15,
+        marginBottom: 8,
     },
     moreAboutListItem: {
         flexDirection: 'row',

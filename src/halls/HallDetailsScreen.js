@@ -59,12 +59,8 @@ const HallDetailsScreen = ({ navigation, route }) => {
               <Icon name="arrow-back" size={28} color="#000" />
             </TouchableOpacity>
             <Text style={styles.headerText}>{name || 'Hall Details'}</Text>
-            <TouchableOpacity
-              style={styles.notificationButton}
-              activeOpacity={0.7}
-            >
-              <Icon name="notifications-outline" size={26} color="#000" />
-            </TouchableOpacity>
+            {/* Placeholder to balance the back button and center the text */}
+            <View style={{ width: 40 }} />
           </View>
         </ImageBackground>
 
@@ -125,13 +121,13 @@ const HallDetailsScreen = ({ navigation, route }) => {
               <Text style={styles.pricingTitle}>Booking Charges</Text>
               <View style={styles.priceContainer}>
                 <View style={styles.priceItem}>
-                  <Text style={styles.priceLabel}>Member Price</Text>
+                  <Text style={styles.priceLabel}>Member Charges</Text>
                   <Text style={styles.priceValue}>Rs. {memberPrice?.toLocaleString() || 'N/A'}</Text>
                 </View>
                 {(!isExclusive && guestPrice > 0) && <>
                   <View style={styles.priceDivider} />
                   <View style={styles.priceItem}>
-                    <Text style={styles.priceLabel}>Guest Price</Text>
+                    <Text style={styles.priceLabel}>Guest Charges</Text>
                     <Text style={styles.priceValue}>Rs. {guestPrice?.toLocaleString() || 'N/A'}</Text>
                   </View>
                 </>}

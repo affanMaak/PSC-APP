@@ -202,7 +202,7 @@ const SportsScreen = ({ navigation }) => {
 
 
           <View>
-            {item.sportCharge && item.sportCharge.length > 0 && item.sportCharge[0]?.guestCharges && (
+            {/* {item.sportCharge && item.sportCharge.length > 0 && item.sportCharge[0]?.guestCharges && (
             <View style={styles.chargesContainer}>
               <Text style={styles.chargesTitle}>Charges:</Text>
               <Text style={styles.chargesPrice}>
@@ -212,11 +212,10 @@ const SportsScreen = ({ navigation }) => {
                 /{item.sportCharge[0]?.chargeType?.toLowerCase().replace('per_', '') || 'session'}
               </Text>
             </View>
-          )}
+          )} */}
 
           {item.timing && (
             <View style={styles.timingContainer}>
-              {/* <Icon name="schedule" size={14} color="rgba(255,255,255,0.9)" /> */}
               <Text style={styles.timingText} numberOfLines={1}>
                 {item.timing.weekdays || item.timing.men || 'View Details'}
               </Text>

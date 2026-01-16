@@ -305,14 +305,14 @@ const Lawn = ({ navigation }) => {
           {/* View Details Button */}
           <View style={styles.viewDetailsButton}>
             <Text style={styles.viewDetailsText}>Show Packages</Text>
-            <Icon name="chevron-right" size={16} color="#2E7D32" />
+            <Icon name="chevron-right" size={16} color="#A3834C" />
           </View>
         </View>
 
         {/* Active Indicator */}
         {index === activeCategory && (
           <View style={styles.activeIndicator}>
-            <Icon name="check-circle" size={20} color="#2E7D32" />
+            <Icon name="check-circle" size={20} color="#A3834C" />
           </View>
         )}
       </TouchableOpacity>
@@ -324,7 +324,7 @@ const Lawn = ({ navigation }) => {
     if (loading && lawnCategories.length === 0) {
       return (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#2E7D32" />
+          <ActivityIndicator size="large" color="#A3834C" />
           <Text style={styles.loadingText}>Loading lawn types...</Text>
         </View>
       );
@@ -382,7 +382,7 @@ const Lawn = ({ navigation }) => {
   if (loading) {
     return (
       <View style={styles.loadingScreenContainer}>
-        <StatusBar backgroundColor="#fffaf2" barStyle="dark-content" />
+        <StatusBar backgroundColor="#FEF9F3" barStyle="dark-content" />
         <ImageBackground
           source={require('../../assets/notch.jpg')}
           style={styles.notch}
@@ -401,7 +401,7 @@ const Lawn = ({ navigation }) => {
         </ImageBackground>
 
         <View style={styles.centerContent}>
-          <ActivityIndicator size="large" color="#2E7D32" />
+          <ActivityIndicator size="large" color="#A3834C" />
           <Text style={styles.loadingText}>Loading Lawns...</Text>
         </View>
       </View>
@@ -410,7 +410,7 @@ const Lawn = ({ navigation }) => {
 
   return (
     <>
-      <StatusBar backgroundColor="#fffaf2" barStyle="dark-content" />
+      <StatusBar backgroundColor="#FEF9F3" barStyle="dark-content" />
       <View style={styles.container}>
         <ImageBackground
           source={require('../../assets/notch.jpg')}
@@ -438,8 +438,8 @@ const Lawn = ({ navigation }) => {
               <RefreshControl
                 refreshing={refreshing}
                 onRefresh={onRefresh}
-                colors={['#2E7D32']}
-                tintColor="#2E7D32"
+                colors={['#A3834C']}
+                tintColor="#A3834C"
               />
             }
           >
@@ -465,7 +465,7 @@ const Lawn = ({ navigation }) => {
                 {features.map((item, index) => (
                   <View key={index} style={styles.featureItem}>
                     <View style={styles.featureIconBox}>
-                      <Icon name={item.icon} size={32} color="#2E7D32" />
+                      <Icon name={item.icon} size={32} color="#A3834C" />
                     </View>
                     <Text style={styles.featureText}>{item.label}</Text>
                   </View>
@@ -477,7 +477,7 @@ const Lawn = ({ navigation }) => {
             <View style={styles.policySection}>
               <Text style={styles.policyTitle}>Lawn Booking Policy</Text>
               {loadingRules ? (
-                <ActivityIndicator color="#2E7D32" size="small" />
+                <ActivityIndicator color="#A3834C" size="small" />
               ) : rules && rules.length > 0 ? (
                 rules.map((rule, index) => (
                   <View key={rule.id || index} style={styles.ruleItem}>
@@ -503,11 +503,11 @@ const Lawn = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#FEF9F3',
   },
   loadingScreenContainer: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#FEF9F3',
   },
   centerContent: {
     flex: 1,
@@ -568,7 +568,7 @@ const styles = StyleSheet.create({
   welcomeSection: {
     padding: 20,
     alignItems: "center",
-    backgroundColor: "#e8f5e9",
+    backgroundColor: "#F9F3EB",
     margin: 15,
     borderRadius: 15,
   },
@@ -576,7 +576,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "bold",
     marginBottom: 8,
-    color: '#2E7D32',
+    color: '#A3834C',
     textAlign: 'center',
   },
   welcomeText: {
@@ -622,7 +622,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   lawnCardActive: {
-    borderColor: '#2E7D32',
+    borderColor: '#A3834C',
     borderWidth: 2,
   },
   imageContainer: {
@@ -677,7 +677,7 @@ const styles = StyleSheet.create({
   memberPrice: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#2E7D32',
+    color: '#A3834C',
     marginLeft: 6,
     marginRight: 4,
   },
@@ -696,14 +696,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#e8f5e9',
+    backgroundColor: '#F9F3EB',
     paddingVertical: 8,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#c8e6c9',
+    borderColor: '#DBC9A5',
   },
   viewDetailsText: {
-    color: '#2E7D32',
+    color: '#A3834C',
     fontWeight: '600',
     marginRight: 4,
   },
@@ -764,7 +764,7 @@ const styles = StyleSheet.create({
   },
   // Button styles
   retryButton: {
-    backgroundColor: '#2E7D32',
+    backgroundColor: '#A3834C',
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,
@@ -807,40 +807,41 @@ const styles = StyleSheet.create({
   featureItem: {
     width: "30%",
     alignItems: "center",
-    marginBottom: 25,
+    marginBottom: 20,
   },
   featureIconBox: {
-    width: 70,
-    height: 70,
-    borderRadius: 15,
-    borderWidth: 2,
-    borderColor: "#2E7D32",
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: "#F9F3EB",
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#e8f5e9",
-    marginBottom: 10,
+    marginBottom: 8,
   },
   featureText: {
-    fontSize: 11,
-    color: "#333",
+    fontSize: 12,
+    color: "#555",
     marginTop: 5,
     textAlign: "center",
-    fontWeight: "500",
   },
   // Policy Section
   policySection: {
-    backgroundColor: "#f1f8e9",
+    backgroundColor: "#fff",
     margin: 15,
     borderRadius: 15,
     padding: 20,
     marginBottom: 30,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+    elevation: 3,
   },
   policyTitle: {
     fontSize: 18,
     fontWeight: "bold",
-    marginBottom: 10,
+    marginBottom: 15,
     textAlign: "center",
-    color: '#2E7D32',
+    color: '#333',
   },
   policySub: {
     fontWeight: "bold",
@@ -857,7 +858,7 @@ const styles = StyleSheet.create({
   ruleItem: {
     flexDirection: "row",
     alignItems: "flex-start",
-    marginBottom: 8,
+    marginBottom: 10,
     paddingRight: 10,
   },
   ruleText: {

@@ -16,7 +16,7 @@ import {
   Animated,
   Easing
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import ImageViewer from 'react-native-image-zoom-viewer';
 import HtmlRenderer from '../src/events/HtmlRenderer';
@@ -38,46 +38,23 @@ const About = () => {
   const fadeAnim = useState(new Animated.Value(0))[0];
   const slideAnim = useState(new Animated.Value(30))[0];
 
-  // Function to split about text into preview and full content
+  // Function to check if about text has more content than the preview
   const getAboutPreview = (htmlContent) => {
+    const defaultText = `Established in 1863 as the "Games Club", the Peshawar Services Club (PSC) has undergone various transformations, from being the HQ for the Vale Hunt Club in 1870 to "Peshawar Club" in 1899. Since 1947, its name changed multiple times until settling on "Peshawar Services Club" in 2011. Spanning acres of land, PSC offers its members a place for socializing, various amenities, including indoor and outdoor sports facilities, dining areas, and elegant accommodations.`;
+
     if (!htmlContent) {
-      const defaultText = `Established in 1863 as the "Games Club", the Peshawar Services Club (PSC) has undergone various transformations, from being the HQ for the Vale Hunt Club in 1870 to "Peshawar Club" in 1899. Since 1947, its name changed multiple times until settling on "Peshawar Services Club" in 2011. Spanning acres of land, PSC offers its members a place for socializing, various amenities, including indoor and outdoor sports facilities, dining areas, and elegant accommodations.`;
       return {
-        preview: defaultText,
         fullContent: defaultText,
         hasMore: false
       };
     }
 
-    // Remove HTML tags and get plain text
-    const plainText = htmlContent.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
-
-    // Split into sentences (simple approach)
-    const sentences = plainText.split(/(?<=[.!?])\s+/);
-
-    if (sentences.length <= 2) {
-      return {
-        preview: htmlContent,
-        fullContent: htmlContent,
-        hasMore: false
-      };
-    }
-
-    // First 2 sentences as preview
-    const previewSentences = sentences.slice(0, 2);
-    let previewText = previewSentences.join(' ');
-
-    // Ensure preview ends with proper punctuation
-    if (!/[.!?]$/.test(previewText)) {
-      previewText += '...';
-    } else {
-      previewText = previewText.replace(/[.!?]$/, '...');
-    }
+    // Remove HTML tags and get plain text to estimate length
+    const plainText = htmlContent.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
 
     return {
-      preview: previewText,
       fullContent: htmlContent,
-      hasMore: true
+      hasMore: plainText.length > 300 // Threshold for "View More"
     };
   };
 
@@ -127,6 +104,17 @@ const About = () => {
     setRefreshing(true);
     fetchData();
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      // Screen gained focus
+      return () => {
+        // Screen blurred - reset expanded states
+        setShowAllAbout(false);
+        setShowAllHistory(false);
+      };
+    }, [])
+  );
 
   const handleBack = () => {
     navigation.goBack();
@@ -225,11 +213,15 @@ const About = () => {
               ]}
             >
               <View style={styles.card}>
-                <HtmlRenderer
-                  htmlContent={showAllAbout ? aboutContent.fullContent : aboutContent.preview}
-                  textStyle={styles.contentText}
-                  maxLines={showAllAbout ? undefined : 6}
-                />
+                <View style={[
+                  styles.htmlContainer,
+                  !showAllAbout && aboutContent.hasMore && styles.collapsedContent
+                ]}>
+                  <HtmlRenderer
+                    htmlContent={aboutContent.fullContent}
+                    textStyle={styles.contentText}
+                  />
+                </View>
 
                 {/* View More Button */}
                 {aboutContent.hasMore && (
@@ -424,7 +416,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f1e3dcff',
     borderRadius: 15,
     padding: 20,
-    marginBottom: 15,
+    marginBottom: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -436,7 +428,13 @@ const styles = StyleSheet.create({
     color: '#000000',
     lineHeight: 24,
     textAlign: 'justify',
-    marginBottom: 12,
+  },
+  htmlContainer: {
+    // marginBottom: 5,
+  },
+  collapsedContent: {
+    maxHeight: 280,
+    overflow: 'hidden',
   },
 
   /* View More Button - Matching the Show More button style */
@@ -445,9 +443,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'transparent',
-    padding: 10,
+    paddingTop: 10,
     marginTop: 5,
-    marginBottom: 10,
+    // marginBottom: 10,
   },
   viewMoreText: {
     fontSize: 14,

@@ -497,7 +497,7 @@ Thank you for your booking!
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Total Amount:</Text>
                 <Text style={[styles.detailValue, styles.amount]}>
-                  ${invoiceData.totalPrice ? parseFloat(invoiceData.totalPrice).toFixed(2) : '0.00'}
+                  Rs. {invoiceData.totalPrice ? parseFloat(invoiceData.totalPrice).toFixed(2) : '0.00'}
                 </Text>
               </View>
 

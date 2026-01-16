@@ -463,9 +463,8 @@ const events = ({ navigation }) => {
       end.setHours(0, 0, 0, 0);
 
       if (selectedFilter === 'Upcoming') {
-        return start > now;
-      } else if (selectedFilter === 'Ongoing') {
-        return start <= now && end >= now;
+        // Merge Ongoing into Upcoming: show if hasn't ended yet
+        return end >= now;
       } else if (selectedFilter === 'Past') {
         return end < now;
       }
@@ -510,7 +509,7 @@ const events = ({ navigation }) => {
 
         {/* 🔹 Filter Section */}
         <View style={styles.filterContainer}>
-          {['Upcoming', 'Ongoing', 'Past'].map((filter) => (
+          {['Upcoming', 'Past'].map((filter) => (
             <TouchableOpacity
               key={filter}
               style={[
@@ -546,11 +545,11 @@ const events = ({ navigation }) => {
             }
           >
             {/* Events Count */}
-            <View style={styles.eventsCountContainer}>
+            {/* <View style={styles.eventsCountContainer}>
               <Text style={styles.eventsCountText}>
                 {filteredEvents.length} {filteredEvents.length === 1 ? 'Event' : 'Events'} in {selectedFilter}
               </Text>
-            </View>
+            </View> */}
 
             {/* 🔹 Events Cards */}
             {filteredEvents.length > 0 ? (
@@ -584,9 +583,28 @@ const events = ({ navigation }) => {
                             />
                           </View>
                         )} */}
-                        {event.endDate && (
+                        {event.startDate && (
                           <Text style={styles.eventDate}>
-                            📅 {new Date(event.endDate).toDateString()}
+                            📅 {(() => {
+                              const start = new Date(event.startDate);
+                              const end = new Date(event.endDate);
+
+                              if (!event.endDate || start.toDateString() === end.toDateString()) {
+                                return start.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+                              }
+
+                              const startDay = start.getDate();
+                              const endDay = end.getDate();
+                              const startMonth = start.toLocaleDateString('en-US', { month: 'short' });
+                              const endMonth = end.toLocaleDateString('en-US', { month: 'short' });
+                              const startYear = start.getFullYear();
+                              const endYear = end.getFullYear();
+
+                              if (startMonth === endMonth && startYear === endYear) {
+                                return `${startDay}-${endDay} ${startMonth} ${startYear}`;
+                              }
+                              return `${startDay} ${startMonth} - ${endDay} ${endMonth} ${startYear}`;
+                            })()}
                           </Text>
                         )}
                         {event.time && (

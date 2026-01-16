@@ -473,14 +473,6 @@ export default function home({ navigation }) {
               <Text style={styles.noRole}>Not Logged In</Text>
             )} */}
           </View>
-
-          <TouchableOpacity
-            style={styles.notificationButton}
-            onPress={() => {/* Add notification handler */ }}
-            activeOpacity={0.7}
-          >
-            <Icon name="bell" size={24} color="#000" />
-          </TouchableOpacity>
         </View>
       </ImageBackground>
       {/* Welcome Section */}

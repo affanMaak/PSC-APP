@@ -21,6 +21,7 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import { bookingService } from '../../services/bookingService';
 import { useAuth } from '../auth/contexts/AuthContext';
 
+
 const { width } = Dimensions.get('window');
 
 export default function MemberBookingsScreen({ navigation }) {
@@ -30,6 +31,7 @@ export default function MemberBookingsScreen({ navigation }) {
     const [bookings, setBookings] = useState([]);
     const [filteredBookings, setFilteredBookings] = useState([]);
     const [selectedType, setSelectedType] = useState('Room');
+    const [selectedStatus, setSelectedStatus] = useState('All');
     const [searchQuery, setSearchQuery] = useState('');
     const [showFilterModal, setShowFilterModal] = useState(false);
     const [stats, setStats] = useState({
@@ -48,7 +50,7 @@ export default function MemberBookingsScreen({ navigation }) {
 
     useEffect(() => {
         filterBookings();
-    }, [selectedType, searchQuery, bookings]);
+    }, [selectedType, selectedStatus, searchQuery, bookings]);
 
     const fetchBookings = async () => {
         try {
@@ -162,14 +164,58 @@ export default function MemberBookingsScreen({ navigation }) {
                     booking.checkIn || booking.date || booking.eventDate || booking.timeTo, // Fallback to checkIn/date for single day events
 
                 // Enhanced Price Mapping
-                totalPrice: booking.totalPrice || booking.amount || booking.price ||
-                    booking.totalAmount || booking.netAmount || booking.charges || booking.rent,
-                paidAmount: booking.paidAmount || booking.paid || booking.advance || 0,
-                pendingAmount: booking.pendingAmount || booking.pending || booking.balance || 0,
+                totalPrice: parseFloat(booking.totalPrice || booking.total_price || booking.amount || booking.price ||
+                    booking.totalAmount || booking.total_amount || booking.netAmount || booking.net_amount ||
+                    booking.payableAmount || booking.payable_amount || booking.charges || booking.rent || 0),
+                paidAmount: (() => {
+                    const status = (booking.paymentStatus || booking.status ||
+                        booking.bookingStatus || booking.payment_status ||
+                        booking.state || '').toUpperCase();
+                    const total = parseFloat(booking.totalPrice || booking.total_price || booking.amount ||
+                        booking.totalAmount || booking.total_amount || booking.netAmount ||
+                        booking.net_amount || booking.charges || booking.rent || 0);
+                    const paid = parseFloat(booking.paidAmount || booking.paid_amount || booking.paid ||
+                        booking.totalPaid || booking.total_paid || booking.advance || 0);
+                    if ((status === 'PAID' || status === 'COMPLETED') && paid === 0 && total > 0) return total;
+                    return paid;
+                })(),
+                pendingAmount: (() => {
+                    const status = (booking.paymentStatus || booking.status ||
+                        booking.bookingStatus || booking.payment_status ||
+                        booking.state || '').toUpperCase();
+                    if (status === 'PAID' || status === 'COMPLETED') return 0;
+                    const pending = parseFloat(booking.pendingAmount || booking.pending_amount || booking.pending ||
+                        booking.balance || booking.remainingAmount || booking.remaining_amount || 0);
+                    return pending;
+                })(),
 
                 // Enhanced Status Mapping
-                paymentStatus: booking.paymentStatus || booking.status ||
-                    booking.bookingStatus || booking.payment_status || booking.state,
+                paymentStatus: (() => {
+                    const originalStatus = (booking.paymentStatus || booking.status ||
+                        booking.bookingStatus || booking.payment_status ||
+                        booking.state || '').toUpperCase();
+
+                    // Trust terminal statuses from API
+                    if (['PAID', 'COMPLETED', 'CANCELLED', 'REJECTED', 'REJECT'].includes(originalStatus)) {
+                        return originalStatus;
+                    }
+
+                    const total = parseFloat(booking.totalPrice || booking.total_price || booking.amount ||
+                        booking.totalAmount || booking.total_amount || booking.netAmount ||
+                        booking.net_amount || booking.charges || booking.rent || 0);
+                    const paid = parseFloat(booking.paidAmount || booking.paid_amount || booking.paid ||
+                        booking.totalPaid || booking.total_paid || booking.advance || 0);
+
+                    // If amounts are clearly available, derive from them
+                    if (total > 0) {
+                        if (paid >= total) return 'PAID';
+                        if (paid > 0) return 'HALF_PAID';
+                        return 'UNPAID';
+                    }
+
+                    // Fallback to original status if amounts are missing/zero
+                    return originalStatus || 'UNPAID';
+                })(),
 
                 guestName: booking.guestName || booking.name || booking.member_name,
                 guestContact: booking.guestContact || booking.contact || booking.phone,
@@ -208,9 +254,9 @@ export default function MemberBookingsScreen({ navigation }) {
         };
 
         bookingList.forEach(booking => {
-            const total = parseFloat(booking.totalPrice || booking.amount || 0) || 0;
-            const paid = parseFloat(booking.paidAmount || booking.paid || 0) || 0;
-            const pending = parseFloat(booking.pendingAmount || booking.pending || 0) || 0;
+            const total = parseFloat(booking.totalPrice || 0);
+            const paid = parseFloat(booking.paidAmount || 0);
+            const pending = parseFloat(booking.pendingAmount || 0);
 
             stats.totalAmount += total;
             stats.paidAmount += paid;
@@ -239,6 +285,17 @@ export default function MemberBookingsScreen({ navigation }) {
                 (booking.guestName && booking.guestName.toLowerCase().includes(query)) ||
                 (booking.roomNumber && booking.roomNumber.toString().includes(query))
             );
+        }
+
+        // Filter by payment status
+        if (selectedStatus !== 'All') {
+            filtered = filtered.filter(booking => {
+                const status = (booking.paymentStatus || '').toUpperCase();
+                if (selectedStatus === 'Paid') return status === 'PAID';
+                if (selectedStatus === 'Pending') return status === 'HALF_PAID';
+                if (selectedStatus === 'Unpaid') return status === 'UNPAID';
+                return true;
+            });
         }
 
         setFilteredBookings(filtered);
@@ -287,10 +344,10 @@ export default function MemberBookingsScreen({ navigation }) {
     };
 
     const formatCurrency = (amount) => {
-        if (!amount && amount !== 0) return '0 Rs';
+        if (!amount && amount !== 0) return '0 Rs.';
         const numAmount = parseFloat(amount);
-        if (isNaN(numAmount)) return '0 Rs';
-        return `${numAmount.toFixed(0)} Rs`;
+        if (isNaN(numAmount)) return '0 Rs.';
+        return `${numAmount.toFixed(0)} Rs.`;
     };
 
     const getStatusColor = (status) => {
@@ -329,9 +386,9 @@ export default function MemberBookingsScreen({ navigation }) {
             >
                 <View style={styles.bookingHeader}>
                     <View style={styles.bookingTypeBadge}>
-                        <Icon name="receipt" size={14} color="#1565c0" />
+                        {/* <Icon name="receipt" size={14} color="#1565c0" /> */}
                         <Text style={styles.bookingTypeText}>
-                            {item.bookingType || 'Booking'} #{item.bookingId || item.id}
+                            Booking #{item.bookingId || item.id}
                         </Text>
                     </View>
                     <View style={[styles.statusBadge, { backgroundColor: `${statusColor}15` }]}>
@@ -345,7 +402,7 @@ export default function MemberBookingsScreen({ navigation }) {
                 <View style={styles.bookingInfo}>
                     {item.roomNumber && (
                         <View style={styles.roomInfo}>
-                            <Icon name="meeting-room" size={16} color="#666" />
+                            {/* <Icon name="meeting-room" size={16} color="#666" /> */}
                             <Text style={styles.roomText}>Room {item.roomNumber}</Text>
                         </View>
                     )}
@@ -671,13 +728,22 @@ export default function MemberBookingsScreen({ navigation }) {
                                 {['All', 'Paid', 'Pending', 'Unpaid'].map((status) => (
                                     <TouchableOpacity
                                         key={status}
-                                        style={styles.filterOption}
+                                        style={[
+                                            styles.filterOption,
+                                            selectedStatus === status && styles.filterOptionActive
+                                        ]}
                                         onPress={() => {
-                                            // Add payment status filtering logic here
+                                            setSelectedStatus(status);
                                             setShowFilterModal(false);
                                         }}
                                     >
-                                        <Text style={styles.filterOptionText}>{status}</Text>
+                                        <Text style={[
+                                            styles.filterOptionText,
+                                            selectedStatus === status && styles.filterOptionTextActive
+                                        ]}>{status}</Text>
+                                        {selectedStatus === status && (
+                                            <Icon name="check" size={20} color="#b48a64" />
+                                        )}
                                     </TouchableOpacity>
                                 ))}
                             </View>
@@ -688,6 +754,7 @@ export default function MemberBookingsScreen({ navigation }) {
                                 style={styles.resetButton}
                                 onPress={() => {
                                     setSelectedType('Room');
+                                    setSelectedStatus('All');
                                     setSearchQuery('');
                                     setShowFilterModal(false);
                                 }}

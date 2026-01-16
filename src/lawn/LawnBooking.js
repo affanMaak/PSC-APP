@@ -3676,7 +3676,7 @@ const LawnBooking = ({ route, navigation }) => {
           <Text style={styles.totalLabel}>Total Amount</Text>
           <Text style={styles.totalAmount}>{calculateTotalAmount()}</Text>
           <Text style={styles.totalNote}>
-            * {isGuest ? 'Guest' : 'Member'} pricing applied
+            * {isGuest ? 'Guest Charges' : 'Member Charges'} pricing applied
           </Text>
         </View>
 
@@ -3811,15 +3811,15 @@ const LawnBooking = ({ route, navigation }) => {
 
           <View style={styles.summaryPricingRow}>
             <View style={styles.summaryPriceItem}>
-              <Text style={styles.summaryPriceLabel}>Member</Text>
+              <Text style={styles.summaryPriceLabel}>Member Charges</Text>
               <Text style={styles.summaryPriceValueMember}>
-                PKR {venue.memberCharges?.toLocaleString() || '0'}
+                Rs. {venue.memberCharges?.toLocaleString() || '0'}
               </Text>
             </View>
             <View style={styles.summaryPriceItem}>
-              <Text style={styles.summaryPriceLabel}>Guest</Text>
+              <Text style={styles.summaryPriceLabel}>Guest Charges</Text>
               <Text style={styles.summaryPriceValueGuest}>
-                PKR {venue.guestCharges?.toLocaleString() || '0'}
+                Rs. {venue.guestCharges?.toLocaleString() || '0'}
               </Text>
             </View>
           </View>
@@ -3842,15 +3842,15 @@ const LawnBooking = ({ route, navigation }) => {
               style={styles.backButton}
               onPress={() => navigation.goBack()}
             >
-              <Icon name="arrowleft" size={24} color="#FFF" />
+              <Icon name="arrowleft" size={24} color="#000000ff" />
             </TouchableOpacity>
             <View style={styles.headerTitleContainer}>
               <Text style={styles.headerTitle}>
                 {isAdmin ? 'Admin Booking' : 'Book Lawn'}
               </Text>
-              <Text style={styles.headerSubtitle}>
+              {/* <Text style={styles.headerSubtitle}>
                 (ID: {venue?.id})
-              </Text>
+              </Text> */}
             </View>
             <View style={styles.placeholder} />
           </View>
@@ -4028,7 +4028,6 @@ const styles = StyleSheet.create({
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.3)',
     borderRadius: 20,
   },
   headerTitleContainer: {
@@ -4038,18 +4037,12 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#FFF',
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
+    color: '#000000ff',
   },
   headerSubtitle: {
     fontSize: 14,
-    color: '#FFF',
+    color: '#000000ff',
     marginTop: 4,
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
   },
   placeholder: {
     width: 40,
@@ -4084,8 +4077,8 @@ const styles = StyleSheet.create({
   },
   summaryHeaderTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#FFF',
+    fontWeight: '500',
+    color: '#000000ff',
     letterSpacing: 0.5,
   },
   summaryContent: {
@@ -4149,7 +4142,7 @@ const styles = StyleSheet.create({
   summaryPriceValueGuest: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#DC3545',
+    color: '#b48a64',
   },
 
   // Toggle Container
@@ -4367,7 +4360,7 @@ const styles = StyleSheet.create({
 
   // Total Amount
   totalCard: {
-    backgroundColor: '#2D3748',
+    backgroundColor: '#b48a64',
     marginHorizontal: 15,
     marginBottom: 15,
     padding: 20,
@@ -4376,18 +4369,18 @@ const styles = StyleSheet.create({
   },
   totalLabel: {
     fontSize: 16,
-    color: '#CBD5E0',
+    color: '#ffffffff',
     marginBottom: 8,
   },
   totalAmount: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#FFF',
+    color: '#ffffffff',
     marginBottom: 8,
   },
   totalNote: {
     fontSize: 12,
-    color: '#A0AEC0',
+    color: '#ffffffff',
     fontStyle: 'italic',
   },
 
@@ -4407,11 +4400,11 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   submitButtonDisabled: {
-    backgroundColor: '#CBD5E0',
+    backgroundColor: '#b489645f',
     shadowColor: 'transparent',
   },
   submitButtonText: {
-    color: '#FFF',
+    color: '#ffffffff',
     fontSize: 18,
     fontWeight: 'bold',
     marginRight: 8,

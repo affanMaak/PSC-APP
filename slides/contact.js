@@ -82,9 +82,9 @@ const contact = () => {
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.contactRow}
-                onPress={() => handlePhonePress('0919212753')}>
+                onPress={() => handlePhonePress('09192127534')}>
                 <Text style={styles.icon}>📞</Text>
-                <Text style={styles.phoneText}>091-9212753-5</Text>
+                <Text style={styles.phoneText}>091-9212753-4</Text>
               </TouchableOpacity>
             </View>
             <View style={styles.card}>

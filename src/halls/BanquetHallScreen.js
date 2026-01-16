@@ -381,10 +381,10 @@ const BH = ({ navigation }) => {
       );
     }
 
-    if (rulesError || hallRules.length === 0) {
-      // Show static rules as fallback
-      return renderStaticRules();
-    }
+    // if (rulesError || hallRules.length === 0) {
+    //   // Show static rules as fallback
+    //   return renderStaticRules();
+    // }
 
     const displayRules = rulesExpanded ? hallRules : hallRules.slice(0, 1);
 
@@ -399,7 +399,7 @@ const BH = ({ navigation }) => {
           <View key={rule._id || index} style={styles.ruleItem}>
             <HtmlRenderer
               htmlContent={rule.content}
-              maxLines={rulesExpanded ? undefined : 3}
+              // maxLines={rulesExpanded ? undefined : 3}
               textStyle={styles.ruleText}
             />
           </View>

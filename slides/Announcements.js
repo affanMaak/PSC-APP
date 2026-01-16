@@ -14,6 +14,8 @@ import {
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { getUserNotifications } from "../config/apis";
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 const { height } = Dimensions.get('window');
 
 const announcements = [
@@ -29,10 +31,25 @@ export default function AnnouncementsScreen({ navigation }) {
   const fetchAnnouncements = async () => {
     try {
       const response = await getUserNotifications();
-      console.log(response)
-      setAnnouncements(response);
+      const lastClearedTime = await AsyncStorage.getItem('lastClearedNotificationsTime');
+
+      let filteredResponse = response;
+      if (lastClearedTime) {
+        filteredResponse = response.filter(item => new Date(item.createdAt) > new Date(lastClearedTime));
+      }
+
+      setAnnouncements(filteredResponse.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 3));
     } catch (error) {
       console.error("Error fetching announcements:", error);
+    }
+  };
+
+  const handleClearAll = async () => {
+    try {
+      await AsyncStorage.setItem('lastClearedNotificationsTime', new Date().toISOString());
+      setAnnouncements([]);
+    } catch (error) {
+      console.error("Error clearing notifications:", error);
     }
   };
 
@@ -77,6 +94,12 @@ export default function AnnouncementsScreen({ navigation }) {
             <Icon name="arrow-back" size={28} color="#000" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Announcements</Text>
+          <TouchableOpacity
+            style={styles.clearButton}
+            // onPress={handleClearAll}
+          >
+            {/* <Icon name="delete" size={26} color="#000" /> */}
+          </TouchableOpacity>
         </View>
       </ImageBackground>
 
@@ -158,7 +181,7 @@ const styles = StyleSheet.create({
   },
   header: {
     width: "100%",
-    height: 140,
+    height: 120,
     borderBottomLeftRadius: 40,
     borderBottomRightRadius: 40,
     overflow: "hidden",
@@ -176,6 +199,10 @@ const styles = StyleSheet.create({
   backButton: {
     position: "absolute",
     left: 20,
+  },
+  clearButton: {
+    position: "absolute",
+    right: 20,
   },
 
   headerTitle: {

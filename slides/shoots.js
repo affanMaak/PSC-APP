@@ -188,9 +188,7 @@ const shoots = ({ navigation }) => {
 
           <Text style={styles.notchTitle}>Photoshoot</Text>
 
-          <TouchableOpacity style={styles.iconWrapper}>
-            <BellIcon name="bell" size={26} color="#000" />
-          </TouchableOpacity>
+          <View style={styles.iconWrapper}/>
         </View>
       </ImageBackground>
 

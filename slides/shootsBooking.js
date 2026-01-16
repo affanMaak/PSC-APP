@@ -472,9 +472,7 @@ const shootsBooking = ({ route, navigation }) => {
 
             <Text style={styles.notchTitle}>Book Photoshoot</Text>
 
-            <View style={styles.iconWrapper}>
-              <Icon name="bells" size={24} color="#000" />
-            </View>
+            <View style={styles.iconWrapper} />
           </View>
         </ImageBackground>
 
@@ -508,11 +506,11 @@ const shootsBooking = ({ route, navigation }) => {
             <Text style={styles.packageTitle}>{photoshoot?.description || 'Photoshoot Package'}</Text>
             <View style={styles.priceContainer}>
               <View style={styles.priceColumn}>
-                <Text style={styles.priceLabel}>Member Price</Text>
+                <Text style={styles.priceLabel}>Member Charges</Text>
                 <Text style={styles.priceValue}>Rs:{photoshoot?.memberCharges || 0}</Text>
               </View>
               <View style={styles.priceColumn}>
-                <Text style={styles.priceLabel}>Guest Price</Text>
+                <Text style={styles.priceLabel}>Guest Charges</Text>
                 <Text style={styles.priceValue}>Rs:{photoshoot?.guestCharges || 0}</Text>
               </View>
             </View>
@@ -555,7 +553,7 @@ const shootsBooking = ({ route, navigation }) => {
             </View>
 
             {/* Price Description based on selection */}
-            <View style={styles.priceDescriptionContainer}>
+            {/* <View style={styles.priceDescriptionContainer}>
               <Icon name="infocirlceo" size={16} color="#666" />
               <Text style={styles.priceDescriptionText}>
                 {isGuest
@@ -563,7 +561,7 @@ const shootsBooking = ({ route, navigation }) => {
                   : `Member price: Rs ${photoshoot?.memberCharges || 0}`
                 }
               </Text>
-            </View>
+            </View> */}
           </View>
 
           {/* Guest Details (Conditional) */}
@@ -719,7 +717,7 @@ const shootsBooking = ({ route, navigation }) => {
               <View style={[styles.summaryRow, styles.totalRow]}>
                 <Text style={styles.totalLabel}>Total Amount:</Text>
                 <Text style={styles.totalValue}>
-                  Rs: {calculateTotalAmount()}
+                  Rs. {calculateTotalAmount()}
                 </Text>
               </View>
             </View>
@@ -781,9 +779,7 @@ const shootsBooking = ({ route, navigation }) => {
 
           <Text style={styles.notchTitle}>Book Photoshoot</Text>
 
-          <View style={styles.iconWrapper}>
-            <Icon name="bells" size={24} color="#000" />
-          </View>
+          <View style={styles.iconWrapper} />
         </View>
       </ImageBackground>
 
@@ -824,12 +820,12 @@ const shootsBooking = ({ route, navigation }) => {
           <Text style={styles.packageTitle}>{photoshoot?.description || 'Photoshoot Package'}</Text>
           <View style={styles.priceContainer}>
             <View style={styles.priceColumn}>
-              <Text style={styles.priceLabel}>Member Price</Text>
-              <Text style={styles.priceValue}>Rs: {photoshoot?.memberCharges || 0}</Text>
+              <Text style={styles.priceLabel}>Member Charges</Text>
+              <Text style={styles.priceValue}>Rs. {photoshoot?.memberCharges || 0}</Text>
             </View>
             <View style={styles.priceColumn}>
-              <Text style={styles.priceLabel}>Guest Price</Text>
-              <Text style={styles.priceValue}>Rs: {photoshoot?.guestCharges || 0}</Text>
+              <Text style={styles.priceLabel}>Guest Charges</Text>
+              <Text style={styles.priceValue}>Rs. {photoshoot?.guestCharges || 0}</Text>
             </View>
           </View>
         </View>
@@ -871,7 +867,7 @@ const shootsBooking = ({ route, navigation }) => {
           </View>
 
           {/* Price Description based on selection */}
-          <View style={styles.priceDescriptionContainer}>
+          {/* <View style={styles.priceDescriptionContainer}>
             <Icon name="infocirlceo" size={16} color="#666" />
             <Text style={styles.priceDescriptionText}>
               {isGuest
@@ -879,7 +875,7 @@ const shootsBooking = ({ route, navigation }) => {
                 : `Member price: Rs ${photoshoot?.memberCharges || 0}`
               }
             </Text>
-          </View>
+          </View> */}
         </View>
 
         {/* Guest Details (Conditional) */}
@@ -1081,8 +1077,8 @@ const shootsBooking = ({ route, navigation }) => {
               <ActivityIndicator color="#fff" />
             ) : (
               <>
-                <Icon name="filetext1" size={20} color="#fff" style={styles.buttonIcon} />
-                <Text style={styles.buttonText}>Generate Invoice</Text>
+                {/* <Icon name="filetext1" size={20} color="#fff" style={styles.buttonIcon} /> */}
+                <Text style={styles.buttonText}>{isGuest ? 'Book For Guest' : 'Confirm Booking'}</Text>
               </>
             )}
           </TouchableOpacity>
@@ -1181,6 +1177,10 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   packageCard: {
+    width: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#fff',
     margin: 15,
     borderRadius: 12,
@@ -1196,10 +1196,14 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#000',
     marginBottom: 10,
-    marginLeft: 120
   },
   priceContainer: {
     flexDirection: 'row',
+    justifyContent: 'space-around',
+    width: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    paddingHorizontal: 50,
     justifyContent: 'space-around',
   },
   priceColumn: {

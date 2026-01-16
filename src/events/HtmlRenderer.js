@@ -103,7 +103,7 @@ import React from 'react';
 import { useWindowDimensions, StyleSheet, Text, Platform } from 'react-native';
 import RenderHtml from 'react-native-render-html';
 
-const HtmlRenderer = ({ htmlContent, textStyle, maxLines }) => {
+const HtmlRenderer = ({ htmlContent, textStyle, maxLines, customTagsStyles, customClassesStyles }) => {
     const { width } = useWindowDimensions();
 
     const getCleanHtml = () => {
@@ -247,7 +247,7 @@ const HtmlRenderer = ({ htmlContent, textStyle, maxLines }) => {
         <RenderHtml
             contentWidth={contentWidth}
             source={{ html: cleanHtml }}
-            tagsStyles={tagsStyles}
+            tagsStyles={{ ...tagsStyles, ...customTagsStyles }}
             baseStyle={baseStyle}
             systemFonts={systemFonts}
             enableExperimentalMarginCollapsing={true}
@@ -268,6 +268,7 @@ const HtmlRenderer = ({ htmlContent, textStyle, maxLines }) => {
                 'ql-align-right': { textAlign: 'right' },
                 'ql-align-justify': { textAlign: 'justify' },
                 'ql-align-left': { textAlign: 'left' },
+                ...customClassesStyles
             }}
         />
     );

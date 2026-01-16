@@ -69,9 +69,8 @@ const ClubRulesScreen = ({ navigation }) => {
     const renderRuleItem = ({ item, index }) => {
         const isExpanded = expandedRules[item.id];
 
-        // Calculate plain text length to decide whether to show "View More"
         const plainText = (item.content || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-        const showViewMore = plainText.length > 600;
+        const showViewMore = plainText.length > 1500;
 
         return (
             <View style={styles.ruleCard}>
@@ -293,7 +292,7 @@ const styles = StyleSheet.create({
         marginBottom: 10,
     },
     collapsedContent: {
-        maxHeight: 180,
+        maxHeight: 550,
         overflow: 'hidden',
     },
     htmlText: {

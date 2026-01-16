@@ -68,15 +68,10 @@ export default function BookingDetailsScreen({ navigation, route }) {
     };
 
     const formatCurrency = (amount) => {
-        if (!amount && amount !== 0) return '0 Rs';
+        if (!amount && amount !== 0) return '0 Rs.';
         const numAmount = parseFloat(amount);
-        if (isNaN(numAmount)) return '0 Rs';
-        return new Intl.NumberFormat('en-PK', {
-            style: 'currency',
-            currency: 'PKR',
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 0
-        }).format(numAmount);
+        if (isNaN(numAmount)) return '0 Rs.';
+        return `${numAmount.toFixed(0)} Rs.`;
     };
 
     const getStatusColor = (status) => {
@@ -231,26 +226,77 @@ Check-out: ${formatDate(booking.checkOut)}
         </View>
     );
 
+    // Enhanced Booking Processing (Similar to MemberBookingsScreen)
+    const processedBooking = {
+        ...booking,
+        totalPrice: parseFloat(booking.totalPrice || booking.total_price || booking.amount || booking.price ||
+            booking.totalAmount || booking.total_amount || booking.netAmount || booking.net_amount ||
+            booking.payableAmount || booking.payable_amount || booking.charges || booking.rent || 0),
+
+        paidAmount: (() => {
+            const status = (booking.paymentStatus || booking.status ||
+                booking.bookingStatus || booking.payment_status ||
+                booking.state || '').toUpperCase();
+            const total = parseFloat(booking.totalPrice || booking.total_price || booking.amount ||
+                booking.totalAmount || booking.total_amount || booking.netAmount ||
+                booking.net_amount || booking.charges || booking.rent || 0);
+            const paid = parseFloat(booking.paidAmount || booking.paid_amount || booking.paid ||
+                booking.totalPaid || booking.total_paid || booking.advance || 0);
+
+            if ((status === 'PAID' || status === 'COMPLETED') && paid === 0 && total > 0) return total;
+            return paid;
+        })(),
+
+        pendingAmount: (() => {
+            const status = (booking.paymentStatus || booking.status ||
+                booking.bookingStatus || booking.payment_status ||
+                booking.state || '').toUpperCase();
+            if (status === 'PAID' || status === 'COMPLETED') return 0;
+            return parseFloat(booking.pendingAmount || booking.pending_amount || booking.pending ||
+                booking.balance || booking.remainingAmount || booking.remaining_amount || 0);
+        })(),
+
+        paymentStatus: (() => {
+            const originalStatus = (booking.paymentStatus || booking.status ||
+                booking.bookingStatus || booking.payment_status ||
+                booking.state || '').toUpperCase();
+            if (['PAID', 'COMPLETED', 'CANCELLED', 'REJECTED', 'REJECT'].includes(originalStatus)) return originalStatus;
+
+            const total = parseFloat(booking.totalPrice || booking.total_price || booking.amount ||
+                booking.totalAmount || booking.total_amount || booking.netAmount ||
+                booking.net_amount || booking.charges || booking.rent || 0);
+            const paid = parseFloat(booking.paidAmount || booking.paid_amount || booking.paid ||
+                booking.totalPaid || booking.total_paid || booking.advance || 0);
+
+            if (total > 0) {
+                if (paid >= total) return 'PAID';
+                if (paid > 0) return 'HALF_PAID';
+                return 'UNPAID';
+            }
+            return originalStatus || 'UNPAID';
+        })()
+    };
+
     const renderPaymentSummary = () => (
         <View style={styles.paymentSummaryCard}>
             <Text style={styles.cardTitle}>Payment Summary</Text>
 
             <View style={styles.paymentRow}>
                 <Text style={styles.paymentLabel}>Total Amount:</Text>
-                <Text style={styles.totalAmount}>{formatCurrency(booking.totalPrice || booking.amount)}</Text>
+                <Text style={styles.totalAmount}>{formatCurrency(processedBooking.totalPrice)}</Text>
             </View>
 
             <View style={styles.paymentRow}>
                 <Text style={styles.paymentLabel}>Paid Amount:</Text>
                 <Text style={[styles.amountValue, { color: '#28a745' }]}>
-                    {formatCurrency(booking.paidAmount || booking.paid)}
+                    {formatCurrency(processedBooking.paidAmount)}
                 </Text>
             </View>
 
             <View style={styles.paymentRow}>
                 <Text style={styles.paymentLabel}>Pending Amount:</Text>
                 <Text style={[styles.amountValue, { color: '#dc3545' }]}>
-                    {formatCurrency(booking.pendingAmount || booking.pending)}
+                    {formatCurrency(processedBooking.pendingAmount)}
                 </Text>
             </View>
 
@@ -258,17 +304,17 @@ Check-out: ${formatDate(booking.checkOut)}
                 <Text style={styles.paymentLabel}>Payment Status:</Text>
                 <View style={[
                     styles.statusBadge,
-                    { backgroundColor: `${getStatusColor(booking.paymentStatus)}20` }
+                    { backgroundColor: `${getStatusColor(processedBooking.paymentStatus)}20` }
                 ]}>
                     <View style={[
                         styles.statusDot,
-                        { backgroundColor: getStatusColor(booking.paymentStatus) }
+                        { backgroundColor: getStatusColor(processedBooking.paymentStatus) }
                     ]} />
                     <Text style={[
                         styles.statusText,
-                        { color: getStatusColor(booking.paymentStatus) }
+                        { color: getStatusColor(processedBooking.paymentStatus) }
                     ]}>
-                        {getStatusText(booking.paymentStatus)}
+                        {getStatusText(processedBooking.paymentStatus)}
                     </Text>
                 </View>
             </View>
@@ -405,17 +451,17 @@ Check-out: ${formatDate(booking.checkOut)}
                         </Text>
                         <View style={[
                             styles.statusBanner,
-                            { backgroundColor: `${getStatusColor(booking.paymentStatus)}20` }
+                            { backgroundColor: `${getStatusColor(processedBooking.paymentStatus)}20` }
                         ]}>
                             <View style={[
                                 styles.statusDotLarge,
-                                { backgroundColor: getStatusColor(booking.paymentStatus) }
+                                { backgroundColor: getStatusColor(processedBooking.paymentStatus) }
                             ]} />
                             <Text style={[
                                 styles.statusTextLarge,
-                                { color: getStatusColor(booking.paymentStatus) }
+                                { color: getStatusColor(processedBooking.paymentStatus) }
                             ]}>
-                                {getStatusText(booking.paymentStatus)}
+                                {getStatusText(processedBooking.paymentStatus)}
                             </Text>
                         </View>
                     </View>

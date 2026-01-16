@@ -2182,7 +2182,7 @@ const BHBooking = ({ route, navigation }) => {
         )}
 
         {/* Package Info Card */}
-        <View style={styles.packageCard}>
+        {/* <View style={styles.packageCard}>
           <Text style={styles.packageTitle}>{venue?.name || 'Banquet Hall'}</Text>
           <View style={styles.priceContainer}>
             <View style={styles.priceColumn}>
@@ -2194,7 +2194,7 @@ const BHBooking = ({ route, navigation }) => {
               <Text style={styles.priceValue}>Rs. {guestPrice.toLocaleString()}/-</Text>
             </View>}
           </View>
-        </View>
+        </View> */}
 
         {/* Booking Type Toggle */}
         <View style={styles.toggleContainer}>
@@ -2264,7 +2264,7 @@ const BHBooking = ({ route, navigation }) => {
             <View style={styles.guestInfoNote}>
               <MaterialIcons name="info-outline" size={16} color="#B8860B" />
               <Text style={styles.guestInfoText}>
-                Guest pricing will be applied. Guest details are required for booking.
+                Guest pricing will be applied. Guest details are required for booking
               </Text>
             </View>
           </View>
@@ -2458,7 +2458,7 @@ const BHBooking = ({ route, navigation }) => {
 
         {/* Special Requests */}
         <View style={styles.specialRequestContainer}>
-          <Text style={styles.sectionTitle}>Special Requests</Text>
+          <Text style={styles.sectionTitle}>Special Request</Text>
           <View style={styles.inputGroup}>
             <Feather name="edit-3" size={20} color="#B8860B" style={styles.inputIcon} />
             <TextInput
@@ -2552,7 +2552,7 @@ const BHBooking = ({ route, navigation }) => {
               style={styles.backButton}
               onPress={() => navigation.goBack()}
             >
-              <Icon name="arrowleft" size={24} color="#FFF" />
+              <Icon name="arrowleft" size={24} color="#000000ff" />
             </TouchableOpacity>
             <View style={styles.headerTitleContainer}>
               <Text style={styles.headerTitle}>
@@ -2571,7 +2571,7 @@ const BHBooking = ({ route, navigation }) => {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {renderVenueInfo()}
+          {/* {renderVenueInfo()} */}
           {isAdmin ? renderAdminReservationForm() : renderMemberBookingForm()}
           <View style={styles.footerSpacer} />
         </ScrollView>
@@ -2851,7 +2851,6 @@ const styles = StyleSheet.create({
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.3)',
     borderRadius: 20,
   },
   headerTitleContainer: {
@@ -2861,18 +2860,12 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#FFF',
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
+    color: '#000000ff',
   },
   headerSubtitle: {
     fontSize: 14,
-    color: '#FFF',
+    color: '#000000ff',
     marginTop: 4,
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
   },
   placeholder: {
     width: 40,
@@ -3325,7 +3318,7 @@ const styles = StyleSheet.create({
 
   // Total Amount
   totalCard: {
-    backgroundColor: '#2D3748',
+    backgroundColor: '#b48a64',
     marginHorizontal: 15,
     marginBottom: 15,
     padding: 20,
@@ -3334,7 +3327,7 @@ const styles = StyleSheet.create({
   },
   totalLabel: {
     fontSize: 16,
-    color: '#CBD5E0',
+    color: '#ffffffff',
     marginBottom: 8,
   },
   totalAmount: {
@@ -3345,7 +3338,7 @@ const styles = StyleSheet.create({
   },
   totalNote: {
     fontSize: 12,
-    color: '#A0AEC0',
+    color: '#ffffffff',
     fontStyle: 'italic',
   },
 
@@ -3371,7 +3364,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#b48a64',
   },
   submitButtonDisabled: {
-    backgroundColor: '#CBD5E0',
+    backgroundColor: '#b4896449',
     shadowColor: 'transparent',
   },
   submitButtonText: {

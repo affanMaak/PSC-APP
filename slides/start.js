@@ -159,11 +159,11 @@ export default function start({ navigation }) {
       },
     ]);
   };
-  
+
   const facilities = [
     {
       id: 1,
-      name: 'GuestRooms',
+      name: 'Guest Rooms',
       image: require('../assets/suite1.jpg'),
       icon: 'hotel',
       iconType: 'material',
@@ -245,7 +245,7 @@ export default function start({ navigation }) {
   const renderIcon = (facility) => {
     const iconProps = {
       size: 50,
-      color: facility.color || '#333',
+      color: facility.id === 10 ? '#FFF' : (facility.color || '#333'),
     };
 
     switch (facility.iconType) {

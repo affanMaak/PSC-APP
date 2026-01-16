@@ -565,7 +565,7 @@ const LawnListScreen = ({ route, navigation }) => {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <StatusBar barStyle="light-content" />
+        <StatusBar backgroundColor="#FEF9F3" barStyle="dark-content" />
         <ImageBackground
           source={require('../../assets/notch.jpg')}
           style={styles.notch}
@@ -584,7 +584,7 @@ const LawnListScreen = ({ route, navigation }) => {
         </ImageBackground>
 
         <View style={styles.centerContent}>
-          <ActivityIndicator size="large" color="#4CAF50" />
+          <ActivityIndicator size="large" color="#A3834C" />
           <Text style={styles.loadingText}>Loading Lawns...</Text>
         </View>
       </View>
@@ -593,7 +593,7 @@ const LawnListScreen = ({ route, navigation }) => {
 
   return (
     <>
-      <StatusBar barStyle="light-content" />
+      <StatusBar backgroundColor="#FEF9F3" barStyle="dark-content" />
       <View style={styles.container}>
         <ImageBackground
           source={require('../../assets/notch.jpg')}
@@ -621,8 +621,8 @@ const LawnListScreen = ({ route, navigation }) => {
               <RefreshControl
                 refreshing={refreshing}
                 onRefresh={onRefresh}
-                colors={['#4CAF50']}
-                tintColor="#4CAF50"
+                colors={['#A3834C']}
+                tintColor="#A3834C"
               />
             }
           >
@@ -677,7 +677,7 @@ const LawnListScreen = ({ route, navigation }) => {
                       {/* Details Grid */}
                       <View style={styles.detailGrid}>
                         <View style={styles.detailItem}>
-                          <Icon name="groups" size={20} color="#b48a64" style={styles.detailIcon} />
+                          <Icon name="groups" size={20} color="#A3834C" style={styles.detailIcon} />
                           <View style={styles.detailInfo}>
                             <Text style={styles.detailLabel}>Capacity</Text>
                             <Text style={styles.detailValue}>
@@ -695,10 +695,10 @@ const LawnListScreen = ({ route, navigation }) => {
                         </View> */}
 
                         <View style={styles.detailItem}>
-                          <Icon name="payments" size={20} color="#b48a64" style={styles.detailIcon} />
+                          <Icon name="payments" size={20} color="#A3834C" style={styles.detailIcon} />
                           <View style={styles.detailInfo}>
-                            <Text style={styles.detailLabel}>Guest Price</Text>
-                            <Text style={styles.detailValue}>PKR {lawn.guestCharges?.toLocaleString()}</Text>
+                            <Text style={styles.detailLabel}>Guest Charges</Text>
+                            <Text style={styles.detailValue}>Rs. {lawn.guestCharges?.toLocaleString()}</Text>
                           </View>
                         </View>
                       </View>
@@ -713,7 +713,7 @@ const LawnListScreen = ({ route, navigation }) => {
                         activeOpacity={0.8}
                       >
                         <Text style={styles.viewDetailButtonText}>View Detail</Text>
-                        <Icon name="arrow-forward" size={16} color="#b48a64" />
+                        <Icon name="arrow-forward" size={16} color="#A3834C" />
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -744,11 +744,11 @@ const LawnListScreen = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#FEF9F3',
   },
   loadingContainer: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#FEF9F3',
   },
   centerContent: {
     flex: 1,
@@ -812,14 +812,14 @@ const styles = StyleSheet.create({
     paddingBottom: 30,
   },
   infoContainer: {
-    backgroundColor: '#f9f3eb',
+    backgroundColor: '#F9F3EB',
     padding: 10,
     borderRadius: 8,
     marginBottom: 15,
     alignItems: 'center',
   },
   infoText: {
-    color: '#b48a64',
+    color: '#A3834C',
     fontSize: 14,
     fontWeight: '600',
   },
@@ -841,7 +841,7 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   retryButtonSmall: {
-    backgroundColor: '#b48a64',
+    backgroundColor: '#A3834C',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 6,
@@ -864,7 +864,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   retryButton: {
-    backgroundColor: '#b48a64',
+    backgroundColor: '#A3834C',
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 8,
@@ -885,7 +885,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF',
   },
   cardBottomSection: {
-    backgroundColor: '#b48a64',
+    backgroundColor: '#A3834C',
     padding: 12,
     flexDirection: 'row',
     justifyContent: 'flex-end', // Aligns children to the right
@@ -898,7 +898,7 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   cardTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#1a1a2e',
     flex: 1,
@@ -967,7 +967,7 @@ const styles = StyleSheet.create({
   viewDetailButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#b48a64',
+    color: '#A3834C',
   },
 });
 

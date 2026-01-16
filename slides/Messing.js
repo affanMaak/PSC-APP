@@ -13,8 +13,121 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/AntDesign';
 import { getMessingCategory } from '../config/apis';
+import HtmlRenderer from '../src/events/HtmlRenderer';
 
 const { width } = Dimensions.get('window');
+
+const DRESS_CODE_HTML = `
+  <section class="section">
+    <h2>Dress Code – Ball Room</h2>
+    <h3>Dress Code</h3>
+    <ul>
+      <li>Dress pants and shirts with formal shoes</li>
+      <li>Safari suits, lounge suits</li>
+      <li>Shalwar kameez with coat, blazer, or waistcoat</li>
+      <li>Closed shoes</li>
+    </ul>
+    <h3>Following are not allowed</h3>
+    <ul>
+      <li>Track suits, jeans, T-shirts, shorts</li>
+      <li>Chappals, joggers</li>
+      <li>Pointed higher heels</li>
+    </ul>
+  </section>
+
+  <section class="section">
+    <h2>Dress Code – Chinar Lawn / BBQ Lawn</h2>
+    <h3>Dress Code</h3>
+    <ul>
+      <li>Smart casual dress or cotton pant with bush shirt, T-shirt, or polo T-shirt</li>
+      <li>Kurta / Shalwar kameez with or without waistcoat</li>
+      <li>Jackets, sweaters, all types of coats & waistcoats (winters)</li>
+      <li>Jeans and T-shirt</li>
+      <li>Track suits</li>
+      <li>Closed shoes, moccasins, joggers, back-strap sandals</li>
+    </ul>
+    <h3>Following are not allowed</h3>
+    <ul>
+      <li>Sandals without back strap, chappals, slippers</li>
+      <li>Sleeveless T-shirts</li>
+      <li>Shorts / Bermuda</li>
+    </ul>
+  </section>
+
+  <section class="section">
+    <h2>Dress Code – Engle Bright Hall</h2>
+    <h3>Dress Code</h3>
+    <ul>
+      <li>Dress or cotton pant with shirt (smart casual)</li>
+      <li>Lounge suit and safari suit</li>
+      <li>Shalwar kameez with coat or blazer</li>
+      <li>Closed shoes</li>
+    </ul>
+    <h3>Following are not allowed</h3>
+    <ul>
+      <li>Slippers, chappals, joggers</li>
+      <li>Track suits, shorts, Bermuda</li>
+    </ul>
+  </section>
+
+  <section class="section">
+    <h2>Dress Code – Dining Hall</h2>
+    <h3>Dress Code</h3>
+    <ul>
+      <li>Dress or cotton pant with shirt (smart casual)</li>
+      <li>Lounge suit and safari suit</li>
+      <li>Shalwar kameez with coat or blazer</li>
+      <li>Jeans and polo T-shirt</li>
+      <li>Closed shoes</li>
+    </ul>
+    <h3>Following are not allowed</h3>
+    <ul>
+      <li>Slippers, chappals, joggers</li>
+      <li>Track suits, shorts, Bermuda</li>
+    </ul>
+  </section>
+
+  <section class="section">
+    <h2>The Club Café</h2>
+    <h3>Dress Code</h3>
+    <ul>
+      <li>Dress or cotton pant with shirt or polo shirt (smart casual)</li>
+      <li>Shalwar kameez with or without waistcoat / kurta</li>
+      <li>Jackets, sweaters, all types of coats & waistcoats (winters)</li>
+      <li>Jeans and T-shirts</li>
+      <li>Track suits with joggers (outdoor café seating only)</li>
+    </ul>
+    <h3>Following are not allowed</h3>
+    <ul>
+      <li>Slippers, chappals</li>
+      <li>Shorts, Bermuda</li>
+    </ul>
+  </section>
+
+  <section class="section">
+    <h2>Instructions</h2>
+    <ul>
+      <li>Members and guests not dressed appropriately will not be served</li>
+      <li>Loud mobile phone conversations are not permitted in dining areas</li>
+      <li>Members and guests are expected to wear smart attire</li>
+      <li>Smoking is strictly prohibited in all indoor dining areas</li>
+      <li>Use of laptops, video calls, or meetings is not allowed in indoor dining areas</li>
+      <li>Members and guests are requested to cooperate with club staff</li>
+    </ul>
+  </section>
+`;
+
+const dressCodeTagsStyles = {
+  h2: { marginTop: 10, borderBottomWidth: 1, borderBottomColor: '#ddd', paddingBottom: 6, fontSize: 18, fontWeight: 'bold' },
+  h3: { marginTop: 15, fontSize: 15, fontWeight: 'bold' },
+  ul: { marginLeft: 15, marginBottom: 10 },
+  li: { lineHeight: 20, fontSize: 14, color: '#444' }
+};
+
+const dressCodeClassesStyles = {
+  'not-allowed': { color: '#b00020' },
+  'section': { marginBottom: 20 }
+};
 
 const cardData = [
   {
@@ -86,36 +199,12 @@ const MessingScreen = ({ navigation }) => {
 
         {/* 🔹 Main Scrollable Content */}
         <SafeAreaView style={styles.safeArea}>
-          {loading ? (
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 50 }}>
-              <ActivityIndicator size="large" color="#5a472c" />
-            </View>
-          ) : (
-            <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-
-              {/* 🔹 Existing Static Cards */}
-              {/* <View style={{ marginTop: 15 }}>
-                {cardData.map((item) => (
-                  <TouchableOpacity
-                    key={item.id}
-                    style={styles.cardWrapper}
-                    onPress={() => navigation.navigate(item.screen)}
-                  >
-                    <ImageBackground
-                      source={item.image}
-                      style={styles.cardImage}
-                      imageStyle={styles.cardImageStyle}
-                    >
-                      <View style={styles.cardOverlay}>
-                        <Text style={styles.cardTitle}>{item.title}</Text>
-                        <Icon name="arrowright" size={28} color="#fff" />
-                      </View>
-                    </ImageBackground>
-                  </TouchableOpacity>
-                ))}
-              </View> */}
-
-              {/* 🔹 Dynamic Category Cards */}
+          <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+            {loading ? (
+              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 50 }}>
+                <ActivityIndicator size="large" color="#5a472c" />
+              </View>
+            ) : (
               <View style={{ marginTop: 15 }}>
                 {categories.map((item) => {
                   // Handle images: could be array of strings, array of objects, or JSON string
@@ -159,83 +248,18 @@ const MessingScreen = ({ navigation }) => {
                   );
                 })}
               </View>
-
-            </ScrollView>
-          )}
-        </SafeAreaView>
-
-        <SafeAreaView style={styles.safeArea}>
-          <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+            )}
 
             {/* Dress Code Header */}
-            <View style={styles.dressCodeHeader}>
-              <Text style={styles.dressCodeTitle}>Mess Dress Code</Text>
+            <View style={[styles.dressCodeHeader, { marginTop: 0 }]}>
+              <Text style={styles.dressCodeTitle}>DRESS CODE</Text>
             </View>
 
-            {/* Chinar Lawn Section */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>
-                Chinar Lawn <Text style={styles.sectionSubtitle}>(Smart Casual)</Text>
-              </Text>
-              <View style={styles.bulletItem}><Text style={styles.bullet}>•</Text><Text style={styles.itemText}>Dress pant with Bush shirt / Collar T-shirt.</Text></View>
-              <View style={styles.bulletItem}><Text style={styles.bullet}>•</Text><Text style={styles.itemText}>Shalwar Kameez starched without waist coat.</Text></View>
-              <View style={styles.bulletItem}><Text style={styles.bullet}>•</Text><Text style={styles.itemText}>Jersey / Coat (winters).</Text></View>
-              <View style={styles.bulletItem}><Text style={styles.bullet}>•</Text><Text style={styles.itemText}>Closed Shoes and Moccasin.</Text></View>
-              <Text style={styles.sublistItemHeader}>Following are not allowed:-</Text>
-              <View style={styles.bulletItem}><Text style={styles.bullet}>•</Text><Text style={styles.itemText}>Back Strap Chapels, Slippers</Text></View>
-              <View style={styles.bulletItem}><Text style={styles.bullet}>•</Text><Text style={styles.itemText}>Men's Shawl</Text></View>
-              <View style={styles.bulletItem}><Text style={styles.bullet}>•</Text><Text style={styles.itemText}>Shorts</Text></View>
-            </View>
-
-            {/* Ball Room Section */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Ball Room</Text>
-              <View style={styles.bulletItem}><Text style={styles.bullet}>•</Text><Text style={styles.itemText}>Dress pants / shirts (with formal shoes) before Lounge suite.</Text></View>
-              <View style={styles.bulletItem}><Text style={styles.bullet}>•</Text><Text style={styles.itemText}>Shalwar Kameez with Coat / Blazer or waist coat.</Text></View>
-              <View style={styles.bulletItem}><Text style={styles.bullet}>•</Text><Text style={styles.itemText}>Closed Shoes</Text></View>
-              <Text style={styles.sublistItemHeader}>Following are not allowed:-</Text>
-              <View style={styles.bulletItem}><Text style={styles.bullet}>•</Text><Text style={styles.itemText}>Jeans with T- Shirt</Text></View>
-              <View style={styles.bulletItem}><Text style={styles.bullet}>•</Text><Text style={styles.itemText}>Track Suits</Text></View>
-              <View style={styles.bulletItem}><Text style={styles.bullet}>•</Text><Text style={styles.itemText}>Shorts</Text></View>
-              <View style={styles.bulletItem}><Text style={styles.bullet}>•</Text><Text style={styles.itemText}>Back Strap Chapels/ Joggers</Text></View>
-              <View style={styles.bulletItem}><Text style={styles.bullet}>•</Text><Text style={styles.itemText}>Pointed Higher Heels</Text></View>
-            </View>
-
-            {/* Dining Hall Section */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>
-                Dining Hall and Engle Bright Hall <Text style={styles.sectionSubtitle}>(Smart Casual)</Text>
-              </Text>
-              <View style={styles.bulletItem}><Text style={styles.bullet}>•</Text><Text style={styles.itemText}>Dress pant / Shirt. Lounge Suit and Safari Suit.</Text></View>
-              <View style={styles.bulletItem}><Text style={styles.bullet}>•</Text><Text style={styles.itemText}>Smart Casual (Dress or Cotton Pant with T- shirt (Collared).</Text></View>
-              <View style={styles.bulletItem}><Text style={styles.bullet}>•</Text><Text style={styles.itemText}>Shalwar Kameez</Text></View>
-              <Text style={styles.sublistItemHeader}>Following are not allowed:-</Text>
-              <View style={styles.bulletItem}><Text style={styles.bullet}>•</Text><Text style={styles.itemText}>Slippers</Text></View>
-              <View style={styles.bulletItem}><Text style={styles.bullet}>•</Text><Text style={styles.itemText}>Track Suit</Text></View>
-              <View style={styles.bulletItem}><Text style={styles.bullet}>•</Text><Text style={styles.itemText}>Shorts / Nicker</Text></View>
-              <View style={styles.bulletItem}><Text style={styles.bullet}>•</Text><Text style={styles.itemText}>Men's Shawl</Text></View>
-            </View>
-
-            {/* BBQ Lawn Section */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>
-                BBQ Lawn <Text style={styles.sectionSubtitle}>(Casual Dress)</Text>
-              </Text>
-              <View style={styles.bulletItem}><Text style={styles.bullet}>•</Text><Text style={styles.itemText}>Shalwar Kameez / Kurta</Text></View>
-              <View style={styles.bulletItem}><Text style={styles.bullet}>•</Text><Text style={styles.itemText}>Jeans & T- shirts (Round Collar)</Text></View>
-              <View style={styles.bulletItem}><Text style={styles.bullet}>•</Text><Text style={styles.itemText}>Track Suits</Text></View>
-              <View style={styles.bulletItem}><Text style={styles.bullet}>•</Text><Text style={styles.itemText}>Sandals, Back Strap Chapels and Joggers</Text></View>
-            </View>
-
-            {/* Note Section */}
-            <View style={styles.noteSection}>
-              <Text style={styles.noteTitle}>Note</Text>
-              <View style={styles.bulletItem}><Text style={styles.bullet}>•</Text><Text style={styles.itemText}>All respectable members are requested to cooperate with the club administration.</Text></View>
-              <View style={styles.bulletItem}><Text style={styles.bullet}>•</Text><Text style={styles.itemText}>Members and their guest improperly dressed up would not be entertained.</Text></View>
-              <View style={styles.bulletItem}><Text style={styles.bullet}>•</Text><Text style={styles.itemText}>Members entering the club are expected to wear smart informal dress.</Text></View>
-              <View style={styles.bulletItem}><Text style={styles.bullet}>•</Text><Text style={styles.itemText}>Club dress rules are also applicable on guest.</Text></View>
-            </View>
-
+            <HtmlRenderer
+              htmlContent={DRESS_CODE_HTML}
+              customTagsStyles={dressCodeTagsStyles}
+              customClassesStyles={dressCodeClassesStyles}
+            />
           </ScrollView>
         </SafeAreaView>
       </View>

@@ -160,10 +160,8 @@ const MessingCategoryDetails = ({ route, navigation }) => {
                                 {items.length > 0 ? items.map((item) => (
                                     <View key={item.id} style={styles.menuItem}>
                                         <View style={styles.menuItemLeft}>
-                                            <Text style={styles.menuItemName}>
-                                                {item.name}{'\n'}
-                                                {item.description && <Text style={styles.menuItemSize}>{item.description}</Text>}
-                                            </Text>
+                                            <Text style={styles.menuItemName}>{item.name}</Text>
+                                            {item.description && <Text style={styles.menuItemSize}>{item.description}</Text>}
                                         </View>
                                         <View style={styles.menuItemRight}>
                                             <Text style={styles.menuItemPrice}>Rs.{item.price}</Text>
@@ -217,9 +215,11 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
     },
-    backButton: { justifyContent: 'center', alignItems: 'center', marginLeft: 10 },
-    headerTitle: { fontSize: 22, fontWeight: 'bold', color: '#000', flex: 1, textAlign: 'center' },
-
+    backButton: { justifyContent: 'center', alignItems: 'center' },
+    headerTitle: {
+        fontSize: 22, fontWeight: 'bold', color: '#000', flex: 1, textAlign: 'center',
+        marginLeft: 20
+    },
     sliderContainer: {
         height: 200,
         width: '90%',
@@ -306,6 +306,7 @@ const styles = StyleSheet.create({
     },
     menuItemLeft: {
         flex: 1,
+        marginRight: 15,
     },
     menuItemName: {
         fontSize: 16,
