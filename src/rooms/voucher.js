@@ -16,66 +16,113 @@ import {
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { bookingService } from '../../services/bookingService';
 import { useAuth } from '../auth/contexts/AuthContext';
+import { useVoucher } from '../auth/contexts/VoucherContext';
+import socketService from '../../services/socket.service';
 
 export default function voucher({ navigation, route }) {
+  const { clearVoucher } = useVoucher();
   const { user } = useAuth();
-  const { bookingId, numericBookingId, bookingData, roomType, selectedRoom, bookingResponse } = route.params || {};
+  const {
+    bookingId,
+    numericBookingId,
+    bookingData,
+    roomType,
+    selectedRoom,
+    bookingResponse,
+    voucherData, // Added for new payload
+    dueDate: initialDueDate, // Allow initial due date from params
+    isGuest,
+    memberDetails
+  } = route.params || {};
 
   const [invoiceData, setInvoiceData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [timeLeft, setTimeLeft] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [shareLoading, setShareLoading] = useState(false);
 
   useEffect(() => {
-    if (bookingId) {
+    if (voucherData) {
+      console.log('🔄 Using passed voucherData for Room Booking');
+      const details = {
+        invoiceNo: voucherData.voucher?.voucher_no || bookingId,
+        invoiceNumber: voucherData.voucher?.voucher_no,
+        bookingId: voucherData.voucher?.booking_id || bookingId,
+        status: voucherData.voucher?.status || 'PENDING',
+        issued_at: voucherData.issue_date || voucherData.voucher?.issued_at || new Date().toISOString(),
+        issued_by: voucherData.voucher?.issued_by || 'System',
+        dueDate: voucherData.due_date || voucherData.voucher?.expiresAt || initialDueDate,
+        amount: voucherData.voucher?.amount || bookingData?.totalPrice,
+        totalPrice: voucherData.voucher?.amount || bookingData?.totalPrice,
+        paymentMode: voucherData.voucher?.payment_mode || 'PENDING',
+        remarks: voucherData.voucher?.remarks,
+        consumerNumber: voucherData.voucher?.consumer_number,
+        membershipNo: voucherData.membership?.no,
+        memberName: voucherData.membership?.name,
+        // Room information
+        roomType: roomType?.name,
+        roomNumber: selectedRoom?.roomNumber,
+        // Booking dates
+        checkIn: bookingData?.checkIn,
+        checkOut: bookingData?.checkOut,
+        numberOfAdults: bookingData?.numberOfAdults || 1,
+        numberOfChildren: bookingData?.numberOfChildren || 0,
+        numberOfRooms: bookingData?.numberOfRooms || 1,
+      };
+      setInvoiceData(details);
+      setLoading(false);
+    } else if (bookingId) {
       fetchInvoice();
     } else {
       Alert.alert('Error', 'No booking ID provided');
       navigation.goBack();
     }
-  }, [bookingId]);
 
-  const fetchInvoice = async () => {
-    try {
-      setLoading(true);
-      console.log('🧾 Fetching invoice for booking:', { bookingId, numericBookingId });
-      console.log('📊 Booking response:', bookingResponse);
+    // Real-time payment sync for THIS specific screen
+    const voucherId = voucherData?.voucher?.id || bookingId;
+    let unsubscribe = () => { };
 
-      let invoiceResponse;
-
-      // First try: Use the booking response data (contains invoice)
-      if (bookingResponse) {
-        console.log('🔄 Using booking response data for invoice');
-        invoiceResponse = transformBookingResponseToInvoice(bookingResponse);
-      }
-
-      // If no invoice from booking response, try to fetch from API
-      if (!invoiceResponse) {
-        try {
-          invoiceResponse = await bookingService.getInvoice(bookingId, numericBookingId);
-          console.log('✅ Invoice fetched from API:', invoiceResponse);
-        } catch (error) {
-          console.log('⚠️ Invoice fetch failed:', error.message);
+    if (voucherId) {
+      unsubscribe = socketService.subscribeToPayment(voucherId, (data) => {
+        if (data.status === 'PAID') {
+          console.log('💰 [Room Voucher] Real-time payment detected!');
+          setInvoiceData(prev => prev ? { ...prev, status: 'PAID' } : null);
         }
-      }
-
-      // If we have invoice data, transform it
-      if (invoiceResponse) {
-        const transformedInvoice = transformInvoiceData(invoiceResponse);
-        setInvoiceData(transformedInvoice);
-      } else {
-        // Create temporary invoice as fallback
-        createTemporaryInvoice();
-      }
-
-    } catch (error) {
-      console.error('❌ Final invoice fetch error:', error);
-      createTemporaryInvoice();
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+      });
     }
-  };
+
+    return () => unsubscribe();
+  }, [bookingId, voucherData]);
+
+  // Countdown Timer Logic
+  useEffect(() => {
+    if (!invoiceData?.dueDate || invoiceData?.status === 'PAID') return;
+
+    const targetDate = new Date(invoiceData.dueDate).getTime();
+
+    const interval = setInterval(() => {
+      const now = new Date().getTime();
+      const distance = targetDate - now;
+
+      if (distance < 0) {
+        clearInterval(interval);
+        setTimeLeft('EXPIRED');
+        return;
+      }
+
+      const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+      let timeStr = '';
+      if (hours > 0) timeStr += `${hours}h `;
+      timeStr += `${minutes}m ${seconds}s`;
+
+      setTimeLeft(timeStr);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [invoiceData?.dueDate, invoiceData?.status]);
 
   const transformBookingResponseToInvoice = (bookingResponse) => {
     // Extract from Data object (invoice response)
@@ -187,6 +234,9 @@ export default function voucher({ navigation, route }) {
         {
           text: 'Proceed to Payment',
           onPress: () => {
+            // Clear global voucher on payment initiation
+            clearVoucher();
+
             // Here you would integrate with your payment gateway
             Alert.alert(
               'Payment Gateway',
@@ -369,14 +419,23 @@ Thank you for your booking!
               <Icon
                 name={statusInfo.icon}
                 size={40}
-                color="#ff9800"
+                color="#b48a64"
               />
               <Text style={styles.invoiceTitle}>
-                BOOKING INVOICE
+                ROOM BOOKING VOUCHER
               </Text>
               <Text style={styles.invoiceSubtitle}>
                 Complete payment to confirm your reservation
               </Text>
+              {timeLeft && timeLeft !== 'EXPIRED' && invoiceData?.status !== 'PAID' && (
+                <View style={styles.timerContainer}>
+                  <Icon name="schedule" size={16} color="#dc3545" />
+                  <Text style={styles.timerText}> Expires in: {timeLeft}</Text>
+                </View>
+              )}
+              {timeLeft === 'EXPIRED' && (
+                <Text style={styles.expiredText}>EXPIRED</Text>
+              )}
             </View>
 
             {/* Payment Required Alert */}
@@ -402,10 +461,19 @@ Thank you for your booking!
 
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Invoice Number:</Text>
-                <Text style={styles.detailValue}>
+                <Text style={[styles.detailValue, styles.invoiceHighlight]}>
                   {invoiceData.invoiceNo}
                 </Text>
               </View>
+
+              {invoiceData.consumerNumber && (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Consumer Number:</Text>
+                  <Text style={[styles.detailValue, styles.invoiceHighlight]}>
+                    {invoiceData.consumerNumber}
+                  </Text>
+                </View>
+              )}
 
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Booking ID:</Text>
@@ -797,6 +865,33 @@ const styles = StyleSheet.create({
   },
   statusCancelled: {
     backgroundColor: '#f8d7da',
+  },
+  invoiceHighlight: {
+    color: '#b48a64',
+    fontWeight: 'bold',
+  },
+  timerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+    backgroundColor: '#fff1f0',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: '#ffa39e',
+  },
+  timerText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#dc3545',
+  },
+  expiredText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#dc3545',
+    marginTop: 10,
+    textTransform: 'uppercase',
   },
   pendingBadge: {
     backgroundColor: '#fff3cd',

@@ -16,8 +16,11 @@ import Icon from 'react-native-vector-icons/AntDesign';
 import Feather from 'react-native-vector-icons/Feather';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { paymentAPI, banquetAPI } from '../config/apis';
+import { useVoucher } from '../auth/contexts/VoucherContext';
+import socketService from '../../services/socket.service';
 
 const HallInvoiceScreen = ({ route, navigation }) => {
+  const { clearVoucher } = useVoucher();
   const {
     invoiceData,
     bookingData,
@@ -30,6 +33,23 @@ const HallInvoiceScreen = ({ route, navigation }) => {
   const [loading, setLoading] = useState(false);
   const [paymentStatus, setPaymentStatus] = useState('pending');
   const [showPaymentMethods, setShowPaymentMethods] = useState(false);
+
+  // Real-time payment sync
+  React.useEffect(() => {
+    const voucherId = invoiceData?.id || invoiceData?.InvoiceNumber || invoiceData?.invoiceNumber;
+    let unsubscribe = () => { };
+
+    if (voucherId) {
+      unsubscribe = socketService.subscribeToPayment(voucherId, (data) => {
+        if (data.status === 'PAID') {
+          console.log('💰 [Hall Invoice] Real-time payment detected!');
+          setPaymentStatus('paid');
+        }
+      });
+    }
+
+    return () => unsubscribe();
+  }, [invoiceData]);
 
   const handleShareInvoice = async () => {
     try {
@@ -81,6 +101,8 @@ Thank you for choosing our banquet hall services!
   };
 
   const handleMakePayment = () => {
+    // Clear global voucher on payment initiation
+    clearVoucher();
     setShowPaymentMethods(true);
   };
 

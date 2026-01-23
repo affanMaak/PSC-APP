@@ -1575,6 +1575,7 @@ import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import DropDownPicker from 'react-native-dropdown-picker';
 import { getUserData, banquetAPI } from '../../config/apis';
 import { useAuth } from '../auth/contexts/AuthContext';
+import { useVoucher } from '../auth/contexts/VoucherContext';
 
 const eventTypeOptions = [
   { label: 'Wedding Reception', value: 'wedding' },
@@ -1592,6 +1593,7 @@ const timeSlotOptions = [
 ];
 
 const BHBooking = ({ route, navigation }) => {
+  const { setVoucher } = useVoucher();
   const { venue } = route.params || {};
   const { user, isAuthenticated } = useAuth();
 
@@ -1962,8 +1964,8 @@ const BHBooking = ({ route, navigation }) => {
             {
               text: 'Proceed to Payment',
               onPress: () => {
-                // Navigate to invoice screen
-                navigation.navigate('HallInvoiceScreen', {
+                // Prepare navigation params
+                const navigationParams = {
                   invoiceData: response.data.Data || response.data,
                   bookingData: {
                     ...bookingData,
@@ -1981,8 +1983,15 @@ const BHBooking = ({ route, navigation }) => {
                   guestDetails: isGuest ? {
                     guestName,
                     guestContact
-                  } : null
-                });
+                  } : null,
+                  module: 'HALL'
+                };
+
+                // Set global voucher for persistent timer
+                setVoucher(response.data.Data || response.data, navigationParams);
+
+                // Navigate to invoice screen
+                navigation.navigate('HallInvoiceScreen', navigationParams);
               }
             },
             {

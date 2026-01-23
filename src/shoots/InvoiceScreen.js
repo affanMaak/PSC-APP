@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,11 +14,31 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/AntDesign';
 import { paymentAPI } from '../config/apis';
+import { useVoucher } from '../auth/contexts/VoucherContext';
+import socketService from '../../services/socket.service';
 
 const InvoiceScreen = ({ route, navigation }) => {
+  const { clearVoucher } = useVoucher();
   const { invoiceData, bookingData, photoshoot, memberInfo } = route.params || {};
   const [loading, setLoading] = useState(false);
   const [paymentStatus, setPaymentStatus] = useState('pending');
+
+  // Real-time payment sync
+  useEffect(() => {
+    const voucherId = invoiceData?.id || invoiceData?.InvoiceNumber;
+    let unsubscribe = () => { };
+
+    if (voucherId) {
+      unsubscribe = socketService.subscribeToPayment(voucherId, (data) => {
+        if (data.status === 'PAID') {
+          console.log('💰 [Shoot Invoice] Real-time payment detected!');
+          setPaymentStatus('paid');
+        }
+      });
+    }
+
+    return () => unsubscribe();
+  }, [invoiceData]);
 
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
@@ -104,6 +124,9 @@ Thank you for choosing our service!
   };
 
   const handleMakePayment = () => {
+    // Clear global voucher on payment initiation
+    clearVoucher();
+
     Alert.alert(
       'Payment Instructions',
       `Complete your payment using any of these methods:\n\n${invoiceData.PaymentChannels?.join('\n') || 'Contact club office for payment details'}\n\nAfter payment, save your transaction ID and click "I Have Paid".\n\nAmount: Rs. ${invoiceData.Amount}\nInvoice: ${invoiceData.InvoiceNumber}`,
