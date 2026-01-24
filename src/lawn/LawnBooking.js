@@ -3063,6 +3063,7 @@ import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import DropDownPicker from 'react-native-dropdown-picker';
 import { getUserData, lawnAPI, getAuthToken } from '../../config/apis';
 import { useAuth } from '../auth/contexts/AuthContext';
+import { useVoucher } from '../auth/contexts/VoucherContext';
 
 const eventTypeOptions = [
   { label: 'Wedding Reception', value: 'wedding' },
@@ -3080,6 +3081,7 @@ const timeSlotOptions = [
 ];
 
 const LawnBooking = ({ route, navigation }) => {
+  const { setVoucher } = useVoucher();
   const { venue } = route.params || {};
   const { user, isAuthenticated } = useAuth();
 
@@ -3358,7 +3360,8 @@ const LawnBooking = ({ route, navigation }) => {
             responseData.InvoiceNumber ||
             `INV-LAWN-${Date.now()}`;
 
-          navigation.navigate('Voucher', {
+          // Prepare navigation params
+          const navigationParams = {
             invoiceData: responseData.Data || responseData,
             invoiceNumber: invoiceNumber,
             bookingType: 'LAWN',
@@ -3384,8 +3387,14 @@ const LawnBooking = ({ route, navigation }) => {
               guestContact
             } : null,
             bookingSuccess: bookingResponse.ok,
-            bookingError: !bookingResponse.ok ? 'Booking creation failed, but invoice was generated' : null
-          });
+            bookingError: !bookingResponse.ok ? 'Booking creation failed, but invoice was generated' : null,
+            module: 'LAWN'
+          };
+
+          // Set global voucher for floating timer
+          setVoucher(responseData.Data || responseData, navigationParams);
+
+          navigation.navigate('Voucher', navigationParams);
 
         } catch (bookingError) {
           console.error('❌ Booking creation error:', bookingError);

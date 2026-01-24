@@ -3,6 +3,8 @@ import React, { useEffect } from 'react';
 import { enableScreens } from 'react-native-screens';
 import { View, Button, Alert, LogBox, Image, StyleSheet, Text, TouchableOpacity, StatusBar, Linking } from 'react-native';
 import { AuthProvider, useAuth } from './src/auth/contexts/AuthContext';
+import { VoucherProvider } from './src/auth/contexts/VoucherContext';
+import FloatingTimer from './src/components/FloatingTimer';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createDrawerNavigator, DrawerContentScrollView, DrawerItemList } from '@react-navigation/drawer';
@@ -565,6 +567,7 @@ function AppContent() {
         <Stack.Screen name="AdminBookingsScreen" component={AdminBookingsScreen} options={{ headerShown: false }} />
         <Stack.Screen name="Announcements" component={Announcements} options={{ headerShown: false }} />
       </Stack.Navigator>
+      <FloatingTimer />
     </NavigationContainer>
   );
 }
@@ -574,7 +577,9 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <AppContent />
+        <VoucherProvider>
+          <AppContent />
+        </VoucherProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

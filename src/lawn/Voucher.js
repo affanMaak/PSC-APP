@@ -820,15 +820,20 @@ import Icon from 'react-native-vector-icons/AntDesign';
 import Feather from 'react-native-vector-icons/Feather';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { paymentAPI } from '../../config/apis';
+import { useVoucher } from '../auth/contexts/VoucherContext';
+import socketService from '../../services/socket.service';
 
 const Voucher = ({ route, navigation }) => {
+  const { clearVoucher } = useVoucher();
   const {
     invoiceData,
+    voucherData, // New data structure for ROOM bookings
     invoiceNumber,
     bookingType = 'LAWN',
     venue,
     bookingDetails,
     bookingId,
+    dueDate: initialDueDate, // Allow initial due date from params
     isGuest,
     memberDetails,
     guestDetails,
@@ -840,28 +845,89 @@ const Voucher = ({ route, navigation }) => {
   const [paymentStatus, setPaymentStatus] = useState('pending');
   const [showPaymentMethods, setShowPaymentMethods] = useState(false);
   const [invoiceDetails, setInvoiceDetails] = useState(null);
+  const [timeLeft, setTimeLeft] = useState('');
 
   useEffect(() => {
     console.log('🧾 Voucher received data:', {
-      invoiceData: invoiceData,
-      invoiceNumber: invoiceNumber,
-      bookingId: bookingId,
-      bookingDetails: bookingDetails,
-      error: error
+      invoiceData,
+      voucherData,
+      invoiceNumber,
+      bookingType,
+      bookingId,
+      initialDueDate
     });
 
-    // Extract invoice details
-    if (invoiceData) {
+    // Extract invoice details based on booking type
+    if (bookingType === 'ROOM' && voucherData) {
+      const details = {
+        invoiceNumber: voucherData.voucher?.voucher_no || invoiceNumber,
+        amount: voucherData.voucher?.amount || bookingDetails?.totalPrice,
+        dueDate: voucherData.due_date || voucherData.voucher?.expiresAt || initialDueDate,
+        issueDate: voucherData.issue_date || voucherData.voucher?.issued_at,
+        membershipNo: voucherData.membership?.no,
+        memberName: voucherData.membership?.name,
+        remarks: voucherData.voucher?.remarks,
+        consumerNumber: voucherData.voucher?.consumer_number,
+        paymentMode: voucherData.voucher?.payment_mode
+      };
+      setInvoiceDetails(details);
+      console.log('📋 ROOM Invoice details extracted:', details);
+    } else if (invoiceData) {
       const details = {
         invoiceNumber: invoiceData.InvoiceNumber || invoiceData.Data?.InvoiceNumber || invoiceNumber,
         amount: invoiceData.Amount || invoiceData.Data?.Amount || bookingDetails?.totalAmount,
         bookingSummary: invoiceData.BookingSummary || invoiceData.Data?.BookingSummary || bookingDetails?.bookingSummary,
-        dueDate: invoiceData.DueDate || invoiceData.Data?.DueDate,
+        dueDate: invoiceData.DueDate || invoiceData.Data?.DueDate || initialDueDate,
       };
       setInvoiceDetails(details);
-      console.log('📋 Invoice details extracted:', details);
+      console.log('📋 LAWN/Other Invoice details extracted:', details);
     }
-  }, [invoiceData, invoiceNumber, bookingId]);
+
+    // Real-time payment sync
+    const vId = voucherData?.voucher?.id || bookingId;
+    let unsubscribe = () => { };
+
+    if (vId) {
+      unsubscribe = socketService.subscribeToPayment(vId, (data) => {
+        if (data.status === 'PAID') {
+          console.log('💰 [Lawn Voucher] Real-time payment detected!');
+          setPaymentStatus('paid');
+        }
+      });
+    }
+
+    return () => unsubscribe();
+  }, [invoiceData, voucherData, invoiceNumber, bookingId, bookingType]);
+
+  // Countdown Timer Logic
+  useEffect(() => {
+    if (!invoiceDetails?.dueDate || paymentStatus === 'paid') return;
+
+    const targetDate = new Date(invoiceDetails.dueDate).getTime();
+
+    const interval = setInterval(() => {
+      const now = new Date().getTime();
+      const distance = targetDate - now;
+
+      if (distance < 0) {
+        clearInterval(interval);
+        setTimeLeft('EXPIRED');
+        return;
+      }
+
+      const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+      let timeStr = '';
+      if (hours > 0) timeStr += `${hours}h `;
+      timeStr += `${minutes}m ${seconds}s`;
+
+      setTimeLeft(timeStr);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [invoiceDetails?.dueDate, paymentStatus]);
 
   const handleShareInvoice = async () => {
     try {
@@ -922,6 +988,9 @@ Thank you for choosing our lawn services!
   };
 
   const handlePaymentMethodSelect = (method) => {
+    // Clear global voucher on payment initiation
+    clearVoucher();
+
     let paymentInstructions = '';
     let contactNumber = '';
 
@@ -1184,7 +1253,9 @@ Please mention Invoice: ${invoiceDetails?.invoiceNumber}
       <ScrollView contentContainerStyle={styles.content}>
         {/* Invoice Header */}
         <View style={styles.invoiceHeader}>
-          <Text style={styles.invoiceTitle}>LAWN BOOKING INVOICE</Text>
+          <Text style={styles.invoiceTitle}>
+            {bookingType === 'ROOM' ? 'ROOM BOOKING VOUCHER' : 'LAWN BOOKING INVOICE'}
+          </Text>
           <Text style={styles.invoiceNumber}>
             #{invoiceDetails?.invoiceNumber || 'N/A'}
           </Text>
@@ -1193,6 +1264,15 @@ Please mention Invoice: ${invoiceDetails?.invoiceNumber}
               {paymentStatus === 'paid' ? 'PAID' : 'PENDING PAYMENT'}
             </Text>
           </Text>
+          {timeLeft && timeLeft !== 'EXPIRED' && paymentStatus !== 'paid' && (
+            <View style={styles.timerContainer}>
+              <Icon name="clockcircleo" size={14} color="#dc3545" />
+              <Text style={styles.timerText}> Expires in: {timeLeft}</Text>
+            </View>
+          )}
+          {timeLeft === 'EXPIRED' && (
+            <Text style={styles.expiredText}>EXPIRED</Text>
+          )}
           {bookingId && (
             <Text style={styles.bookingId}>
               Booking ID: {bookingId}
@@ -1239,60 +1319,65 @@ Please mention Invoice: ${invoiceDetails?.invoiceNumber}
           </View>
         )}
 
-        {/* Lawn Booking Summary */}
+        {/* Booking Summary */}
         <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Lawn Booking Summary</Text>
+          <Text style={styles.sectionTitle}>
+            {bookingType === 'ROOM' ? 'Room Booking Summary' : 'Lawn Booking Summary'}
+          </Text>
 
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Lawn Name:</Text>
-            <Text style={styles.detailValue}>
-              {venue?.description || bookingDetails?.lawnName || 'N/A'}
-            </Text>
-          </View>
+          {bookingType === 'ROOM' ? (
+            <>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Room(s):</Text>
+                <Text style={styles.detailValue}>
+                  {invoiceDetails?.remarks?.split(':')[1]?.trim() || roomType?.name || 'N/A'}
+                </Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Duration:</Text>
+                <Text style={styles.detailValue}>
+                  {bookingData?.checkIn} to {bookingData?.checkOut}
+                </Text>
+              </View>
+            </>
+          ) : (
+            <>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Lawn Name:</Text>
+                <Text style={styles.detailValue}>
+                  {venue?.description || bookingDetails?.lawnName || 'N/A'}
+                </Text>
+              </View>
 
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Booking Date:</Text>
-            <Text style={styles.detailValue}>
-              {formatDate(bookingDetails?.bookingDate)}
-            </Text>
-          </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Booking Date:</Text>
+                <Text style={styles.detailValue}>
+                  {formatDate(bookingDetails?.bookingDate)}
+                </Text>
+              </View>
 
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Time Slot:</Text>
-            <Text style={styles.detailValue}>
-              {formatTimeSlot(bookingDetails?.eventTime)}
-            </Text>
-          </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Time Slot:</Text>
+                <Text style={styles.detailValue}>
+                  {formatTimeSlot(bookingDetails?.eventTime)}
+                </Text>
+              </View>
 
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Event Type:</Text>
-            <Text style={styles.detailValue}>
-              {bookingDetails?.eventType || 'N/A'}
-            </Text>
-          </View>
-
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Number of Guests:</Text>
-            <Text style={styles.detailValue}>
-              {bookingDetails?.numberOfGuests || 0} people
-            </Text>
-          </View>
-
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Rate Type:</Text>
-            <Text style={styles.detailValue}>
-              {isGuest ? 'Guest Rate' : 'Member Rate'}
-            </Text>
-          </View>
-
-          {bookingDetails?.specialRequest && (
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Special Requests:</Text>
-              <Text style={styles.detailValue}>
-                {bookingDetails.specialRequest}
-              </Text>
-            </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Event Type:</Text>
+                <Text style={styles.detailValue}>
+                  {bookingDetails?.eventType || 'N/A'}
+                </Text>
+              </View>
+            </>
           )}
+
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Guests:</Text>
+            <Text style={styles.detailValue}>
+              {bookingDetails?.numberOfGuests || (bookingData?.numberOfAdults && bookingData?.numberOfAdults + (bookingData?.numberOfChildren || 0)) || 0} people
+            </Text>
+          </View>
 
           <View style={[styles.detailRow, styles.totalRow]}>
             <Text style={styles.totalLabel}>Total Amount:</Text>
@@ -1312,6 +1397,15 @@ Please mention Invoice: ${invoiceDetails?.invoiceNumber}
               {invoiceDetails?.invoiceNumber || 'N/A'}
             </Text>
           </View>
+
+          {invoiceDetails?.consumerNumber && (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Consumer Number:</Text>
+              <Text style={[styles.detailValue, styles.invoiceHighlight]}>
+                {invoiceDetails?.consumerNumber}
+              </Text>
+            </View>
+          )}
 
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Generated On:</Text>
@@ -1338,6 +1432,15 @@ Please mention Invoice: ${invoiceDetails?.invoiceNumber}
               {paymentStatus === 'paid' ? 'PAID' : 'PENDING'}
             </Text>
           </View>
+
+          {invoiceDetails?.paymentMode && (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Payment Mode:</Text>
+              <Text style={styles.detailValue}>
+                {invoiceDetails.paymentMode}
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* Important Instructions */}
@@ -1570,6 +1673,29 @@ const styles = StyleSheet.create({
   statusPaid: {
     color: '#2E8B57',
     fontWeight: 'bold',
+  },
+  timerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+    backgroundColor: '#fff1f0',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: '#ffa39e',
+  },
+  timerText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#dc3545',
+  },
+  expiredText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#dc3545',
+    marginTop: 10,
+    textTransform: 'uppercase',
   },
   errorAlertCard: {
     flexDirection: 'row',

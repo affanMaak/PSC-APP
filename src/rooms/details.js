@@ -20,6 +20,7 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { roomService } from '../../services/roomService';
 import { bookingService } from '../../services/bookingService';
+import { useVoucher } from '../auth/contexts/VoucherContext';
 import { contentService } from '../../config/apis';
 import { useAuth } from '../auth/contexts/AuthContext';
 import { ImageBackground } from 'react-native';
@@ -29,6 +30,7 @@ import HtmlRenderer from '../events/HtmlRenderer';
 const { width: screenWidth } = Dimensions.get('window');
 
 export default function details({ navigation, route }) {
+    const { setVoucher } = useVoucher();
     const { user, isAuthenticated } = useAuth();
 
     console.log('🚀 RoomDetails - User object:', JSON.stringify(user, null, 2));
@@ -388,68 +390,35 @@ export default function details({ navigation, route }) {
             console.log('📦 Final booking payload:', JSON.stringify(payload, null, 2));
 
             // Call the booking service with roomType as query parameter
-            const result = await bookingService.memberBookingRoom(roomType.id, payload);
-            console.log('✅ Booking response received:', result);
+            const response = await bookingService.memberBookingRoom(roomType.id, payload);
+            const result = response.data;
+            console.log('✅ Booking response data received:', result);
 
-            // Extract booking information from response
-            let bookingId;
-            let numericBookingId = null;
-            let invoiceNumber = null;
-
-            if (result.Data?.InvoiceNumber) {
-                invoiceNumber = result.Data.InvoiceNumber;
-                bookingId = invoiceNumber; // Use invoice number as booking ID
-            } else if (result.Data?.BookingId) {
-                bookingId = result.Data.BookingId;
-                numericBookingId = result.Data.BookingId;
-            } else if (result.bookings && Array.isArray(result.bookings) && result.bookings.length > 0) {
-                bookingId = result.bookings[0].id;
-                numericBookingId = result.bookings[0].id;
-            } else if (result.id) {
-                bookingId = result.id;
-                numericBookingId = result.id;
-            } else if (result.bookingId) {
-                bookingId = result.bookingId;
-                numericBookingId = result.bookingId;
-            } else {
-                bookingId = `temp-${Date.now()}`;
-            }
-
-            console.log('✅ Booking successful! Response:', result);
-
-
-            // Extract room information from response if available
-            let selectedRoomsInfo = [];
-            if (result.Data?.BookingSummary?.SelectedRooms) {
-                selectedRoomsInfo = result.Data.BookingSummary.SelectedRooms;
-            } else if (result.TemporaryData?.roomIds) {
-                // You might need to fetch room details if only IDs are provided
-                selectedRoomsInfo = result.TemporaryData.roomIds.map(id => ({ id }));
-            }
-
-            // Navigate to voucher screen with all necessary data
-            navigation.navigate('voucher', {
-                bookingId: bookingId,
-                numericBookingId: numericBookingId,
-                invoiceNumber: invoiceNumber,
+            const navigationParams = {
+                bookingType: 'ROOM',
+                voucherData: result, // Pass the whole new structure
+                bookingId: result.voucher?.booking_id || result.voucher?.id,
+                invoiceNumber: result.voucher?.voucher_no,
+                dueDate: result.due_date || result.voucher?.expiresAt,
                 bookingData: {
                     ...bookingData,
-                    // Use backend calculated total price if available
-                    totalPrice: result.Data?.Amount || result.Data?.totalPrice || bookingData.totalPrice,
-                    numberOfAdults: bookingData.numberOfAdults || 1,
-                    numberOfChildren: bookingData.numberOfChildren || 0,
-                    numberOfRooms: bookingData.numberOfRooms || 1,
-                    checkIn: bookingData.checkIn,
-                    checkOut: bookingData.checkOut,
-                    specialRequest: bookingData.specialRequest || '',
-                    isGuestBooking: bookingData.isGuestBooking || false,
-                    guestName: bookingData.guestName || '',
+                    totalPrice: result.voucher?.amount || bookingData.totalPrice,
                 },
                 roomType: roomType,
-                selectedRooms: selectedRoomsInfo,
-                bookingResponse: result,
-                invoiceData: result.Data || result // Pass invoice data directly
-            });
+                memberDetails: result.membership ? {
+                    memberName: result.membership.name,
+                    membershipNo: result.membership.no,
+                    email: result.membership.email,
+                    contact: result.membership.contact
+                } : null,
+                isGuest: bookingData.isGuestBooking
+            };
+
+            // Set global voucher for the floating timer
+            setVoucher(result, navigationParams);
+
+            // Navigate to voucher screen
+            navigation.navigate('voucher', navigationParams);
 
         } catch (error) {
             console.error('💥 Booking error in component:', {

@@ -18,9 +18,11 @@ import Icon from 'react-native-vector-icons/AntDesign';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { paymentAPI, photoshootAPI, makeApiCall, getUserData, checkAuthStatus, getPhotoshootRule } from '../config/apis';
+import { useVoucher } from '../src/auth/contexts/VoucherContext';
 import HtmlRenderer from '../src/events/HtmlRenderer';
 
 const shootsBooking = ({ route, navigation }) => {
+  const { setVoucher } = useVoucher();
   const { photoshoot } = route.params || {};
 
   // State variables
@@ -320,8 +322,8 @@ const shootsBooking = ({ route, navigation }) => {
       if (result.success) {
         console.log('✅ Invoice generated successfully:', result.data);
 
-        // Navigate to invoice screen
-        navigation.navigate('InvoiceScreen', {
+        // Prepare navigation params
+        const navigationParams = {
           invoiceData: result.data.Data || result.data,
           bookingData: {
             ...bookingData,
@@ -333,7 +335,14 @@ const shootsBooking = ({ route, navigation }) => {
           },
           photoshoot: photoshoot,
           memberInfo: memberInfo,
-        });
+          module: 'SHOOT'
+        };
+
+        // Set global voucher for persistent timer
+        setVoucher(result.data.Data || result.data, navigationParams);
+
+        // Navigate to invoice screen
+        navigation.navigate('InvoiceScreen', navigationParams);
       } else {
         Alert.alert('Invoice Generation Failed', result.message || 'Failed to generate invoice');
       }
