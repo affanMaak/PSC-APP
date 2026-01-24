@@ -23,7 +23,7 @@ const announcements = [
   { id: "2", date: "2024-08-12", title: "Welcome to the App" },
 ];
 
-export default function AnnouncementsScreen({ navigation }) {
+export default function Announcements({ navigation }) {
   const [announcements, setAnnouncements] = useState([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedAnnouncement, setSelectedAnnouncement] = useState(null);

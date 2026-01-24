@@ -508,7 +508,7 @@ import {
 } from 'react-native';
 import axios from 'axios';
 import { jwtDecode } from 'jwt-decode'; // Use library instead of custom decoder
-import { storeAuthData, getBaseUrl, userWho, registerFcmToken } from '../../config/apis';
+import { storeAuthData, getBaseUrl, userWho, registerFcmToken, removeAuthData } from '../../config/apis';
 import messaging from '@react-native-firebase/messaging';
 import { useAuth } from './contexts/AuthContext';
 
@@ -718,6 +718,11 @@ const LoginScr = ({ navigation }) => {
 
         // Always try to get and send current FCM token
         try {
+          // Note: On simulators, this might still fail if not configured correctly, 
+          // but we've added entitlements to help.
+          if (Platform.OS === 'ios') {
+            await messaging().registerDeviceForRemoteMessages();
+          }
           const currentToken = await messaging().getToken();
           if (currentToken) {
             console.log('🔑 Current FCM Token:', currentToken);
@@ -727,39 +732,41 @@ const LoginScr = ({ navigation }) => {
             console.log('⚠️ No FCM token available');
           }
         } catch (fcmErr) {
-          console.error('❌ Error handling FCM token during login:', fcmErr);
+          console.warn('⚠️ FCM registration failed (Common on simulators):', fcmErr.message);
+          // Non-blocking error
         }
 
-        // Check if FCM token is missing in userWho response (if the backend supports returning it)
-        // If not available and permission not granted, we might want to ask.
-        // But the request says "if not available from user-who then ask for permission"
+        // Check if FCM token is missing in userWho response
         if (!userWhoData?.fcmToken) {
           console.log('❕ FCM token missing in user-who response, checking permissions...');
-          const authStatus = await messaging().requestPermission();
-          const enabled =
-            authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
-            authStatus === messaging.AuthorizationStatus.PROVISIONAL;
+          try {
+            const authStatus = await messaging().requestPermission();
+            const enabled =
+              authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
+              authStatus === messaging.AuthorizationStatus.PROVISIONAL;
 
-          if (enabled) {
-            console.log('🔔 Permission granted after check');
-            const newToken = await messaging().getToken();
-            if (newToken) {
-              await registerFcmToken(userInfo.id, newToken);
-              console.log('✅ FCM token updated after permission grant');
+            if (enabled) {
+              console.log('🔔 Permission granted after check');
+              if (Platform.OS === 'ios') {
+                await messaging().registerDeviceForRemoteMessages();
+              }
+              const newToken = await messaging().getToken();
+              if (newToken) {
+                await registerFcmToken(userInfo.id, newToken);
+                console.log('✅ FCM token updated after permission grant');
+              }
             }
-          } else {
-            console.log('🔕 Permission denied after check');
+          } catch (permError) {
+            console.warn('⚠️ Permission check failed:', permError.message);
           }
         }
 
       } catch (activCheckErr) {
         console.error('❌ User activeness check failed:', activCheckErr);
-        await removeAuthData();
-
+        // We log this but don't necessarily block login unless it's a specific 403
         if (activCheckErr.response?.status === 403) {
+          await removeAuthData();
           throw new Error('User is not active. Please contact support.');
-        } else {
-          throw activCheckErr;
         }
       }
 

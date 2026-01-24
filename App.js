@@ -563,6 +563,7 @@ function AppContent() {
         <Stack.Screen name="MemberBookingsScreen" component={MemberBookingsScreen} options={{ headerShown: false }} />
         <Stack.Screen name="BookingDetailsScreen" component={BookingDetailsScreen} options={{ headerShown: false }} />
         <Stack.Screen name="AdminBookingsScreen" component={AdminBookingsScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="Announcements" component={Announcements} options={{ headerShown: false }} />
       </Stack.Navigator>
     </NavigationContainer>
   );
