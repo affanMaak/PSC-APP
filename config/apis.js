@@ -1643,8 +1643,6 @@ export const isAuthenticated = async () => {
   }
 };
 
-
-
 // Test API connection without authentication
 export const testApiConnection = async () => {
   try {
@@ -1681,38 +1679,134 @@ export const testApiConnection = async () => {
     };
   }
 };
+// config/apis/calendarAPI.js
 export const calendarAPI = {
   // Get all calendar data
-  getAllCalendarData: async () => {
+  getAllCalendarData: async (params = {}) => {
     try {
+      console.log('Fetching all calendar data with params:', params);
+
       const [rooms, halls, lawns, photoshoots] = await Promise.all([
-        calendarAPI.getCalendarRooms(),
-        calendarAPI.getHalls(),
-        calendarAPI.getLawns(),
-        calendarAPI.getPhotoshoots(),
+        calendarAPI.getCalendarRooms(params),
+        calendarAPI.getHalls(params),
+        calendarAPI.getLawns(params),
+        calendarAPI.getPhotoshoots(params),
       ]);
-      return { rooms, halls, lawns, photoshoots };
+
+      // Normalize data structure
+      const normalizedRooms = (rooms || []).map(room => ({
+        id: room.id || room._id,
+        roomNumber: room.roomNumber || room.roomNo || room.id,
+        roomName: room.roomName || `Room ${room.roomNumber || room.roomNo || room.id}`,
+        roomType: room.roomType || { type: 'Standard' },
+        rate: room.rate || room.price || 0,
+        status: room.status || 'AVAILABLE',
+        bookings: Array.isArray(room.bookings) ? room.bookings : [],
+        reservations: Array.isArray(room.reservations) ? room.reservations : [],
+        outOfOrders: Array.isArray(room.outOfOrders) ? room.outOfOrders : [],
+        // Include all original properties
+        ...room
+      }));
+
+      console.log('Normalized rooms data:', {
+        total: normalizedRooms.length,
+        sample: normalizedRooms[0] ? {
+          id: normalizedRooms[0].id,
+          bookings: normalizedRooms[0].bookings.length,
+          reservations: normalizedRooms[0].reservations.length
+        } : 'No rooms'
+      });
+
+      return {
+        rooms: normalizedRooms,
+        halls: halls || [],
+        lawns: lawns || [],
+        photoshoots: photoshoots || []
+      };
     } catch (error) {
       console.error('Error fetching all calendar data:', error);
       throw error;
     }
   },
 
-  // Room endpoints - Same as web portal
-  getCalendarRooms: async () => {
+  // Room endpoints
+  getCalendarRooms: async (params = {}) => {
     try {
-      const response = await api.get(`${base_url}/room/calendar`);
-      return response.data || [];
+      console.log('Fetching rooms with params:', params);
+      const response = await api.get('/room/calendar', { params });
+      const rooms = response.data || [];
+
+      console.log('Raw rooms data received:', {
+        count: rooms.length,
+        firstRoom: rooms[0] || 'No rooms'
+      });
+
+      // Normalize room data
+      return rooms.map(room => {
+        const normalizedRoom = {
+          id: room.id || room._id,
+          roomNumber: room.roomNumber || room.roomNo || room.id,
+          roomName: room.roomName || `Room ${room.roomNumber || room.roomNo || room.id}`,
+          roomType: room.roomType || { type: 'Standard' },
+          rate: room.rate || room.price || 0,
+          status: room.status || 'AVAILABLE',
+          bookings: [],
+          reservations: [],
+          outOfOrders: [],
+          // Include all original properties
+          ...room
+        };
+
+        // Ensure arrays are properly initialized and normalize internal structures if needed
+        if (room.bookings && Array.isArray(room.bookings)) {
+          normalizedRoom.bookings = room.bookings.map(booking => ({
+            id: booking.id || booking._id,
+            checkIn: booking.checkIn,
+            checkOut: booking.checkOut,
+            bookingDate: booking.bookingDate,
+            paymentStatus: booking.paymentStatus,
+            status: booking.status,
+            memberName: booking.memberName,
+            guestName: booking.guestName,
+            totalPrice: booking.totalPrice,
+            ...booking
+          }));
+        }
+
+        if (room.reservations && Array.isArray(room.reservations)) {
+          normalizedRoom.reservations = room.reservations.map(reservation => ({
+            id: reservation.id || reservation._id,
+            reservedFrom: reservation.reservedFrom,
+            reservedTo: reservation.reservedTo,
+            startDate: reservation.startDate,
+            endDate: reservation.endDate,
+            admin: reservation.admin,
+            ...reservation
+          }));
+        }
+
+        if (room.outOfOrders && Array.isArray(room.outOfOrders)) {
+          normalizedRoom.outOfOrders = room.outOfOrders.map(order => ({
+            id: order.id || order._id,
+            startDate: order.startDate,
+            endDate: order.endDate,
+            reason: order.reason,
+            ...order
+          }));
+        }
+
+        return normalizedRoom;
+      });
     } catch (error) {
       console.error('Error fetching calendar rooms:', error.message);
       return [];
     }
   },
 
-  // Hall endpoints - Same as web portal
-  getHalls: async () => {
+  // Hall endpoints
+  getHalls: async (params = {}) => {
     try {
-      const response = await api.get(`${base_url}/hall/get/halls`);
+      const response = await api.get('/hall/get/halls', { params });
       return response.data || [];
     } catch (error) {
       console.error('Error fetching halls:', error.message);
@@ -1720,10 +1814,10 @@ export const calendarAPI = {
     }
   },
 
-  // Lawn endpoints - Same as web portal
-  getLawns: async () => {
+  // Lawn endpoints
+  getLawns: async (params = {}) => {
     try {
-      const response = await api.get(`${base_url}/lawn/get/lawns`);
+      const response = await api.get('/lawn/get/lawns', { params });
       return response.data || [];
     } catch (error) {
       console.error('Error fetching lawns:', error.message);
@@ -1731,18 +1825,232 @@ export const calendarAPI = {
     }
   },
 
-  // Photoshoot endpoints - Same as web portal
-  getPhotoshoots: async () => {
+  // Photoshoot endpoints
+  getPhotoshoots: async (params = {}) => {
     try {
-      const response = await api.get(`${base_url}/photoShoot/get/photoShoots`);
+      const response = await api.get('/photoShoot/get/photoShoots', { params });
       return response.data || [];
     } catch (error) {
       console.error('Error fetching photoshoots:', error.message);
       return [];
     }
   },
-
 };
+// export const calendarAPI = {
+//   // Get all calendar data
+//   getAllCalendarData: async (params = {}) => {
+//     try {
+//       console.log('Fetching all calendar data with params:', params);
+
+//       const [rooms, halls, lawns, photoshoots] = await Promise.all([
+//         calendarAPI.getCalendarRooms(params),
+//         calendarAPI.getHalls(params),
+//         calendarAPI.getLawns(params),
+//         calendarAPI.getPhotoshoots(params),
+//       ]);
+
+//       // Normalize data structure
+//       const normalizedRooms = (rooms || []).map(room => ({
+//         id: room.id || room._id,
+//         roomNumber: room.roomNumber || room.roomNo || room.id,
+//         roomName: room.roomName || `Room ${room.roomNumber || room.roomNo || room.id}`,
+//         roomType: room.roomType || { type: 'Standard' },
+//         rate: room.rate || room.price || 0,
+//         status: room.status || 'AVAILABLE',
+//         bookings: Array.isArray(room.bookings) ? room.bookings : [],
+//         reservations: Array.isArray(room.reservations) ? room.reservations : [],
+//         outOfOrders: Array.isArray(room.outOfOrders) ? room.outOfOrders : [],
+//         // Include all original properties
+//         ...room
+//       }));
+
+//       console.log('Normalized rooms data:', {
+//         total: normalizedRooms.length,
+//         sample: normalizedRooms[0] || 'No rooms'
+//       });
+
+//       return { 
+//         rooms: normalizedRooms, 
+//         halls: halls || [], 
+//         lawns: lawns || [], 
+//         photoshoots: photoshoots || [] 
+//       };
+//     } catch (error) {
+//       console.error('Error fetching all calendar data:', error);
+//       throw error;
+//     }
+//   },
+
+//   // Room endpoints
+//   getCalendarRooms: async (params = {}) => {
+//     try {
+//       console.log('Fetching rooms with params:', params);
+//       const response = await api.get(`${base_url}/room/calendar`, { params });
+//       const rooms = response.data || [];
+
+//       console.log('Raw rooms data received:', {
+//         count: rooms.length,
+//         firstRoom: rooms[0] || 'No rooms'
+//       });
+
+//       // Normalize room data
+//       return rooms.map(room => {
+//         const normalizedRoom = {
+//           id: room.id || room._id,
+//           roomNumber: room.roomNumber || room.roomNo || room.id,
+//           roomName: room.roomName || `Room ${room.roomNumber || room.roomNo || room.id}`,
+//           roomType: room.roomType || { type: 'Standard' },
+//           rate: room.rate || room.price || 0,
+//           status: room.status || 'AVAILABLE',
+//           bookings: [],
+//           reservations: [],
+//           outOfOrders: [],
+//           // Include all original properties
+//           ...room
+//         };
+
+//         // Ensure arrays are properly initialized
+//         if (room.bookings && Array.isArray(room.bookings)) {
+//           normalizedRoom.bookings = room.bookings.map(booking => ({
+//             id: booking.id || booking._id,
+//             checkIn: booking.checkIn,
+//             checkOut: booking.checkOut,
+//             bookingDate: booking.bookingDate,
+//             paymentStatus: booking.paymentStatus,
+//             status: booking.status,
+//             memberName: booking.memberName,
+//             guestName: booking.guestName,
+//             totalPrice: booking.totalPrice,
+//             ...booking
+//           }));
+//         }
+
+//         if (room.reservations && Array.isArray(room.reservations)) {
+//           normalizedRoom.reservations = room.reservations.map(reservation => ({
+//             id: reservation.id || reservation._id,
+//             reservedFrom: reservation.reservedFrom,
+//             reservedTo: reservation.reservedTo,
+//             startDate: reservation.startDate,
+//             endDate: reservation.endDate,
+//             admin: reservation.admin,
+//             ...reservation
+//           }));
+//         }
+
+//         if (room.outOfOrders && Array.isArray(room.outOfOrders)) {
+//           normalizedRoom.outOfOrders = room.outOfOrders.map(order => ({
+//             id: order.id || order._id,
+//             startDate: order.startDate,
+//             endDate: order.endDate,
+//             reason: order.reason,
+//             ...order
+//           }));
+//         }
+
+//         return normalizedRoom;
+//       });
+//     } catch (error) {
+//       console.error('Error fetching calendar rooms:', error.message);
+//       return [];
+//     }
+//   },
+
+//   // Hall endpoints
+//   getHalls: async (params = {}) => {
+//     try {
+//       const response = await api.get(`${base_url}/hall/get/halls`, { params });
+//       return response.data || [];
+//     } catch (error) {
+//       console.error('Error fetching halls:', error.message);
+//       return [];
+//     }
+//   },
+
+//   // Lawn endpoints
+//   getLawns: async (params = {}) => {
+//     try {
+//       const response = await api.get(`${base_url}/lawn/get/lawns`, { params });
+//       return response.data || [];
+//     } catch (error) {
+//       console.error('Error fetching lawns:', error.message);
+//       return [];
+//     }
+//   },
+
+//   // Photoshoot endpoints
+//   getPhotoshoots: async (params = {}) => {
+//     try {
+//       const response = await api.get(`${base_url}/photoShoot/get/photoShoots`, { params });
+//       return response.data || [];
+//     } catch (error) {
+//       console.error('Error fetching photoshoots:', error.message);
+//       return [];
+//     }
+//   },
+// };
+// export const calendarAPI = {
+//   // Get all calendar data
+//   getAllCalendarData: async (params = {}) => {
+//     try {
+//       const [rooms, halls, lawns, photoshoots] = await Promise.all([
+//         calendarAPI.getCalendarRooms(params),
+//         calendarAPI.getHalls(params),
+//         calendarAPI.getLawns(params),
+//         calendarAPI.getPhotoshoots(params),
+//       ]);
+//       return { rooms, halls, lawns, photoshoots };
+//     } catch (error) {
+//       console.error('Error fetching all calendar data:', error);
+//       throw error;
+//     }
+//   },
+
+//   // Room endpoints - Same as web portal
+//   getCalendarRooms: async (params = {}) => {
+//     try {
+//       const response = await api.get(`${base_url}/room/calendar`, { params });
+//       return response.data || [];
+//     } catch (error) {
+//       console.error('Error fetching calendar rooms:', error.message);
+//       return [];
+//     }
+//   },
+
+//   // Hall endpoints - Same as web portal
+//   getHalls: async (params = {}) => {
+//     try {
+//       const response = await api.get(`${base_url}/hall/get/halls`, { params });
+//       return response.data || [];
+//     } catch (error) {
+//       console.error('Error fetching halls:', error.message);
+//       return [];
+//     }
+//   },
+
+//   // Lawn endpoints - Same as web portal
+//   getLawns: async (params = {}) => {
+//     try {
+//       const response = await api.get(`${base_url}/lawn/get/lawns`, { params });
+//       return response.data || [];
+//     } catch (error) {
+//       console.error('Error fetching lawns:', error.message);
+//       return [];
+//     }
+//   },
+
+//   // Photoshoot endpoints - Same as web portal
+//   getPhotoshoots: async (params = {}) => {
+//     try {
+//       const response = await api.get(`${base_url}/photoShoot/get/photoShoots`, { params });
+//       return response.data || [];
+//     } catch (error) {
+//       console.error('Error fetching photoshoots:', error.message);
+//       return [];
+//     }
+//   },
+
+// };
+
 export const getHallRule = async () => {
   try {
     const response = await api.get(`${base_url}/booking/hall/rule`, {
@@ -1849,8 +2157,5 @@ export const getMessingItemsBySubCategory = async (subCatID) => {
     return [];
   }
 }
-
-
-
 
 export { base_url, api };
