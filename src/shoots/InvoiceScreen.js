@@ -10,44 +10,202 @@ import {
   StatusBar,
   Share,
   ActivityIndicator,
-  ImageBackground,
+  Linking,
+  RefreshControl,
+  ImageBackground
 } from 'react-native';
-import Icon from 'react-native-vector-icons/AntDesign';
-import { paymentAPI } from '../config/apis';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { useVoucher } from '../auth/contexts/VoucherContext';
 import socketService from '../../services/socket.service';
 
 const InvoiceScreen = ({ route, navigation }) => {
   const { clearVoucher } = useVoucher();
-  const { invoiceData, bookingData, photoshoot, memberInfo } = route.params || {};
-  const [loading, setLoading] = useState(false);
-  const [paymentStatus, setPaymentStatus] = useState('pending');
+  const {
+    invoiceData: rawInvoiceData,
+    bookingData,
+    photoshoot,
+    memberInfo
+  } = route.params || {};
 
-  // Real-time payment sync
+  const [invoiceData, setInvoiceData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [timeLeft, setTimeLeft] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
+  const [shareLoading, setShareLoading] = useState(false);
+
   useEffect(() => {
-    const voucherId = invoiceData?.id || invoiceData?.InvoiceNumber;
+    if (rawInvoiceData) {
+      console.log('🔄 Mapping Photoshoot Invoice Data');
+
+      const mappedDetails = {
+        invoiceNo: rawInvoiceData.voucher?.id || 'N/A',
+        invoiceNumber: rawInvoiceData.voucher?.id,
+        consumerNumber: rawInvoiceData.voucher?.consumer_number,
+        amount: rawInvoiceData.voucher?.amount,
+        totalPrice: rawInvoiceData.voucher?.amount,
+        dueDate: rawInvoiceData.due_date,
+        status: rawInvoiceData.voucher?.status || 'PENDING',
+        membershipNo: rawInvoiceData.membership?.no,
+        memberName: rawInvoiceData.membership?.name,
+        // Photoshoot specific
+        packageDescription: photoshoot?.description || 'Photoshoot Package',
+        selectedDates: bookingData?.selectedDates,
+        dateConfigurations: bookingData?.dateConfigurations,
+        bookingDate: bookingData?.bookingDate,
+        timeSlot: bookingData?.timeSlot,
+        pricingType: bookingData?.pricingType,
+        remarks: rawInvoiceData.voucher?.remarks,
+      };
+      setInvoiceData(mappedDetails);
+      setLoading(false);
+    } else {
+      Alert.alert('Error', 'Invoice data not found');
+      navigation.goBack();
+    }
+
+    // Real-time payment sync
+    const voucherId = rawInvoiceData?.voucher?.id;
     let unsubscribe = () => { };
 
     if (voucherId) {
       unsubscribe = socketService.subscribeToPayment(voucherId, (data) => {
         if (data.status === 'PAID') {
           console.log('💰 [Shoot Invoice] Real-time payment detected!');
-          setPaymentStatus('paid');
+          setInvoiceData(prev => prev ? { ...prev, status: 'PAID' } : null);
         }
       });
     }
 
     return () => unsubscribe();
-  }, [invoiceData]);
+  }, [rawInvoiceData]);
+
+  // Countdown Timer Logic
+  useEffect(() => {
+    if (!invoiceData?.dueDate || invoiceData?.status === 'PAID') {
+      setTimeLeft('');
+      return;
+    }
+
+    const targetDate = new Date(invoiceData.dueDate).getTime();
+
+    const interval = setInterval(() => {
+      const now = new Date().getTime();
+      const distance = targetDate - now;
+
+      if (distance < 0) {
+        clearInterval(interval);
+        setTimeLeft('EXPIRED');
+        return;
+      }
+
+      const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+      let timeStr = '';
+      if (hours > 0) timeStr += `${hours}h `;
+      timeStr += `${minutes}m ${seconds}s`;
+
+      setTimeLeft(timeStr);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [invoiceData?.dueDate, invoiceData?.status]);
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    setTimeout(() => {
+      setRefreshing(false);
+    }, 1000);
+  };
+
+  const handleMakePayment = () => {
+    Alert.alert(
+      'Complete Payment',
+      'Redirect to payment gateway to complete your booking?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Proceed to Payment',
+          onPress: () => {
+            clearVoucher();
+            Alert.alert(
+              'Payment Gateway',
+              'Payment integration would happen here. For now, please check your bookings list after payment completion.',
+              [{ text: 'OK' }]
+            );
+          }
+        }
+      ]
+    );
+  };
+
+  const handleShareInvoice = async () => {
+    try {
+      setShareLoading(true);
+      if (!invoiceData) return;
+
+      const slotsText = invoiceData.selectedDates
+        ? invoiceData.selectedDates.map(date =>
+          `• ${formatDate(date)} at ${formatTime(invoiceData.dateConfigurations?.[date]?.time)}`
+        ).join('\n')
+        : `• ${formatDate(invoiceData.bookingDate)} at ${formatTime(invoiceData.timeSlot)}`;
+
+      const message = `
+📸 PHOTOSHOOT BOOKING INVOICE
+
+Invoice Number: ${invoiceData.invoiceNo}
+Consumer Number: ${invoiceData.consumerNumber || 'N/A'}
+Amount: Rs. ${invoiceData.amount}
+Status: ${invoiceData.status}
+
+📋 Booking Details:
+• Package: ${invoiceData.packageDescription}
+${slotsText}
+
+👤 Member Information:
+• Name: ${invoiceData.memberName}
+• Membership No: ${invoiceData.membershipNo}
+
+${invoiceData.dueDate ? `📅 Payment Due: ${formatDateTime(invoiceData.dueDate)}\n` : ''}
+
+Thank you for choosing our photoshoot services!
+`.trim();
+
+      await Share.share({
+        message,
+        title: `Photoshoot Invoice - ${invoiceData.invoiceNo}`,
+      });
+    } catch (error) {
+      console.error('Error sharing:', error);
+      Alert.alert('Error', 'Failed to share invoice');
+    } finally {
+      setShareLoading(false);
+    }
+  };
 
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     try {
       return new Date(dateString).toLocaleDateString('en-US', {
-        weekday: 'short',
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+    } catch (error) {
+      return dateString;
+    }
+  };
+
+  const formatDateTime = (dateString) => {
+    if (!dateString) return 'N/A';
+    try {
+      return new Date(dateString).toLocaleString('en-US', {
         year: 'numeric',
         month: 'short',
         day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
       });
     } catch (error) {
       return dateString;
@@ -83,367 +241,304 @@ const InvoiceScreen = ({ route, navigation }) => {
     }
   };
 
-  const handleShareInvoice = async () => {
-    try {
-      const slotsText = bookingData?.selectedDates
-        ? bookingData.selectedDates.map(date =>
-          `• ${formatDate(date)} at ${formatTime(bookingData.dateConfigurations?.[date]?.time)}`
-        ).join('\n')
-        : `• Date: ${formatDate(bookingData?.bookingDate)}\n• Time: ${formatTime(bookingData?.timeSlot)}`;
-
-      const message = `
-📸 Photoshoot Booking Invoice
-
-Invoice Number: ${invoiceData.InvoiceNumber}
-Amount: Rs. ${invoiceData.Amount}
-Due Date: ${formatDate(invoiceData.DueDate)}
-
-📋 Booking Details:
-• Package: ${photoshoot?.description || 'Photoshoot Package'}
-${slotsText}
-• Type: ${bookingData?.pricingType === 'member' ? 'Member' : 'Guest'}
-• Total: Rs. ${invoiceData.Amount}
-
-💳 Payment Channels:
-${invoiceData.PaymentChannels?.map(channel => `• ${channel}`).join('\n') || '• Not specified'}
-
-📝 Instructions:
-${invoiceData.Instructions || 'Please complete your payment to confirm the booking.'}
-
-Thank you for choosing our service!
-      `.trim();
-
-      await Share.share({
-        message,
-        title: `Invoice - ${invoiceData.InvoiceNumber}`,
-      });
-    } catch (error) {
-      console.error('Error sharing:', error);
-      Alert.alert('Error', 'Failed to share invoice');
+  const getStatusBadge = (status) => {
+    const statusUpper = (status || '').toUpperCase();
+    switch (statusUpper) {
+      case 'CONFIRMED':
+      case 'PAID':
+        return { text: 'CONFIRMED', style: styles.statusConfirmed, icon: 'check-circle' };
+      case 'PENDING_PAYMENT':
+      case 'PENDING':
+        return { text: 'PAYMENT PENDING', style: styles.statusPending, icon: 'payment' };
+      default:
+        return { text: status || 'PENDING', style: styles.statusPending, icon: 'schedule' };
     }
   };
 
-  const handleMakePayment = () => {
-    // Clear global voucher on payment initiation
-    clearVoucher();
+  const statusInfo = getStatusBadge(invoiceData?.status);
 
-    Alert.alert(
-      'Payment Instructions',
-      `Complete your payment using any of these methods:\n\n${invoiceData.PaymentChannels?.join('\n') || 'Contact club office for payment details'}\n\nAfter payment, save your transaction ID and click "I Have Paid".\n\nAmount: Rs. ${invoiceData.Amount}\nInvoice: ${invoiceData.InvoiceNumber}`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'I Have Paid',
-          onPress: () => promptForTransactionId(),
-        },
-      ]
-    );
-  };
-
-  const promptForTransactionId = () => {
-    Alert.prompt(
-      'Transaction ID',
-      'Please enter your payment transaction ID:',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Submit',
-          onPress: (transactionId) => verifyPayment(transactionId),
-        },
-      ],
-      'plain-text'
-    );
-  };
-
-  const verifyPayment = async (transactionId) => {
-    if (!transactionId || transactionId.trim() === '') {
-      Alert.alert('Error', 'Please enter a valid transaction ID');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const result = await paymentAPI.verifyPayment(
-        invoiceData.InvoiceNumber,
-        transactionId
-      );
-
-      setLoading(false);
-
-      if (result.success || result.verified) {
-        setPaymentStatus('paid');
-        Alert.alert(
-          'Payment Verified!',
-          'Your payment has been successfully verified. Your booking is now confirmed.',
-          [
-            {
-              text: 'View Booking',
-              onPress: () => navigation.navigate('BookingConfirmation', {
-                invoiceData: invoiceData,
-                bookingData: bookingData,
-                photoshoot: photoshoot,
-                memberInfo: memberInfo,
-                paymentStatus: 'PAID',
-                transactionId: transactionId,
-              }),
-            },
-          ]
-        );
-      } else {
-        Alert.alert(
-          'Payment Verification',
-          result.message || 'We are verifying your payment. Please check your bookings list in a few minutes.',
-          [
-            {
-              text: 'OK',
-              onPress: () => navigation.navigate('Home'),
-            },
-          ]
-        );
-      }
-    } catch (error) {
-      setLoading(false);
-      console.error('❌ Payment verification error:', error);
-      Alert.alert(
-        'Payment Verification',
-        'We are verifying your payment. Please check your bookings list in a few minutes.',
-        [
-          {
-            text: 'OK',
-            onPress: () => navigation.navigate('Home'),
-          },
-        ]
-      );
-    }
-  };
-
-  if (!invoiceData) {
+  if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.errorContainer}>
-          <Icon name="exclamationcircleo" size={64} color="#ff6b6b" />
-          <Text style={styles.errorText}>Invoice data not found</Text>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Text style={styles.backButtonText}>Go Back</Text>
-          </TouchableOpacity>
+      <View style={styles.container}>
+        <StatusBar backgroundColor="#fffaf2" barStyle="dark-content" />
+        <ImageBackground
+          source={require("../../assets/notch.jpg")}
+          style={styles.notch}
+          imageStyle={styles.notchImage}
+        >
+          <View style={styles.notchRow}>
+            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconWrapper}>
+              <MaterialIcons name="arrow-back" size={28} color="#000" />
+            </TouchableOpacity>
+            <Text style={styles.notchTitle}>Photoshoot Invoice</Text>
+            <View style={styles.iconWrapper} />
+          </View>
+        </ImageBackground>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#b48a64" />
+          <Text style={styles.loadingText}>Generating your invoice...</Text>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#000" />
+    <View style={styles.container}>
+      <StatusBar backgroundColor="#fffaf2" barStyle="dark-content" />
 
-      {/* Notch Header */}
       <ImageBackground
-        source={require('../../assets/notch.jpg')}
+        source={require("../../assets/notch.jpg")}
         style={styles.notch}
         imageStyle={styles.notchImage}
       >
         <View style={styles.notchRow}>
-          <TouchableOpacity
-            style={styles.iconWrapper}
-            onPress={() => navigation.goBack()}
-          >
-            <Icon name="arrowleft" size={30} color="#000" />
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconWrapper}>
+            <MaterialIcons name="arrow-back" size={28} color="#000" />
           </TouchableOpacity>
 
-          <Text style={styles.notchTitle}>Booking Invoice</Text>
+          <Text style={styles.notchTitle}>Shoot Invoice</Text>
 
-          <TouchableOpacity
-            style={styles.iconWrapper}
-            onPress={handleShareInvoice}
-            disabled={loading}
-          >
-            <Icon name="sharealt" size={24} color="#000" />
+          <TouchableOpacity onPress={handleRefresh} disabled={refreshing} style={styles.iconWrapper}>
+            <MaterialIcons name="refresh" size={24} color="#000" />
           </TouchableOpacity>
         </View>
       </ImageBackground>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        {/* Invoice Header */}
-        <View style={styles.invoiceHeader}>
-          <Text style={styles.invoiceTitle}>PHOTOSHOOT BOOKING INVOICE</Text>
-          <Text style={styles.invoiceNumber}>#{invoiceData.InvoiceNumber}</Text>
-          <Text style={styles.invoiceStatus}>
-            Status: <Text style={paymentStatus === 'paid' ? styles.statusPaid : styles.statusPending}>
-              {paymentStatus === 'paid' ? 'PAID' : 'PENDING PAYMENT'}
+      <ScrollView
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={['#b48a64']}
+          />
+        }
+      >
+        <View style={styles.invoiceContainer}>
+          {/* Invoice Header */}
+          <View style={styles.invoiceHeader}>
+            <MaterialIcons
+              name={statusInfo.icon}
+              size={40}
+              color="#b48a64"
+            />
+            <Text style={styles.invoiceTitle}>
+              PHOTOSHOOT BOOKING VOUCHER
             </Text>
-          </Text>
-        </View>
-
-        {/* Payment Required Alert */}
-        {paymentStatus !== 'paid' && (
-          <View style={styles.alertCard}>
-            <View style={styles.alertIcon}>
-              <Icon name="clockcircle" size={20} color="#856404" />
-            </View>
-            <View style={styles.alertContent}>
-              <Text style={styles.alertTitle}>Payment Required</Text>
-              <Text style={styles.alertText}>
-                Complete payment within 3 minutes to confirm your booking
-              </Text>
-              <Text style={styles.dueDate}>
-                Due by: {formatDate(invoiceData.DueDate)}
-              </Text>
-            </View>
-          </View>
-        )}
-
-        {/* Amount Card */}
-        <View style={styles.amountCard}>
-          <Text style={styles.amountLabel}>Total Amount Due</Text>
-          <Text style={styles.amountValue}>Rs. {invoiceData.Amount}</Text>
-        </View>
-
-        {/* Member Information */}
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Member Information</Text>
-
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Membership No:</Text>
-            <Text style={styles.detailValue}>{memberInfo?.membership_no || 'N/A'}</Text>
-          </View>
-
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Name:</Text>
-            <Text style={styles.detailValue}>{memberInfo?.member_name || memberInfo?.Name || 'N/A'}</Text>
-          </View>
-        </View>
-
-        {/* Booking Summary */}
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Booking Summary</Text>
-
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Package:</Text>
-            <Text style={styles.detailValue}>
-              {invoiceData.BookingSummary?.ServiceName || photoshoot?.description || 'N/A'}
+            <Text style={styles.invoiceSubtitle}>
+              Complete payment to confirm your booking
             </Text>
-          </View>
-
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Booking Type:</Text>
-            <Text style={styles.detailValue}>
-              {bookingData?.pricingType === 'member' ? 'Member Booking' : 'Guest Booking'}
-            </Text>
-          </View>
-
-          <View style={styles.divider} />
-          <Text style={[styles.detailLabel, { marginBottom: 10, fontWeight: 'bold' }]}>Selected Slots:</Text>
-
-          {bookingData?.selectedDates ? (
-            bookingData.selectedDates.map(date => (
-              <View key={date} style={styles.slotRow}>
-                <View style={styles.slotDateBox}>
-                  <Text style={styles.detailLabelSmall}>{formatDate(date)}</Text>
-                </View>
-                <View style={styles.slotTimeBox}>
-                  <Text style={styles.detailValueSmall}>{formatTime(bookingData.dateConfigurations?.[date]?.time)}</Text>
-                </View>
+            {timeLeft && timeLeft !== 'EXPIRED' && invoiceData?.status !== 'PAID' && (
+              <View style={styles.timerContainer}>
+                <MaterialIcons name="schedule" size={16} color="#dc3545" />
+                <Text style={styles.timerText}> Expires in: {timeLeft}</Text>
               </View>
-            ))
-          ) : (
-            <View style={styles.slotRow}>
-              <Text style={styles.detailLabelSmall}>{formatDate(bookingData?.bookingDate)}</Text>
-              <Text style={styles.detailValueSmall}>{formatTime(bookingData?.timeSlot)}</Text>
+            )}
+            {timeLeft === 'EXPIRED' && (
+              <View style={styles.timerContainer}>
+                <MaterialIcons name="warning" size={16} color="#dc3545" />
+                <Text style={styles.expiredText}>EXPIRED</Text>
+              </View>
+            )}
+          </View>
+
+          {/* Payment Required Alert */}
+          {invoiceData?.status !== 'PAID' && (
+            <View style={styles.paymentAlert}>
+              <MaterialIcons name="payment" size={20} color="#856404" />
+              <View style={styles.paymentAlertContent}>
+                <Text style={styles.paymentAlertTitle}>Payment Required</Text>
+                <Text style={styles.paymentAlertText}>
+                  Complete payment within 1 hour to secure your booking.
+                </Text>
+                <TouchableOpacity
+                  style={[styles.paymentButton, timeLeft === 'EXPIRED' && { backgroundColor: '#ccc' }]}
+                  onPress={handleMakePayment}
+                  disabled={timeLeft === 'EXPIRED'}
+                >
+                  <Text style={styles.paymentButtonText}>Make Payment Now</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           )}
 
-          <View style={styles.divider} />
+          {/* Invoice Details */}
+          <View style={styles.invoiceSection}>
+            <Text style={styles.sectionTitle}>Invoice Details</Text>
 
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Base Price:</Text>
-            <Text style={styles.detailValue}>Rs. {invoiceData.BookingSummary?.BasePrice || invoiceData.Amount}</Text>
-          </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Invoice Number:</Text>
+              <Text style={[styles.detailValue, styles.invoiceHighlight]}>
+                {invoiceData.invoiceNo}
+              </Text>
+            </View>
 
-          <View style={[styles.detailRow, styles.totalRow]}>
-            <Text style={styles.totalLabel}>Total Amount:</Text>
-            <Text style={styles.totalValue}>Rs. {invoiceData.Amount}</Text>
-          </View>
-        </View>
+            {invoiceData.consumerNumber && (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Consumer Number:</Text>
+                <Text style={[styles.detailValue, styles.invoiceHighlight]}>
+                  {invoiceData.consumerNumber}
+                </Text>
+              </View>
+            )}
 
-        {/* Payment Channels */}
-        {invoiceData.PaymentChannels && invoiceData.PaymentChannels.length > 0 && (
-          <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Available Payment Methods</Text>
-            <View style={styles.channelsGrid}>
-              {invoiceData.PaymentChannels.map((channel, index) => (
-                <View key={index} style={styles.channelItem}>
-                  <Icon name="creditcard" size={16} color="#A3834C" />
-                  <Text style={styles.channelText}>{channel}</Text>
-                </View>
-              ))}
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Status:</Text>
+              <View style={[styles.statusBadge, statusInfo.style]}>
+                <Text style={styles.statusText}>{statusInfo.text}</Text>
+              </View>
+            </View>
+
+            {invoiceData.dueDate && (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Payment Due:</Text>
+                <Text style={[styles.detailValue, styles.dueDate]}>
+                  {formatDateTime(invoiceData.dueDate)}
+                </Text>
+              </View>
+            )}
+
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Member Name:</Text>
+              <Text style={styles.detailValue}>{invoiceData.memberName}</Text>
+            </View>
+
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Membership No:</Text>
+              <Text style={styles.detailValue}>{invoiceData.membershipNo}</Text>
             </View>
           </View>
-        )}
 
-        {/* Instructions */}
-        <View style={styles.instructionsCard}>
-          <Text style={styles.instructionsTitle}>Important Instructions</Text>
-          <Text style={styles.instructionsText}>
-            {invoiceData.Instructions || 'Please complete your payment to confirm the booking.'}
-          </Text>
-        </View>
+          {/* Booking Summary */}
+          <View style={styles.invoiceSection}>
+            <Text style={styles.sectionTitle}>Photoshoot Summary</Text>
 
-        {/* Contact Info */}
-        <View style={styles.contactCard}>
-          <Text style={styles.contactTitle}>Need Assistance?</Text>
-          <View style={styles.contactItem}>
-            <Icon name="phone" size={14} color="#666" />
-            <Text style={styles.contactText}>Club Office: 091-1234567</Text>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Package:</Text>
+              <Text style={styles.detailValue}>{invoiceData.packageDescription}</Text>
+            </View>
+
+            <View style={styles.divider} />
+            <Text style={[styles.detailLabel, { marginBottom: 10, fontWeight: 'bold' }]}>Selected Slots:</Text>
+
+            {invoiceData.selectedDates ? (
+              invoiceData.selectedDates.map(date => (
+                <View key={date} style={styles.slotRow}>
+                  <View style={styles.slotDateBox}>
+                    <Text style={styles.detailLabelSmall}>{formatDate(date)}</Text>
+                  </View>
+                  <View style={styles.slotTimeBox}>
+                    <Text style={styles.detailValueSmall}>{formatTime(invoiceData.dateConfigurations?.[date]?.time)}</Text>
+                  </View>
+                </View>
+              ))
+            ) : (
+              <View style={styles.slotRow}>
+                <View style={styles.slotDateBox}>
+                  <Text style={styles.detailLabelSmall}>{formatDate(invoiceData.bookingDate)}</Text>
+                </View>
+                <View style={styles.slotTimeBox}>
+                  <Text style={styles.detailValueSmall}>{formatTime(invoiceData.timeSlot)}</Text>
+                </View>
+              </View>
+            )}
           </View>
+
+          {/* Payment Details */}
+          <View style={styles.invoiceSection}>
+            <Text style={styles.sectionTitle}>Payment Details</Text>
+
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Total Amount:</Text>
+              <Text style={[styles.detailValue, styles.amount]}>
+                Rs. {invoiceData.amount ? parseFloat(invoiceData.amount).toLocaleString() : '0.00'}/-
+              </Text>
+            </View>
+
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Payment Status:</Text>
+              <View style={[styles.statusBadge, invoiceData.status === 'PAID' ? styles.statusConfirmed : styles.pendingBadge]}>
+                <Text style={styles.statusText}>{invoiceData.status}</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Important Information */}
+          <View style={styles.instructions}>
+            <Text style={styles.instructionsTitle}>Important Information</Text>
+            <View style={styles.instructionItem}>
+              <MaterialIcons name="check-circle" size={16} color="#b48a64" />
+              <Text style={styles.instructionText}>
+                {invoiceData.remarks || 'Complete payment within 1 hour to secure your booking'}
+              </Text>
+            </View>
+            <View style={styles.instructionItem}>
+              <MaterialIcons name="check-circle" size={16} color="#b48a64" />
+              <Text style={styles.instructionText}>Present this voucher at the club office for verification</Text>
+            </View>
+          </View>
+
+          {/* Action Buttons */}
+          <View style={styles.actionButtons}>
+            <TouchableOpacity
+              style={styles.secondaryButton}
+              onPress={handleRefresh}
+              disabled={refreshing}
+            >
+              <MaterialIcons name="refresh" size={20} color="#b48a64" />
+              <Text style={styles.secondaryButtonText}>
+                {refreshing ? 'Refreshing...' : 'Refresh'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.shareButton}
+              onPress={handleShareInvoice}
+              disabled={shareLoading}
+            >
+              <MaterialIcons name="share" size={20} color="#fff" />
+              <Text style={styles.shareButtonText}>
+                {shareLoading ? 'Sharing...' : 'Share Invoice'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Complete Payment Button */}
+          {invoiceData?.status !== 'PAID' && (
+            <TouchableOpacity
+              style={[styles.paymentActionButton, timeLeft === 'EXPIRED' && { backgroundColor: '#ccc' }]}
+              onPress={handleMakePayment}
+              disabled={timeLeft === 'EXPIRED'}
+            >
+              <MaterialIcons name="payment" size={20} color="#fff" />
+              <Text style={styles.paymentActionButtonText}>Complete Payment Now</Text>
+            </TouchableOpacity>
+          )}
+
+          <TouchableOpacity
+            style={styles.primaryButton}
+            onPress={() => navigation.navigate('Home')}
+          >
+            <MaterialIcons name="home" size={20} color="#fff" />
+            <Text style={styles.primaryButtonText}>Back to Home</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
-
-      {/* Action Buttons */}
-      {paymentStatus !== 'paid' && (
-        <View style={styles.actionContainer}>
-          <TouchableOpacity
-            style={styles.paymentButton}
-            onPress={handleMakePayment}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <>
-                <Icon name="creditcard" size={20} color="#fff" />
-                <Text style={styles.paymentButtonText}>Make Payment</Text>
-              </>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={() => navigation.goBack()}
-            disabled={loading}
-          >
-            <Text style={styles.secondaryButtonText}>Back to Booking</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F9EFE6',
-  },
+  container: { flex: 1, backgroundColor: '#f9f3eb' },
   notch: {
-    paddingTop: 60,
+    paddingTop: 50,
     paddingBottom: 25,
     paddingHorizontal: 20,
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
     overflow: "hidden",
-    backgroundColor: "#A3834C",
+    backgroundColor: "#D2B48C",
   },
   notchImage: {
     resizeMode: "cover",
@@ -452,6 +547,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    paddingBottom: 10,
   },
   iconWrapper: {
     width: 40,
@@ -464,112 +560,267 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#000",
   },
-  content: {
-    padding: 20,
-    paddingBottom: 120,
+  content: { flex: 1 },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  loadingText: {
+    marginTop: 10,
+    color: '#666',
+    fontSize: 16,
+  },
+  invoiceContainer: {
+    padding: 15,
   },
   invoiceHeader: {
     alignItems: 'center',
+    padding: 20,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 15,
     marginBottom: 20,
-    padding: 15,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    elevation: 3,
   },
   invoiceTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
-    color: '#000',
+    color: '#2e7d32',
+    marginTop: 10,
     marginBottom: 5,
     textAlign: 'center',
   },
-  invoiceNumber: {
+  invoiceSubtitle: {
     fontSize: 14,
     color: '#666',
-    marginBottom: 5,
+    textAlign: 'center',
   },
-  invoiceStatus: {
-    fontSize: 12,
-    color: '#666',
-  },
-  statusPending: {
-    color: '#FFA500',
-    fontWeight: 'bold',
-  },
-  statusPaid: {
-    color: '#2E8B57',
-    fontWeight: 'bold',
-  },
-  alertCard: {
+  paymentAlert: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
     backgroundColor: '#fff3cd',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 15,
     borderLeftWidth: 4,
     borderLeftColor: '#ffc107',
-    padding: 15,
-    borderRadius: 8,
-    marginBottom: 20,
   },
-  alertIcon: {
-    marginRight: 10,
-  },
-  alertContent: {
+  paymentAlertContent: {
     flex: 1,
+    marginLeft: 10,
   },
-  alertTitle: {
+  paymentAlertTitle: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#856404',
     marginBottom: 5,
   },
-  alertText: {
+  paymentAlertText: {
     fontSize: 14,
     color: '#856404',
-    lineHeight: 20,
+    lineHeight: 18,
+    marginBottom: 10,
   },
-  dueDate: {
-    fontSize: 12,
-    color: '#856404',
-    marginTop: 5,
-    fontStyle: 'italic',
+  paymentButton: {
+    backgroundColor: '#b48a64',
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
   },
-  amountCard: {
-    backgroundColor: '#A3834C',
-    borderRadius: 12,
-    padding: 20,
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  amountLabel: {
-    fontSize: 14,
+  paymentButtonText: {
     color: '#fff',
-    opacity: 0.9,
-    marginBottom: 5,
-  },
-  amountValue: {
-    fontSize: 32,
     fontWeight: 'bold',
-    color: '#fff',
+    fontSize: 14,
   },
-  sectionCard: {
+  invoiceSection: {
     backgroundColor: '#fff',
+    padding: 18,
     borderRadius: 12,
-    padding: 20,
     marginBottom: 15,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
     elevation: 2,
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#000',
+    color: '#333',
     marginBottom: 15,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
-    paddingBottom: 10,
+    paddingBottom: 8,
   },
   detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  detailLabel: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+    flex: 1,
+  },
+  detailValue: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '600',
+    flex: 1,
+    textAlign: 'right',
+  },
+  amount: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#2e7d32',
+  },
+  dueDate: {
+    color: '#dc3545',
+    fontWeight: 'bold',
+  },
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  statusConfirmed: {
+    backgroundColor: '#e8f5e8',
+  },
+  statusPending: {
+    backgroundColor: '#fff3cd',
+  },
+  invoiceHighlight: {
+    color: '#b48a64',
+    fontWeight: 'bold',
+  },
+  timerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+    backgroundColor: '#fff1f0',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: '#ffa39e',
+  },
+  timerText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#dc3545',
+  },
+  expiredText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#dc3545',
+  },
+  pendingBadge: {
+    backgroundColor: '#fff3cd',
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#2e7d32',
+  },
+  instructions: {
+    backgroundColor: '#f0f7ff',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 15,
+  },
+  instructionsTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#1565c0',
     marginBottom: 10,
+  },
+  instructionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  instructionText: {
+    fontSize: 12,
+    color: '#1565c0',
+    marginLeft: 8,
+    flex: 1,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 15,
+  },
+  secondaryButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#b48a64',
+    backgroundColor: 'transparent',
+    gap: 8,
+  },
+  secondaryButtonText: {
+    color: '#b48a64',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  shareButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: '#2196f3',
+    gap: 8,
+  },
+  shareButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  paymentActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#bdaea1ff',
+    padding: 15,
+    borderRadius: 8,
+    marginBottom: 15,
+    gap: 8,
+  },
+  paymentActionButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  primaryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: '#b48a64',
+    gap: 8,
+    marginBottom: 30,
+  },
+  primaryButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#eee',
+    marginVertical: 12,
   },
   slotRow: {
     flexDirection: 'row',
@@ -586,23 +837,6 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'flex-end',
   },
-  detailLabel: {
-    fontSize: 14,
-    color: '#666',
-  },
-  detailValue: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#000',
-    textAlign: 'right',
-    flex: 1,
-    marginLeft: 10,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#eee',
-    marginVertical: 12,
-  },
   detailLabelSmall: {
     fontSize: 13,
     color: '#777',
@@ -611,144 +845,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#000',
-  },
-  totalRow: {
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-    paddingTop: 10,
-    marginTop: 10,
-  },
-  totalLabel: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#000',
-  },
-  totalValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#A3834C',
-  },
-  channelsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  channelItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F9F3EB',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#DBC9A5',
-    marginBottom: 4,
-  },
-  channelText: {
-    fontSize: 12,
-    color: '#A3834C',
-    marginLeft: 5,
-    fontWeight: '500',
-  },
-  instructionsCard: {
-    backgroundColor: '#E7F3FF',
-    borderWidth: 1,
-    borderColor: '#B3D7FF',
-    borderRadius: 12,
-    padding: 15,
-    marginBottom: 15,
-  },
-  instructionsTitle: {
-    fontSize: 15,
-    fontWeight: 'bold',
-    color: '#0D6EFD',
-    marginBottom: 5,
-  },
-  instructionsText: {
-    fontSize: 13,
-    color: '#0D6EFD',
-    lineHeight: 18,
-  },
-  contactCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 15,
-    elevation: 1,
-  },
-  contactTitle: {
-    fontSize: 15,
-    fontWeight: 'bold',
-    color: '#000',
-    marginBottom: 8,
-  },
-  contactItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  contactText: {
-    fontSize: 13,
-    color: '#666',
-    marginLeft: 8,
-  },
-  actionContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 20,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-    elevation: 10,
-  },
-  paymentButton: {
-    backgroundColor: '#A3834C',
-    paddingVertical: 14,
-    borderRadius: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    marginBottom: 10,
-  },
-  paymentButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  secondaryButton: {
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#ddd',
-  },
-  secondaryButtonText: {
-    color: '#666',
-    fontSize: 15,
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  errorText: {
-    fontSize: 18,
-    color: '#ff6b6b',
-    marginVertical: 20,
-    textAlign: 'center',
-  },
-  backButton: {
-    backgroundColor: '#A3834C',
-    paddingHorizontal: 25,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  backButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
   },
 });
 

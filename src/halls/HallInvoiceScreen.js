@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,18 +11,17 @@ import {
   Share,
   ActivityIndicator,
   Linking,
+  RefreshControl,
+  ImageBackground
 } from 'react-native';
-import Icon from 'react-native-vector-icons/AntDesign';
-import Feather from 'react-native-vector-icons/Feather';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import { paymentAPI, banquetAPI } from '../config/apis';
 import { useVoucher } from '../auth/contexts/VoucherContext';
 import socketService from '../../services/socket.service';
 
 const HallInvoiceScreen = ({ route, navigation }) => {
   const { clearVoucher } = useVoucher();
   const {
-    invoiceData,
+    invoiceData: rawInvoiceData,
     bookingData,
     venue,
     isGuest,
@@ -30,244 +29,180 @@ const HallInvoiceScreen = ({ route, navigation }) => {
     guestDetails
   } = route.params || {};
 
-  const [loading, setLoading] = useState(false);
-  const [paymentStatus, setPaymentStatus] = useState('pending');
-  const [showPaymentMethods, setShowPaymentMethods] = useState(false);
+  const [invoiceData, setInvoiceData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [timeLeft, setTimeLeft] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
+  const [shareLoading, setShareLoading] = useState(false);
 
-  // Real-time payment sync
-  React.useEffect(() => {
-    const voucherId = invoiceData?.id || invoiceData?.InvoiceNumber || invoiceData?.invoiceNumber;
+  useEffect(() => {
+    if (rawInvoiceData) {
+      console.log('🔄 Mapping Hall Invoice Data');
+
+      const mappedDetails = {
+        invoiceNo: rawInvoiceData.voucher?.id || 'N/A',
+        invoiceNumber: rawInvoiceData.voucher?.id,
+        consumerNumber: rawInvoiceData.voucher?.consumer_number,
+        amount: rawInvoiceData.voucher?.amount,
+        totalPrice: rawInvoiceData.voucher?.amount,
+        dueDate: rawInvoiceData.due_date,
+        status: rawInvoiceData.voucher?.status || 'PENDING',
+        membershipNo: rawInvoiceData.membership?.no,
+        memberName: rawInvoiceData.membership?.name,
+        // Hall specific
+        hallName: venue?.name || bookingData?.hallName,
+        eventDate: bookingData?.bookingDate,
+        eventTime: bookingData?.eventTime,
+        eventType: bookingData?.eventType,
+        numberOfGuests: bookingData?.numberOfGuests,
+        isGuest: isGuest,
+      };
+      setInvoiceData(mappedDetails);
+      setLoading(false);
+    } else {
+      Alert.alert('Error', 'Invoice data not found');
+      navigation.goBack();
+    }
+
+    // Real-time payment sync
+    const voucherId = rawInvoiceData?.voucher?.id;
     let unsubscribe = () => { };
 
     if (voucherId) {
       unsubscribe = socketService.subscribeToPayment(voucherId, (data) => {
         if (data.status === 'PAID') {
           console.log('💰 [Hall Invoice] Real-time payment detected!');
-          setPaymentStatus('paid');
+          setInvoiceData(prev => prev ? { ...prev, status: 'PAID' } : null);
         }
       });
     }
 
     return () => unsubscribe();
-  }, [invoiceData]);
+  }, [rawInvoiceData]);
 
-  const handleShareInvoice = async () => {
-    try {
-      const message = `
-🏢 Banquet Hall Booking Invoice
-
-Invoice Number: ${invoiceData.InvoiceNumber || invoiceData.invoiceNumber}
-Amount: ${invoiceData.Amount || invoiceData.amount}
-Due Date: ${new Date(invoiceData.DueDate || invoiceData.dueDate).toLocaleDateString()}
-
-📋 Booking Details:
-• Hall: ${venue?.name || bookingData?.hallName}
-• Date: ${formatDate(bookingData?.bookingDate)}
-• Time Slot: ${bookingData?.eventTime}
-• Event Type: ${bookingData?.eventType}
-• Number of Guests: ${bookingData?.numberOfGuests}
-• Booking Type: ${isGuest ? 'Guest Booking' : 'Member Booking'}
-• Total: ${invoiceData.Amount || invoiceData.amount}
-
-${isGuest ? `
-👤 Guest Information:
-• Name: ${guestDetails?.guestName}
-• Email: ${guestDetails?.guestEmail}
-• Phone: ${guestDetails?.guestPhone}
-` : `
-👤 Member Information:
-• Name: ${memberDetails?.memberName}
-• Membership No: ${memberDetails?.membershipNo}
-`}
-
-💳 Payment Instructions:
-• Amount: ${invoiceData.Amount || invoiceData.amount}
-• Invoice: ${invoiceData.InvoiceNumber || invoiceData.invoiceNumber}
-• Due Date: ${new Date(invoiceData.DueDate || invoiceData.dueDate).toLocaleDateString()}
-
-📞 Contact Club Office for payment details.
-
-Thank you for choosing our banquet hall services!
-      `.trim();
-
-      await Share.share({
-        message,
-        title: `Hall Booking Invoice - ${invoiceData.InvoiceNumber || invoiceData.invoiceNumber}`,
-      });
-    } catch (error) {
-      console.error('Error sharing:', error);
-      Alert.alert('Error', 'Failed to share invoice');
+  // Countdown Timer Logic
+  useEffect(() => {
+    if (!invoiceData?.dueDate || invoiceData?.status === 'PAID') {
+      setTimeLeft('');
+      return;
     }
+
+    const targetDate = new Date(invoiceData.dueDate).getTime();
+
+    const interval = setInterval(() => {
+      const now = new Date().getTime();
+      const distance = targetDate - now;
+
+      if (distance < 0) {
+        clearInterval(interval);
+        setTimeLeft('EXPIRED');
+        return;
+      }
+
+      const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+      let timeStr = '';
+      if (hours > 0) timeStr += `${hours}h `;
+      timeStr += `${minutes}m ${seconds}s`;
+
+      setTimeLeft(timeStr);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [invoiceData?.dueDate, invoiceData?.status]);
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    setTimeout(() => {
+      setRefreshing(false);
+    }, 1000);
   };
 
   const handleMakePayment = () => {
-    // Clear global voucher on payment initiation
-    clearVoucher();
-    setShowPaymentMethods(true);
-  };
-
-  const handlePaymentMethodSelect = (method) => {
-    let paymentInstructions = '';
-    let contactNumber = '';
-
-    switch (method) {
-      case 'bank':
-        paymentInstructions = `
-🏦 Bank Transfer Instructions:
-
-Bank Name: ABC Bank
-Account Name: PSC Banquet Hall
-Account Number: 1234567890
-Branch Code: 1234
-Reference: ${invoiceData.InvoiceNumber || invoiceData.invoiceNumber}
-
-Please include the invoice number as reference.
-        `;
-        contactNumber = '091-1234567';
-        break;
-
-      case 'cash':
-        paymentInstructions = `
-💵 Cash Payment Instructions:
-
-Please visit the club office to make cash payment.
-Office Hours: 9:00 AM - 6:00 PM
-Location: Club Main Building, Ground Floor
-Bring this invoice with you.
-        `;
-        contactNumber = '091-1234567';
-        break;
-
-      case 'card':
-        paymentInstructions = `
-💳 Card Payment Instructions:
-
-Visit the club office for card payment.
-We accept Visa, MasterCard, and UnionPay.
-A 2% processing fee applies for credit cards.
-        `;
-        contactNumber = '091-1234567';
-        break;
-    }
-
     Alert.alert(
-      `${getPaymentMethodName(method)} Payment`,
-      paymentInstructions,
+      'Complete Payment',
+      'Redirect to payment gateway to complete your booking?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Call Office',
-          onPress: () => Linking.openURL(`tel:${contactNumber}`),
-        },
-        {
-          text: 'I Have Paid',
-          onPress: () => promptForTransactionId(method),
-        },
+          text: 'Proceed to Payment',
+          onPress: () => {
+            clearVoucher();
+            Alert.alert(
+              'Payment Gateway',
+              'Payment integration would happen here. For now, please check your bookings list after payment completion.',
+              [{ text: 'OK' }]
+            );
+          }
+        }
       ]
     );
   };
 
-  const getPaymentMethodName = (method) => {
-    switch (method) {
-      case 'bank': return 'Bank Transfer';
-      case 'cash': return 'Cash';
-      case 'card': return 'Card';
-      default: return method;
-    }
-  };
-
-  const promptForTransactionId = (method) => {
-    Alert.prompt(
-      'Payment Confirmation',
-      `Please enter your ${getPaymentMethodName(method)} transaction ID or receipt number:`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Submit',
-          onPress: (transactionId) => verifyPayment(transactionId, method),
-        },
-      ],
-      'plain-text'
-    );
-  };
-
-  const verifyPayment = async (transactionId, method) => {
-    if (!transactionId || transactionId.trim() === '') {
-      Alert.alert('Error', 'Please enter a valid transaction ID');
-      return;
-    }
-
-    setLoading(true);
+  const handleShareInvoice = async () => {
     try {
-      console.log('🔍 Verifying payment with transaction ID:', transactionId);
+      setShareLoading(true);
+      if (!invoiceData) return;
 
-      const result = await paymentAPI.verifyPayment(
-        invoiceData.InvoiceNumber || invoiceData.invoiceNumber,
-        transactionId,
-        method
-      );
+      const message = `
+🏢 BANQUET HALL INVOICE
 
-      setLoading(false);
+Invoice Number: ${invoiceData.invoiceNo}
+Amount: Rs. ${invoiceData.amount}
+Status: ${invoiceData.status}
 
-      if (result.success || result.verified) {
-        setPaymentStatus('paid');
-        Alert.alert(
-          'Payment Verified!',
-          'Your payment has been successfully verified. Your hall booking is now confirmed.',
-          [
-            {
-              text: 'View Booking',
-              onPress: () => navigation.navigate('BookingConfirmation', {
-                invoiceData: invoiceData,
-                bookingData: bookingData,
-                venue: venue,
-                isGuest: isGuest,
-                memberDetails: memberDetails,
-                guestDetails: guestDetails,
-                paymentStatus: 'PAID',
-                transactionId: transactionId,
-                paymentMethod: method,
-              }),
-            },
-          ]
-        );
-      } else {
-        Alert.alert(
-          'Payment Verification',
-          result.message || 'We are verifying your payment. Please check your bookings list in a few minutes.',
-          [
-            {
-              text: 'OK',
-              onPress: () => navigation.navigate('Home'),
-            },
-          ]
-        );
-      }
+📋 Booking Details:
+• Hall: ${invoiceData.hallName}
+• Date: ${formatDate(invoiceData.eventDate)}
+• Time Slot: ${formatTimeSlot(invoiceData.eventTime)}
+• Event Type: ${invoiceData.eventType}
+• Guests: ${invoiceData.numberOfGuests}
+
+👤 Member Information:
+• Name: ${invoiceData.memberName}
+• Membership No: ${invoiceData.membershipNo}
+
+${invoiceData.dueDate ? `📅 Payment Due: ${formatDateTime(invoiceData.dueDate)}\n` : ''}
+
+Thank you for choosing our banquet hall services!
+`.trim();
+
+      await Share.share({
+        message,
+        title: `Hall Invoice - ${invoiceData.invoiceNo}`,
+      });
     } catch (error) {
-      setLoading(false);
-      console.error('❌ Payment verification error:', error);
-      Alert.alert(
-        'Payment Verification',
-        'We are verifying your payment. Please check your bookings list in a few minutes.',
-        [
-          {
-            text: 'OK',
-            onPress: () => navigation.navigate('Home'),
-          },
-        ]
-      );
+      console.error('Error sharing:', error);
+      Alert.alert('Error', 'Failed to share invoice');
+    } finally {
+      setShareLoading(false);
     }
   };
 
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString('en-US', {
-        weekday: 'short',
+      return new Date(dateString).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+    } catch (error) {
+      return dateString;
+    }
+  };
+
+  const formatDateTime = (dateString) => {
+    if (!dateString) return 'N/A';
+    try {
+      return new Date(dateString).toLocaleString('en-US', {
         year: 'numeric',
         month: 'short',
         day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
       });
     } catch (error) {
       return dateString;
@@ -275,7 +210,7 @@ A 2% processing fee applies for credit cards.
   };
 
   const formatTimeSlot = (timeSlot) => {
-    if (!timeSlot) return '';
+    if (!timeSlot) return 'N/A';
     const slotMap = {
       'MORNING': 'Morning (8:00 AM - 2:00 PM)',
       'EVENING': 'Evening (2:00 PM - 8:00 PM)',
@@ -284,711 +219,573 @@ A 2% processing fee applies for credit cards.
     return slotMap[timeSlot] || timeSlot;
   };
 
-  const formatEventType = (eventType) => {
-    if (!eventType) return '';
-    const eventMap = {
-      'wedding': 'Wedding Reception',
-      'birthday': 'Birthday Party',
-      'corporate': 'Corporate Event',
-      'anniversary': 'Anniversary',
-      'family': 'Family Gathering',
-      'other': 'Other Event'
-    };
-    return eventMap[eventType] || eventType;
+  const getStatusBadge = (status) => {
+    const statusUpper = (status || '').toUpperCase();
+    switch (statusUpper) {
+      case 'CONFIRMED':
+      case 'PAID':
+        return { text: 'CONFIRMED', style: styles.statusConfirmed, icon: 'check-circle' };
+      case 'PENDING_PAYMENT':
+      case 'PENDING':
+        return { text: 'PAYMENT PENDING', style: styles.statusPending, icon: 'payment' };
+      default:
+        return { text: status || 'PENDING', style: styles.statusPending, icon: 'schedule' };
+    }
   };
 
-  if (!invoiceData) {
+  const statusInfo = getStatusBadge(invoiceData?.status);
+
+  if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.errorContainer}>
-          <Icon name="exclamationcircleo" size={64} color="#ff6b6b" />
-          <Text style={styles.errorText}>Invoice data not found</Text>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Text style={styles.backButtonText}>Go Back</Text>
-          </TouchableOpacity>
+      <View style={styles.container}>
+        <StatusBar backgroundColor="#fffaf2" barStyle="dark-content" />
+        <ImageBackground
+          source={require("../../assets/notch.jpg")}
+          style={styles.notch}
+          imageStyle={styles.notchImage}
+        >
+          <View style={styles.notchRow}>
+            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconWrapper}>
+              <MaterialIcons name="arrow-back" size={28} color="#000" />
+            </TouchableOpacity>
+            <Text style={styles.notchTitle}>Hall Invoice</Text>
+            <View style={styles.iconWrapper} />
+          </View>
+        </ImageBackground>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#b48a64" />
+          <Text style={styles.loadingText}>Generating your invoice...</Text>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <StatusBar backgroundColor="#fffaf2" barStyle="dark-content" />
 
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Icon name="arrowleft" size={24} color="#000" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Hall Booking Invoice</Text>
-        <TouchableOpacity onPress={handleShareInvoice} disabled={loading}>
-          <Icon name="sharealt" size={24} color={loading ? '#ccc' : '#000'} />
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView contentContainerStyle={styles.content}>
-        {/* Invoice Header */}
-        <View style={styles.invoiceHeader}>
-          <Text style={styles.invoiceTitle}>BANQUET HALL BOOKING INVOICE</Text>
-          <Text style={styles.invoiceNumber}>
-            #{invoiceData.InvoiceNumber || invoiceData.invoiceNumber}
-          </Text>
-          <Text style={styles.invoiceStatus}>
-            Status: <Text style={paymentStatus === 'paid' ? styles.statusPaid : styles.statusPending}>
-              {paymentStatus === 'paid' ? 'PAID' : 'PENDING PAYMENT'}
-            </Text>
-          </Text>
-        </View>
-
-        {/* Payment Required Alert */}
-        {paymentStatus !== 'paid' && (
-          <View style={styles.alertCard}>
-            <View style={styles.alertIcon}>
-              <Icon name="clockcircle" size={20} color="#856404" />
-            </View>
-            <View style={styles.alertContent}>
-              <Text style={styles.alertTitle}>Payment Required</Text>
-              <Text style={styles.alertText}>
-                Complete payment within 24 hours to confirm your booking
-              </Text>
-              <Text style={styles.dueDate}>
-                Due by: {formatDate(invoiceData.DueDate || invoiceData.dueDate)}
-              </Text>
-            </View>
-          </View>
-        )}
-
-        {/* Amount Card */}
-        <View style={styles.amountCard}>
-          <Text style={styles.amountLabel}>Total Amount Due</Text>
-          <Text style={styles.amountValue}>
-            Rs. {(invoiceData.Amount || invoiceData.amount || 0).toLocaleString()}/-
-          </Text>
-        </View>
-
-        {/* Customer Information */}
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>
-            {isGuest ? 'Guest Information' : 'Member Information'}
-          </Text>
-
-          {isGuest ? (
-            <>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Name:</Text>
-                <Text style={styles.detailValue}>
-                  {guestDetails?.guestName || 'N/A'}
-                </Text>
-              </View>
-
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Email:</Text>
-                <Text style={styles.detailValue}>
-                  {guestDetails?.guestEmail || 'N/A'}
-                </Text>
-              </View>
-
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Phone:</Text>
-                <Text style={styles.detailValue}>
-                  {guestDetails?.guestPhone || 'N/A'}
-                </Text>
-              </View>
-
-              {guestDetails?.guestAddress && (
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Address:</Text>
-                  <Text style={styles.detailValue}>
-                    {guestDetails.guestAddress}
-                  </Text>
-                </View>
-              )}
-            </>
-          ) : (
-            <>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Name:</Text>
-                <Text style={styles.detailValue}>
-                  {memberDetails?.memberName || 'N/A'}
-                </Text>
-              </View>
-
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Membership No:</Text>
-                <Text style={styles.detailValue}>
-                  {memberDetails?.membershipNo || 'N/A'}
-                </Text>
-              </View>
-
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Booking Type:</Text>
-                <Text style={styles.detailValue}>
-                  Member Booking
-                </Text>
-              </View>
-            </>
-          )}
-        </View>
-
-        {/* Hall Booking Summary */}
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Hall Booking Summary</Text>
-
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Hall Name:</Text>
-            <Text style={styles.detailValue}>
-              {venue?.name || bookingData?.hallName || 'N/A'}
-            </Text>
-          </View>
-
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Booking Date:</Text>
-            <Text style={styles.detailValue}>
-              {formatDate(bookingData?.bookingDate)}
-            </Text>
-          </View>
-
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Time Slot:</Text>
-            <Text style={styles.detailValue}>
-              {formatTimeSlot(bookingData?.eventTime)}
-            </Text>
-          </View>
-
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Event Type:</Text>
-            <Text style={styles.detailValue}>
-              {formatEventType(bookingData?.eventType)}
-            </Text>
-          </View>
-
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Number of Guests:</Text>
-            <Text style={styles.detailValue}>
-              {bookingData?.numberOfGuests || 0} people
-            </Text>
-          </View>
-
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Rate Type:</Text>
-            <Text style={styles.detailValue}>
-              {isGuest ? 'Guest Rate' : 'Member Rate'}
-            </Text>
-          </View>
-
-          {bookingData?.specialRequest && (
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Special Requests:</Text>
-              <Text style={styles.detailValue}>
-                {bookingData.specialRequest}
-              </Text>
-            </View>
-          )}
-
-          <View style={[styles.detailRow, styles.totalRow]}>
-            <Text style={styles.totalLabel}>Total Amount:</Text>
-            <Text style={styles.totalValue}>
-              Rs. {(invoiceData.Amount || invoiceData.amount || 0).toLocaleString()}/-
-            </Text>
-          </View>
-        </View>
-
-        {/* Payment Methods */}
-        {!showPaymentMethods ? (
-          <TouchableOpacity
-            style={styles.showPaymentMethodsButton}
-            onPress={() => setShowPaymentMethods(true)}
-          >
-            <Feather name="credit-card" size={20} color="#FFF" />
-            <Text style={styles.showPaymentMethodsText}>
-              Show Payment Methods
-            </Text>
-            <Icon name="right" size={16} color="#FFF" />
+      <ImageBackground
+        source={require("../../assets/notch.jpg")}
+        style={styles.notch}
+        imageStyle={styles.notchImage}
+      >
+        <View style={styles.notchRow}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconWrapper}>
+            <MaterialIcons name="arrow-back" size={28} color="#000" />
           </TouchableOpacity>
-        ) : (
-          <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Available Payment Methods</Text>
-            <View style={styles.paymentMethodsGrid}>
-              <TouchableOpacity
-                style={styles.paymentMethodCard}
-                onPress={() => handlePaymentMethodSelect('bank')}
-              >
-                <View style={styles.paymentMethodIcon}>
-                  <Feather name="bank" size={24} color="#2E8B57" />
-                </View>
-                <Text style={styles.paymentMethodName}>Bank Transfer</Text>
-                <Text style={styles.paymentMethodDesc}>Online/ATM Transfer</Text>
-              </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.paymentMethodCard}
-                onPress={() => handlePaymentMethodSelect('cash')}
-              >
-                <View style={styles.paymentMethodIcon}>
-                  <Feather name="dollar-sign" size={24} color="#2E8B57" />
-                </View>
-                <Text style={styles.paymentMethodName}>Cash Payment</Text>
-                <Text style={styles.paymentMethodDesc}>At Club Office</Text>
-              </TouchableOpacity>
+          <Text style={styles.notchTitle}>Hall Invoice</Text>
 
-              <TouchableOpacity
-                style={styles.paymentMethodCard}
-                onPress={() => handlePaymentMethodSelect('card')}
-              >
-                <View style={styles.paymentMethodIcon}>
-                  <Feather name="credit-card" size={24} color="#2E8B57" />
-                </View>
-                <Text style={styles.paymentMethodName}>Card Payment</Text>
-                <Text style={styles.paymentMethodDesc}>Visa/MasterCard</Text>
-              </TouchableOpacity>
+          <TouchableOpacity onPress={handleRefresh} disabled={refreshing} style={styles.iconWrapper}>
+            <MaterialIcons name="refresh" size={24} color="#000" />
+          </TouchableOpacity>
+        </View>
+      </ImageBackground>
+
+      <ScrollView
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={['#b48a64']}
+          />
+        }
+      >
+        <View style={styles.invoiceContainer}>
+          {/* Invoice Header */}
+          <View style={styles.invoiceHeader}>
+            <MaterialIcons
+              name={statusInfo.icon}
+              size={40}
+              color="#b48a64"
+            />
+            <Text style={styles.invoiceTitle}>
+              BANQUET HALL BOOKING VOUCHER
+            </Text>
+            <Text style={styles.invoiceSubtitle}>
+              Complete payment to confirm your booking
+            </Text>
+            {timeLeft && timeLeft !== 'EXPIRED' && invoiceData?.status !== 'PAID' && (
+              <View style={styles.timerContainer}>
+                <MaterialIcons name="schedule" size={16} color="#dc3545" />
+                <Text style={styles.timerText}> Expires in: {timeLeft}</Text>
+              </View>
+            )}
+            {timeLeft === 'EXPIRED' && (
+              <Text style={styles.expiredText}>EXPIRED</Text>
+            )}
+          </View>
+
+          {/* Payment Required Alert */}
+          {invoiceData?.status !== 'PAID' && (
+            <View style={styles.paymentAlert}>
+              <MaterialIcons name="payment" size={20} color="#856404" />
+              <View style={styles.paymentAlertContent}>
+                <Text style={styles.paymentAlertTitle}>Payment Required</Text>
+                <Text style={styles.paymentAlertText}>
+                  Complete payment within 1 hour to secure your booking.
+                </Text>
+                <TouchableOpacity
+                  style={styles.paymentButton}
+                  onPress={handleMakePayment}
+                  disabled={timeLeft === 'EXPIRED'}
+                >
+                  <Text style={styles.paymentButtonText}>Make Payment Now</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {/* Invoice Details */}
+          <View style={styles.invoiceSection}>
+            <Text style={styles.sectionTitle}>Invoice Details</Text>
+
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Invoice Number:</Text>
+              <Text style={[styles.detailValue, styles.invoiceHighlight]}>
+                {invoiceData.invoiceNo}
+              </Text>
+            </View>
+
+            {invoiceData.consumerNumber && (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Consumer Number:</Text>
+                <Text style={[styles.detailValue, styles.invoiceHighlight]}>
+                  {invoiceData.consumerNumber}
+                </Text>
+              </View>
+            )}
+
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Status:</Text>
+              <View style={[styles.statusBadge, statusInfo.style]}>
+                <Text style={styles.statusText}>{statusInfo.text}</Text>
+              </View>
+            </View>
+
+            {invoiceData.dueDate && (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Payment Due:</Text>
+                <Text style={[styles.detailValue, styles.dueDate]}>
+                  {formatDateTime(invoiceData.dueDate)}
+                </Text>
+              </View>
+            )}
+
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Member Name:</Text>
+              <Text style={styles.detailValue}>{invoiceData.memberName}</Text>
+            </View>
+
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Membership No:</Text>
+              <Text style={styles.detailValue}>{invoiceData.membershipNo}</Text>
             </View>
           </View>
-        )}
 
-        {/* Important Instructions */}
-        <View style={styles.instructionsCard}>
-          <Text style={styles.instructionsTitle}>Important Instructions</Text>
+          {/* Hall Booking Summary */}
+          <View style={styles.invoiceSection}>
+            <Text style={styles.sectionTitle}>Hall Booking Summary</Text>
 
-          <View style={styles.instructionItem}>
-            <Icon name="checkcircle" size={14} color="#2E8B57" />
-            <Text style={styles.instructionTextItem}>
-              Complete payment within 24 hours to secure your booking
-            </Text>
-          </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Hall Name:</Text>
+              <Text style={styles.detailValue}>{invoiceData.hallName}</Text>
+            </View>
 
-          <View style={styles.instructionItem}>
-            <Icon name="checkcircle" size={14} color="#2E8B57" />
-            <Text style={styles.instructionTextItem}>
-              Bring this invoice and payment confirmation when you visit
-            </Text>
-          </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Event Date:</Text>
+              <Text style={styles.detailValue}>{formatDate(invoiceData.eventDate)}</Text>
+            </View>
 
-          <View style={styles.instructionItem}>
-            <Icon name="checkcircle" size={14} color="#2E8B57" />
-            <Text style={styles.instructionTextItem}>
-              Arrive 1 hour before your event time for setup
-            </Text>
-          </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Time Slot:</Text>
+              <Text style={styles.detailValue}>{formatTimeSlot(invoiceData.eventTime)}</Text>
+            </View>
 
-          <View style={styles.instructionItem}>
-            <Icon name="checkcircle" size={14} color="#2E8B57" />
-            <Text style={styles.instructionTextItem}>
-              Maximum capacity: {venue?.capacity || 'As per booking'} people
-            </Text>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Event Type:</Text>
+              <Text style={styles.detailValue}>{invoiceData.eventType}</Text>
+            </View>
+
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Guests:</Text>
+              <Text style={styles.detailValue}>{invoiceData.numberOfGuests} people</Text>
+            </View>
           </View>
 
-          <View style={styles.instructionItem}>
-            <Icon name="checkcircle" size={14} color="#2E8B57" />
-            <Text style={styles.instructionTextItem}>
-              Food and decoration arrangements to be made separately
-            </Text>
-          </View>
-        </View>
+          {/* Payment Information */}
+          <View style={styles.invoiceSection}>
+            <Text style={styles.sectionTitle}>Payment Details</Text>
 
-        {/* Terms & Conditions */}
-        <View style={styles.termsCard}>
-          <Text style={styles.termsTitle}>Terms & Conditions</Text>
-          <Text style={styles.termsText}>
-            1. Booking confirmation is subject to full payment.
-            2. Cancellation 48 hours before event: 50% refund.
-            3. Cancellation 24 hours before event: No refund.
-            4. Damage to property will be charged separately.
-            5. Club rules must be followed at all times.
-          </Text>
-        </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Total Amount:</Text>
+              <Text style={[styles.detailValue, styles.amount]}>
+                Rs. {invoiceData.amount ? parseFloat(invoiceData.amount).toLocaleString() : '0.00'}/-
+              </Text>
+            </View>
 
-        {/* Contact Info */}
-        <View style={styles.contactCard}>
-          <Text style={styles.contactTitle}>Need Assistance?</Text>
-          <View style={styles.contactItem}>
-            <Feather name="phone" size={14} color="#666" />
-            <Text style={styles.contactText}>Banquet Office: 091-1234567</Text>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Payment Status:</Text>
+              <View style={[styles.statusBadge, invoiceData.status === 'PAID' ? styles.statusConfirmed : styles.pendingBadge]}>
+                <Text style={styles.statusText}>{invoiceData.status}</Text>
+              </View>
+            </View>
           </View>
-          <View style={styles.contactItem}>
-            <Feather name="mail" size={14} color="#666" />
-            <Text style={styles.contactText}>Email: banquet@pscclub.com</Text>
+
+          {/* Important Information */}
+          <View style={styles.instructions}>
+            <Text style={styles.instructionsTitle}>Important Information</Text>
+            <View style={styles.instructionItem}>
+              <MaterialIcons name="check-circle" size={16} color="#b48a64" />
+              <Text style={styles.instructionText}>Complete payment within 1 hour to secure your booking</Text>
+            </View>
+            <View style={styles.instructionItem}>
+              <MaterialIcons name="check-circle" size={16} color="#b48a64" />
+              <Text style={styles.instructionText}>Present this voucher at the club office for verification</Text>
+            </View>
           </View>
-          <View style={styles.contactItem}>
-            <Feather name="clock" size={14} color="#666" />
-            <Text style={styles.contactText}>Office Hours: 9:00 AM - 8:00 PM</Text>
+
+          {/* Action Buttons */}
+          <View style={styles.actionButtons}>
+            <TouchableOpacity
+              style={styles.secondaryButton}
+              onPress={handleRefresh}
+              disabled={refreshing}
+            >
+              <MaterialIcons name="refresh" size={20} color="#b48a64" />
+              <Text style={styles.secondaryButtonText}>
+                {refreshing ? 'Refreshing...' : 'Refresh'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.shareButton}
+              onPress={handleShareInvoice}
+              disabled={shareLoading}
+            >
+              <MaterialIcons name="share" size={20} color="#fff" />
+              <Text style={styles.shareButtonText}>
+                {shareLoading ? 'Sharing...' : 'Share Invoice'}
+              </Text>
+            </TouchableOpacity>
           </View>
-          <View style={styles.contactItem}>
-            <Feather name="map-pin" size={14} color="#666" />
-            <Text style={styles.contactText}>Location: Club Main Building</Text>
-          </View>
+
+          {/* Complete Payment Button */}
+          {invoiceData?.status !== 'PAID' && (
+            <TouchableOpacity
+              style={[styles.paymentActionButton, timeLeft === 'EXPIRED' && { backgroundColor: '#ccc' }]}
+              onPress={handleMakePayment}
+              disabled={timeLeft === 'EXPIRED'}
+            >
+              <MaterialIcons name="payment" size={20} color="#fff" />
+              <Text style={styles.paymentActionButtonText}>Complete Payment Now</Text>
+            </TouchableOpacity>
+          )}
+
+          <TouchableOpacity
+            style={styles.primaryButton}
+            onPress={() => navigation.navigate('Home')}
+          >
+            <MaterialIcons name="home" size={20} color="#fff" />
+            <Text style={styles.primaryButtonText}>Back to Home</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
-
-      {/* Action Buttons */}
-      {paymentStatus !== 'paid' && (
-        <View style={styles.actionContainer}>
-          <TouchableOpacity
-            style={styles.paymentButton}
-            onPress={handleMakePayment}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <>
-                <Feather name="credit-card" size={20} color="#fff" />
-                <Text style={styles.paymentButtonText}>
-                  Make Payment
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={() => navigation.goBack()}
-            disabled={loading}
-          >
-            <Text style={styles.secondaryButtonText}>Back to Booking</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
+  container: { flex: 1, backgroundColor: '#f9f3eb' },
+  notch: {
+    paddingTop: 50,
+    paddingBottom: 25,
+    paddingHorizontal: 20,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    overflow: "hidden",
+    backgroundColor: "#D2B48C",
   },
-  errorContainer: {
+  notchImage: {
+    resizeMode: "cover",
+  },
+  notchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingBottom: 10,
+  },
+  iconWrapper: {
+    width: 40,
+    height: 40,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  notchTitle: {
+    fontSize: 22,
+    fontWeight: "600",
+    color: "#000",
+  },
+  content: { flex: 1 },
+  loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: 40,
   },
-  errorText: {
-    fontSize: 18,
-    color: '#ff6b6b',
-    marginTop: 20,
-    marginBottom: 30,
-    textAlign: 'center',
-  },
-  backButton: {
-    backgroundColor: '#D2B48C',
-    paddingHorizontal: 30,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  backButtonText: {
-    color: '#000',
+  loadingText: {
+    marginTop: 10,
+    color: '#666',
     fontSize: 16,
-    fontWeight: 'bold',
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#000',
-  },
-  content: {
-    padding: 20,
-    paddingBottom: 100,
+  invoiceContainer: {
+    padding: 15,
   },
   invoiceHeader: {
     alignItems: 'center',
+    padding: 20,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 15,
     marginBottom: 20,
-    padding: 15,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
   },
   invoiceTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
-    color: '#000',
+    color: '#2e7d32',
+    marginTop: 10,
     marginBottom: 5,
     textAlign: 'center',
   },
-  invoiceNumber: {
+  invoiceSubtitle: {
     fontSize: 14,
     color: '#666',
-    marginBottom: 5,
+    textAlign: 'center',
   },
-  invoiceStatus: {
-    fontSize: 12,
-    color: '#666',
-  },
-  statusPending: {
-    color: '#FFA500',
-    fontWeight: 'bold',
-  },
-  statusPaid: {
-    color: '#2E8B57',
-    fontWeight: 'bold',
-  },
-  alertCard: {
+  paymentAlert: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
     backgroundColor: '#fff3cd',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 15,
     borderLeftWidth: 4,
     borderLeftColor: '#ffc107',
-    padding: 15,
-    borderRadius: 8,
-    marginBottom: 20,
   },
-  alertIcon: {
-    marginRight: 10,
-  },
-  alertContent: {
+  paymentAlertContent: {
     flex: 1,
+    marginLeft: 10,
   },
-  alertTitle: {
+  paymentAlertTitle: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#856404',
     marginBottom: 5,
   },
-  alertText: {
+  paymentAlertText: {
     fontSize: 14,
     color: '#856404',
-    lineHeight: 20,
+    lineHeight: 18,
+    marginBottom: 10,
   },
-  dueDate: {
-    fontSize: 12,
-    color: '#856404',
-    marginTop: 5,
-    fontStyle: 'italic',
+  paymentButton: {
+    backgroundColor: '#b48a64',
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
   },
-  amountCard: {
-    backgroundColor: '#B8860B',
-    borderRadius: 12,
-    padding: 20,
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  amountLabel: {
-    fontSize: 14,
+  paymentButtonText: {
     color: '#fff',
-    opacity: 0.9,
-    marginBottom: 5,
-  },
-  amountValue: {
-    fontSize: 36,
     fontWeight: 'bold',
-    color: '#fff',
+    fontSize: 14,
   },
-  sectionCard: {
+  invoiceSection: {
     backgroundColor: '#fff',
+    padding: 18,
     borderRadius: 12,
-    padding: 20,
     marginBottom: 15,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowRadius: 3,
+    elevation: 2,
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#000',
+    color: '#333',
     marginBottom: 15,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
-    paddingBottom: 10,
+    paddingBottom: 8,
   },
   detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    alignItems: 'center',
+    marginBottom: 12,
   },
   detailLabel: {
     fontSize: 14,
     color: '#666',
-    width: '40%',
+    fontWeight: '500',
+    flex: 1,
   },
   detailValue: {
     fontSize: 14,
-    fontWeight: '500',
-    color: '#000',
+    color: '#333',
+    fontWeight: '600',
+    flex: 1,
     textAlign: 'right',
-    width: '60%',
-    flexWrap: 'wrap',
   },
-  totalRow: {
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-    paddingTop: 10,
-    marginTop: 10,
-  },
-  totalLabel: {
+  amount: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#000',
+    color: '#2e7d32',
   },
-  totalValue: {
-    fontSize: 18,
+  dueDate: {
+    color: '#dc3545',
     fontWeight: 'bold',
-    color: '#B8860B',
   },
-  showPaymentMethodsButton: {
-    backgroundColor: '#2E8B57',
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
     borderRadius: 12,
-    padding: 15,
-    marginBottom: 15,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
   },
-  showPaymentMethodsText: {
-    color: '#FFF',
-    fontSize: 16,
+  statusConfirmed: {
+    backgroundColor: '#e8f5e8',
+  },
+  statusPending: {
+    backgroundColor: '#fff3cd',
+  },
+  invoiceHighlight: {
+    color: '#b48a64',
     fontWeight: 'bold',
   },
-  paymentMethodsGrid: {
+  timerContainer: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
-  paymentMethodCard: {
-    width: '31%',
-    backgroundColor: '#F8F9FA',
-    borderRadius: 8,
-    padding: 15,
     alignItems: 'center',
+    marginTop: 10,
+    backgroundColor: '#fff1f0',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 15,
     borderWidth: 1,
-    borderColor: '#E9ECEF',
+    borderColor: '#ffa39e',
   },
-  paymentMethodIcon: {
-    marginBottom: 10,
+  timerText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#dc3545',
   },
-  paymentMethodName: {
+  expiredText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#dc3545',
+    marginTop: 10,
+    textTransform: 'uppercase',
+  },
+  pendingBadge: {
+    backgroundColor: '#fff3cd',
+  },
+  statusText: {
     fontSize: 12,
     fontWeight: 'bold',
-    color: '#000',
-    marginBottom: 4,
-    textAlign: 'center',
+    color: '#2e7d32',
   },
-  paymentMethodDesc: {
-    fontSize: 10,
-    color: '#666',
-    textAlign: 'center',
-  },
-  instructionsCard: {
-    backgroundColor: '#e7f3ff',
-    borderWidth: 1,
-    borderColor: '#b3d7ff',
+  instructions: {
+    backgroundColor: '#f0f7ff',
+    padding: 16,
     borderRadius: 12,
-    padding: 20,
     marginBottom: 15,
   },
   instructionsTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: 'bold',
-    color: '#0d6efd',
+    color: '#1565c0',
     marginBottom: 10,
   },
   instructionItem: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 8,
-  },
-  instructionTextItem: {
-    fontSize: 14,
-    color: '#0d6efd',
-    marginLeft: 8,
-    flex: 1,
-    lineHeight: 20,
-  },
-  termsCard: {
-    backgroundColor: '#f8f9fa',
-    borderRadius: 12,
-    padding: 20,
-    marginBottom: 15,
-    borderWidth: 1,
-    borderColor: '#e9ecef',
-  },
-  termsTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#000',
-    marginBottom: 10,
-  },
-  termsText: {
-    fontSize: 12,
-    color: '#666',
-    lineHeight: 18,
-  },
-  contactCard: {
-    backgroundColor: '#f8f9fa',
-    borderRadius: 12,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: '#e9ecef',
-  },
-  contactTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#000',
-    marginBottom: 10,
-  },
-  contactItem: {
-    flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 8,
   },
-  contactText: {
-    fontSize: 14,
-    color: '#666',
+  instructionText: {
+    fontSize: 12,
+    color: '#1565c0',
     marginLeft: 8,
+    flex: 1,
   },
-  actionContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 20,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 15,
   },
-  paymentButton: {
-    backgroundColor: '#B8860B',
-    paddingVertical: 15,
-    borderRadius: 10,
+  secondaryButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
-    marginBottom: 10,
-  },
-  paymentButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  secondaryButton: {
-    paddingVertical: 15,
-    borderRadius: 10,
-    alignItems: 'center',
+    padding: 12,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: '#b48a64',
+    backgroundColor: 'transparent',
+    gap: 8,
   },
   secondaryButtonText: {
-    color: '#666',
+    color: '#b48a64',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  shareButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: '#2196f3',
+    gap: 8,
+  },
+  shareButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  paymentActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#bdaea1ff',
+    padding: 15,
+    borderRadius: 8,
+    marginBottom: 15,
+    gap: 8,
+  },
+  paymentActionButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
     fontSize: 16,
+  },
+  primaryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: '#b48a64',
+    gap: 8,
+    marginBottom: 30,
+  },
+  primaryButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
   },
 });
 
