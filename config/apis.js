@@ -745,10 +745,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const getBaseUrl = () => {
   if (Platform.OS === 'android') {
-    return 'http://193.203.169.122:8080/api';
+    return 'https://admin.peshawarservicesclub.com/api';
     // return 'http://10.0.2.2:3000/api';
   } else {
-    return 'http://193.203.169.122:8080/api';
+    return 'https://admin.peshawarservicesclub.com/api';
   }
 };
 

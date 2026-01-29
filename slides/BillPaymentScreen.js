@@ -19,7 +19,7 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getBaseUrl } from '../config/apis'; // If you have this, otherwise use your API_BASE_URL
 
-const API_BASE_URL = getBaseUrl ? getBaseUrl() : 'http://193.203.169.122:8080/api';
+const API_BASE_URL = getBaseUrl ? getBaseUrl() : 'https://admin.peshawarservicesclub.com/api';
 
 // API functions
 const storeAuthData = async (tokens, userData) => {
