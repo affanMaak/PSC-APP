@@ -329,16 +329,6 @@ function AdminDrawer() {
           ),
         }}
       />
-      {/* <Drawer.Screen
-        name="Announcements"
-        component={events}
-        options={{
-          headerShown: false,
-          drawerIcon: ({ color, size }) => (
-            <Icon name="megaphone-outline" size={size} color={color} />
-          ),
-        }}
-      /> */}
       <Drawer.Screen
         name="Club rules"
         component={ClubRulesScreen}
@@ -369,6 +359,16 @@ function AdminDrawer() {
           ),
         }}
       /> */}
+       <Drawer.Screen
+        name="Admin Reservations"
+        component={ReservationsScreen}
+        options={{
+          headerShown: false,
+          drawerIcon: ({ color, size }) => (
+            <Icon name="briefcase-outline" size={size} color={color} />
+          ),
+        }}
+      />
       <Drawer.Screen
         name="Booking Management"
         component={AdminBookingsScreen}
@@ -405,6 +405,7 @@ function RoleBasedDrawer() {
 
 import messaging from '@react-native-firebase/messaging';
 import notifee from '@notifee/react-native';
+import ReservationsScreen from './src/adminOnly/ReservationsScreen.js';
 
 // ... (imports)
 
@@ -566,6 +567,7 @@ function AppContent() {
         <Stack.Screen name="BookingDetailsScreen" component={BookingDetailsScreen} options={{ headerShown: false }} />
         <Stack.Screen name="AdminBookingsScreen" component={AdminBookingsScreen} options={{ headerShown: false }} />
         <Stack.Screen name="Announcements" component={Announcements} options={{ headerShown: false }} />
+        <Stack.Screen name="ReservationsScreen" component={ReservationsScreen} options={{ headerShown: false }} />
       </Stack.Navigator>
       <FloatingTimer />
     </NavigationContainer>
