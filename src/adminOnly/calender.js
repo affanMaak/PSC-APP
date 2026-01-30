@@ -2647,6 +2647,43 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useAuth } from '../auth/contexts/AuthContext';
 import { calendarAPI } from '../../config/apis';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import {
+    format,
+    startOfMonth,
+    endOfMonth,
+    startOfWeek,
+    endOfWeek,
+    eachDayOfInterval,
+    isSameDay,
+    addMonths,
+    subMonths,
+    addDays,
+    differenceInDays,
+    isWithinInterval,
+    addWeeks,
+    subWeeks
+} from 'date-fns';
+import {
+    Bed,
+    Building,
+    Trees,
+    Camera,
+    Calendar as CalendarIcon,
+    ChevronLeft,
+    ChevronRight,
+    Users,
+    Info,
+    AlertTriangle,
+    Clock,
+    CheckCircle,
+    XCircle,
+    Menu,
+    X,
+    Search,
+    RefreshCw,
+    MapPin,
+    DollarSign
+} from 'lucide-react-native';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -2656,7 +2693,7 @@ const dateUtils = {
         if (!date) return '';
         const d = new Date(date);
         if (isNaN(d.getTime())) return '';
-        
+
         const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
         const fullMonths = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
         const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -2718,7 +2755,7 @@ const dateUtils = {
             } else {
                 date = new Date();
             }
-            
+
             if (isNaN(date.getTime())) {
                 console.warn('Invalid date string:', dateString);
                 return new Date();
@@ -2781,12 +2818,295 @@ const dateUtils = {
     }
 };
 
+// Robust Date Parsing Utility
+const parseBookingDate = (dateString) => {
+    if (!dateString) return new Date();
+
+    // Handle different date formats
+    let date;
+
+    // If it's a Date object already
+    if (dateString instanceof Date) return dateString;
+
+    // If it's a string with T (ISO format)
+    if (typeof dateString === 'string' && dateString.includes('T')) {
+        date = new Date(dateString);
+    }
+    // If it's just a date string
+    else if (typeof dateString === 'string') {
+        // Try parsing as ISO
+        date = new Date(dateString);
+
+        // If invalid, try adding time
+        if (isNaN(date.getTime())) {
+            date = new Date(dateString + 'T00:00:00');
+        }
+    }
+    // If it's a number (timestamp)
+    else if (typeof dateString === 'number') {
+        date = new Date(dateString);
+    }
+
+    // If still invalid, return today
+    if (!date || isNaN(date.getTime())) {
+        console.warn('Invalid date, using today:', dateString);
+        return new Date();
+    }
+
+    return date;
+};
+
+// Data Normalization Helper
+const normalizeEvents = (facilities, facilityType) => {
+    const normalized = [];
+    facilities.forEach(facility => {
+        const periods = [];
+
+        // Bookings logic
+        if (facility.bookings && Array.isArray(facility.bookings)) {
+            facility.bookings.forEach((item, index) => {
+                const booking = facilityType === 'ROOMS' ? item.booking : item;
+                if (!booking) return;
+
+                let start, end;
+                try {
+                    if (facilityType === 'ROOMS') {
+                        start = parseBookingDate(booking.checkIn);
+                        end = parseBookingDate(booking.checkOut);
+                    } else if (facilityType === 'PHOTOSHOOTS') {
+                        start = parseBookingDate(booking.startTime || booking.bookingDate);
+                        end = parseBookingDate(booking.endTime || booking.bookingDate);
+                    } else {
+                        // HALLS and LAWNS (Flat structure)
+                        start = parseBookingDate(booking.bookingDate);
+                        if (booking.endDate) {
+                            end = parseBookingDate(booking.endDate);
+                        } else if (booking.numberOfDays > 1) {
+                            end = addDays(start, booking.numberOfDays - 1);
+                        } else {
+                            end = parseBookingDate(booking.bookingDate);
+                        }
+                    }
+                } catch (e) {
+                    console.error("Error parsing dates for booking:", booking.id, e);
+                    return;
+                }
+
+
+                if (isNaN(start.getTime()) || isNaN(end.getTime())) return;
+
+                periods.push({
+                    id: `booking-${booking.id}`,
+                    type: 'booking',
+                    start,
+                    end,
+                    status: booking.paymentStatus || 'PENDING',
+                    title: booking.memberName || booking.guestName || 'Guest',
+                    data: booking
+                });
+            });
+        }
+
+        // Reservations logic
+        if (facility.reservations && Array.isArray(facility.reservations)) {
+            facility.reservations.forEach(res => {
+                const start = parseBookingDate(res.reservedFrom);
+                const end = parseBookingDate(res.reservedTo);
+                if (isNaN(start.getTime()) || isNaN(end.getTime())) return;
+
+                periods.push({
+                    id: `res-${res.id}`,
+                    type: 'reservation',
+                    start,
+                    end,
+                    status: 'RESERVED',
+                    title: res.admin?.name || 'Reserved',
+                    data: res
+                });
+            });
+        }
+
+        // Out of Orders logic
+        if (facility.outOfOrders && Array.isArray(facility.outOfOrders)) {
+            facility.outOfOrders.forEach(ooo => {
+                const start = parseBookingDate(ooo.startDate);
+                const end = parseBookingDate(ooo.endDate);
+                if (isNaN(start.getTime()) || isNaN(end.getTime())) return;
+
+                periods.push({
+                    id: `ooo-${ooo.id}`,
+                    type: 'maintenance',
+                    start,
+                    end,
+                    status: 'MAINTENANCE',
+                    title: ooo.reason || 'Maintenance',
+                    data: ooo
+                });
+            });
+        }
+
+        normalized.push({
+            id: facility.id,
+            name: getFacilityDisplayName(facility, facilityType),
+            type: facilityType,
+            category: facility.roomType?.type || '',
+            capacity: facility.capacity || facility.maxGuests || 0,
+            periods: periods.filter(p => p.start !== null)
+        });
+    });
+
+    return normalized;
+};
+
+const getFacilityDisplayName = (facility, type) => {
+    switch (type) {
+        case 'ROOMS': return `Room ${facility.roomNumber || facility.roomNo}`;
+        case 'HALLS': return facility.name || `Hall ${facility.id}`;
+        case 'LAWNS': return facility.description || `Lawn ${facility.id}`;
+        case 'PHOTOSHOOTS': return facility.description || `Shoot ${facility.id}`;
+        default: return 'Facility';
+    }
+};
+
+// Horizontal Timeline Scheduler Component
+const HorizontalTimeline = ({ facilities, dateRange, dayWidth = 70, onEventPress, selectedFacilityType }) => {
+    const timelineStart = dateRange[0];
+    const timelineEnd = dateRange[dateRange.length - 1];
+
+    const getStatusColor = (type, status) => {
+        if (type === 'maintenance') return '#EF4444';
+        if (type === 'reservation') return '#F59E0B';
+        if (status === 'PAID') return '#002f79';
+        if (status === 'HALF_PAID') return '#3B82F6';
+        return '#93C5FD'; // UNPAID/Pending
+    };
+
+    const renderFacilityRow = ({ item: facility }) => {
+        return (
+            <View style={styles.timelineRow}>
+                {/* Facility Label (Fixed Left Area) */}
+                <View style={styles.facilityLabelArea}>
+                    <Text style={styles.facilityNameText} numberOfLines={1}>
+                        {facility.name}
+                    </Text>
+                    <View style={styles.facilitySubDetails}>
+                        {facility.category ? (
+                            <Text style={styles.facilityCategoryText} numberOfLines={1}>
+                                {facility.category}
+                            </Text>
+                        ) : null}
+                        {facility.capacity > 0 ? (
+                            <View style={styles.capacityBadge}>
+                                <Users size={10} color="#64748B" />
+                                <Text style={styles.capacityTextMini}>{facility.capacity}</Text>
+                            </View>
+                        ) : null}
+                    </View>
+                </View>
+
+                {/* Grid and Bars Area */}
+                <View style={[styles.timelineGrid, { width: dateRange.length * dayWidth }]}>
+                    {/* Vertical Hour/Day Lines */}
+                    {dateRange.map((date, idx) => (
+                        <View
+                            key={idx}
+                            style={[
+                                styles.timelineGridLine,
+                                { left: idx * dayWidth, width: dayWidth },
+                                isSameDay(date, new Date()) && styles.timelineTodayLine
+                            ]}
+                        />
+                    ))}
+
+                    {/* Timeline Bars */}
+                    {facility.periods.map((period, index) => {
+                        // Check overlap with visible range
+                        const overlaps = (() => {
+                            const periodStart = period.start;
+                            const periodEnd = period.end;
+
+                            // Simple overlap check: periods overlap if one starts before the other ends
+                            const doesOverlap = periodStart <= timelineEnd && periodEnd >= timelineStart;
+
+                            return doesOverlap;
+                        })();
+
+                        if (!overlaps) return null;
+
+                        const clippedStart = period.start < timelineStart ? timelineStart : period.start;
+                        const clippedEnd = period.end > timelineEnd ? timelineEnd : period.end;
+
+                        const startOffset = differenceInDays(clippedStart, timelineStart);
+                        const duration = differenceInDays(clippedEnd, clippedStart) + 1;
+
+                        const left = startOffset * dayWidth;
+                        const width = duration * dayWidth;
+
+                        return (
+                            <TouchableOpacity
+                                key={period.id}
+                                activeOpacity={0.8}
+                                onPress={() => onEventPress(period, facility)}
+                                style={[
+                                    styles.horizontalBar,
+                                    {
+                                        left,
+                                        width: width - 4,
+                                        backgroundColor: getStatusColor(period.type, period.status),
+                                        zIndex: period.type === 'maintenance' ? 10 : 5,
+                                        top: period.type === 'booking' ? 10 : 35
+                                    }
+                                ]}
+                            >
+                                <Text style={styles.horizontalBarText} numberOfLines={1}>
+                                    {period.title}
+                                </Text>
+                            </TouchableOpacity>
+                        );
+                    })}
+                </View>
+            </View>
+        );
+    };
+
+    return (
+        <View style={styles.timelineWrapper}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View>
+                    {/* Timeline Header Row (Dates) */}
+                    <View style={styles.timelineHeaderRow}>
+                        <View style={styles.facilityLabelArea}>
+                            <Text style={styles.timelineHeaderLabel}>Facility</Text>
+                        </View>
+                        {dateRange.map((date, idx) => (
+                            <View key={idx} style={[styles.timelineDateHeader, { width: dayWidth }, isSameDay(date, new Date()) && styles.todayHeaderCell]}>
+                                <Text style={styles.timelineDateText}>{format(date, 'MMM d')}</Text>
+                                <Text style={styles.timelineDayText}>{format(date, 'EEE')}</Text>
+                            </View>
+                        ))}
+                    </View>
+
+                    {/* Facility Rows List */}
+                    <View style={{ flex: 1 }}>
+                        <FlatList
+                            data={facilities}
+                            renderItem={renderFacilityRow}
+                            keyExtractor={item => `${item.id}-${item.type}`}
+                            scrollEnabled={false}
+                        />
+                    </View>
+                </View>
+            </ScrollView>
+        </View>
+    );
+};
+
 // Custom Day Component to fix text rendering warnings
 const CustomDayComponent = React.memo(({ date, state, marking, onDatePress, selectedStatusFilter, getStatusColor }) => {
     const isToday = dateUtils.isSameDay(new Date(), date.dateString);
     const isSelected = marking?.selected;
     const count = marking?._count || 0;
-    
+
     return (
         <TouchableOpacity
             style={styles.dayWrapper}
@@ -2807,7 +3127,7 @@ const CustomDayComponent = React.memo(({ date, state, marking, onDatePress, sele
                 ]}>
                     {String(date.day)}
                 </Text>
-                
+
                 {count > 0 && (
                     <View style={[
                         styles.eventBadge,
@@ -2815,7 +3135,7 @@ const CustomDayComponent = React.memo(({ date, state, marking, onDatePress, sele
                         count > 5 && count <= 9 && styles.eventBadgeMedium
                     ]}>
                         <Text style={styles.eventBadgeText}>
-                            {count > 9 ? '9+' : count}
+                            {count}
                         </Text>
                     </View>
                 )}
@@ -2831,6 +3151,13 @@ const calender = ({ navigation }) => {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState(null);
+    const [viewMode, setViewMode] = useState('CALENDAR'); // 'CALENDAR' or 'TIMELINE'
+
+    const dateRange = useMemo(() => {
+        const start = startOfMonth(currentDate);
+        const end = endOfMonth(currentDate);
+        return eachDayOfInterval({ start, end });
+    }, [currentDate]);
 
     // Filter states
     const [searchByMonth, setSearchByMonth] = useState(false);
@@ -2857,6 +3184,8 @@ const calender = ({ navigation }) => {
 
     const { user } = useAuth();
 
+
+
     // Helper function for status colors
     const getStatusColor = (status) => {
         switch (status) {
@@ -2872,17 +3201,17 @@ const calender = ({ navigation }) => {
     const getFacilityStatusOnDate = useCallback((facility, date) => {
         try {
             const checkDate = dateUtils.startOfDay(date);
-            
+
             // 1. Check out of orders (MAINTENANCE - highest priority)
             if (facility.outOfOrders && Array.isArray(facility.outOfOrders)) {
                 for (const order of facility.outOfOrders) {
                     if (!order) continue;
-                    
+
                     const startDate = order.startDate ? dateUtils.parseISO(order.startDate) : null;
                     const endDate = order.endDate ? dateUtils.parseISO(order.endDate) : null;
-                    
+
                     if (startDate && endDate) {
-                        if (checkDate >= dateUtils.startOfDay(startDate) && 
+                        if (checkDate >= dateUtils.startOfDay(startDate) &&
                             checkDate <= dateUtils.endOfDay(endDate)) {
                             return 'MAINTENANCE';
                         }
@@ -2894,20 +3223,25 @@ const calender = ({ navigation }) => {
             if (facility.bookings && Array.isArray(facility.bookings)) {
                 for (const booking of facility.bookings) {
                     if (!booking) continue;
-                    
+
                     // Skip cancelled bookings
-                    const isCancelled = 
-                        booking.paymentStatus === 'CANCELLED' || 
+                    const isCancelled =
+                        booking.paymentStatus === 'CANCELLED' ||
                         booking.status === 'CANCELLED' ||
                         booking.bookingStatus === 'CANCELLED';
-                    
+
                     if (isCancelled) continue;
-                    
-                    const checkIn = booking.checkIn ? dateUtils.parseISO(booking.checkIn) : null;
-                    const checkOut = booking.checkOut ? dateUtils.parseISO(booking.checkOut) : null;
-                    
+
+                    // Handle nested booking for ROOMS or flat for others
+                    const b = booking.booking || booking;
+
+                    const checkIn = (b.checkIn || b.bookingDate) ?
+                        dateUtils.parseISO(b.checkIn || b.bookingDate) : null;
+                    const checkOut = (b.checkOut || b.endDate || b.bookingDate) ?
+                        dateUtils.parseISO(b.checkOut || b.endDate || b.bookingDate) : null;
+
                     if (checkIn && checkOut) {
-                        if (checkDate >= dateUtils.startOfDay(checkIn) && 
+                        if (checkDate >= dateUtils.startOfDay(checkIn) &&
                             checkDate <= dateUtils.endOfDay(checkOut)) {
                             return 'BOOKED';
                         }
@@ -2919,14 +3253,14 @@ const calender = ({ navigation }) => {
             if (facility.reservations && Array.isArray(facility.reservations)) {
                 for (const reservation of facility.reservations) {
                     if (!reservation) continue;
-                    
-                    const reservedFrom = reservation.reservedFrom ? 
+
+                    const reservedFrom = reservation.reservedFrom ?
                         dateUtils.parseISO(reservation.reservedFrom) : null;
-                    const reservedTo = reservation.reservedTo ? 
+                    const reservedTo = reservation.reservedTo ?
                         dateUtils.parseISO(reservation.reservedTo) : null;
-                    
+
                     if (reservedFrom && reservedTo) {
-                        if (checkDate >= dateUtils.startOfDay(reservedFrom) && 
+                        if (checkDate >= dateUtils.startOfDay(reservedFrom) &&
                             checkDate <= dateUtils.endOfDay(reservedTo)) {
                             return 'RESERVED';
                         }
@@ -2957,7 +3291,6 @@ const calender = ({ navigation }) => {
             params.roomNumber = selectedRoomNumber;
         }
 
-        console.log('API params:', params);
         return params;
     }, [searchByMonth, selectedMonth, searchByRoomMonth, selectedRoomNumber]);
 
@@ -2974,34 +3307,14 @@ const calender = ({ navigation }) => {
 
             const params = getApiParams();
 
-            console.log('Fetching calendar data...');
-            
             // Use getAllCalendarData to get normalized data
             const allData = await calendarAPI.getAllCalendarData(params);
-            
-            console.log('Data received:', {
-                rooms: allData.rooms?.length || 0,
-                halls: allData.halls?.length || 0,
-                lawns: allData.lawns?.length || 0,
-                photoshoots: allData.photoshoots?.length || 0
-            });
 
             // Set all data
             setRooms(allData.rooms || []);
             setHalls(allData.halls || []);
             setLawns(allData.lawns || []);
             setPhotoshoots(allData.photoshoots || []);
-
-            // Log sample data for debugging
-            if (allData.rooms && allData.rooms.length > 0) {
-                console.log('Sample room data:', {
-                    id: allData.rooms[0].id,
-                    roomNumber: allData.rooms[0].roomNumber,
-                    bookings: allData.rooms[0].bookings?.length || 0,
-                    reservations: allData.rooms[0].reservations?.length || 0,
-                    outOfOrders: allData.rooms[0].outOfOrders?.length || 0
-                });
-            }
 
         } catch (error) {
             console.error('Error fetching calendar data:', error);
@@ -3049,11 +3362,28 @@ const calender = ({ navigation }) => {
 
     // Get facilities to display
     const getFacilitiesForDisplay = useMemo(() => {
+        let facilities = [];
         if (selectedFacilityType === 'ROOMS') {
-            return filteredRooms;
+            facilities = filteredRooms;
+        } else {
+            facilities = getCurrentFacilities();
         }
-        return getCurrentFacilities();
-    }, [selectedFacilityType, filteredRooms]);
+
+        // Apply status filter to the facilities list
+        if (selectedStatusFilter === 'ALL') {
+            return facilities;
+        } else {
+            const today = new Date(); // Or the currently selected date if applicable
+            return facilities.filter(facility => {
+                const status = getFacilityStatusOnDate(facility, today);
+                return status === selectedStatusFilter;
+            });
+        }
+    }, [selectedFacilityType, filteredRooms, getCurrentFacilities, selectedStatusFilter, getFacilityStatusOnDate]);
+
+    const normalizedFacilities = useMemo(() => {
+        return normalizeEvents(getFacilitiesForDisplay, selectedFacilityType);
+    }, [getFacilitiesForDisplay, selectedFacilityType]);
 
     // Function to check if a room is booked for today
     const isRoomBookedToday = useCallback((room) => {
@@ -3067,56 +3397,42 @@ const calender = ({ navigation }) => {
         }
     }, [getFacilityStatusOnDate]);
 
-    // Function to show available rooms modal
+    // Function to show available rooms/facilities modal
     const showAvailableRoomsModal = useCallback(() => {
-        console.log('Checking available rooms for today...');
-
-        const available = rooms.filter(room => {
-            const isBooked = isRoomBookedToday(room);
-            return !isBooked;
+        const facilities = getCurrentFacilities();
+        const available = facilities.filter(facility => {
+            const status = getFacilityStatusOnDate(facility, new Date());
+            return status === 'AVAILABLE';
         });
 
-        console.log('Available rooms found:', available.length);
-        
         setAvailableRooms(available);
         setAvailableModalVisible(true);
-    }, [rooms, isRoomBookedToday]);
+    }, [getCurrentFacilities, getFacilityStatusOnDate]);
 
-    // Function to show booked rooms modal
+    // Function to show booked rooms/facilities modal
     const showBookedRoomsModal = useCallback(() => {
-        console.log('Checking booked rooms for today...');
-
-        const booked = rooms.filter(room => {
-            const isBooked = isRoomBookedToday(room);
-            return isBooked;
+        const facilities = getCurrentFacilities();
+        const booked = facilities.filter(facility => {
+            const status = getFacilityStatusOnDate(facility, new Date());
+            return status === 'BOOKED';
         });
 
-        console.log('Booked rooms found:', booked.length);
-        
         setBookedRooms(booked);
         setBookedModalVisible(true);
-    }, [rooms, isRoomBookedToday]);
+    }, [getCurrentFacilities, getFacilityStatusOnDate]);
 
     // Generate marked dates for calendar view
     const markedDates = useMemo(() => {
-        const facilities = getFacilitiesForDisplay;
+        const facilities = getCurrentFacilities(); // Use all facilities for marking, then filter for display
         const marks = {};
 
         if (!facilities || facilities.length === 0) {
-            console.log('No facilities to mark');
             return marks;
         }
 
         // Date range for the current calendar view
         const start = dateUtils.startOfMonth(currentDate);
         const end = dateUtils.endOfMonth(currentDate);
-
-        console.log('Generating marks for:', {
-            facilitiesCount: facilities.length,
-            start: dateUtils.format(start, 'yyyy-MM-dd'),
-            end: dateUtils.format(end, 'yyyy-MM-dd'),
-            filter: selectedStatusFilter
-        });
 
         // Loop through each day of the month
         for (let day = new Date(start); day <= end; day = dateUtils.addDays(day, 1)) {
@@ -3126,7 +3442,7 @@ const calender = ({ navigation }) => {
             // Count facilities based on status filter
             facilities.forEach(facility => {
                 const status = getFacilityStatusOnDate(facility, day);
-                
+
                 if (selectedStatusFilter === 'ALL') {
                     // Count all non-available facilities
                     if (status !== 'AVAILABLE') {
@@ -3184,38 +3500,33 @@ const calender = ({ navigation }) => {
             };
         }
 
-        console.log('Generated marks:', Object.keys(marks).length);
         return marks;
-    }, [getFacilitiesForDisplay, selectedStatusFilter, currentDate, getFacilityStatusOnDate]);
+    }, [getCurrentFacilities, selectedStatusFilter, currentDate, getFacilityStatusOnDate]);
 
     // Get events for a specific date
     const getEventsForDate = useCallback((dateString) => {
-        const facilities = getFacilitiesForDisplay;
+        const facilities = getCurrentFacilities(); // Use all facilities to get events
         const selectedDate = dateUtils.parseISO(dateString);
         const eventsOnDate = [];
 
         if (!facilities || facilities.length === 0) return eventsOnDate;
 
-        console.log(`Getting events for ${dateString}, facilities: ${facilities.length}`);
-
         facilities.forEach(facility => {
             const status = getFacilityStatusOnDate(facility, selectedDate);
-            
-            if (selectedStatusFilter !== 'ALL' && status !== selectedStatusFilter) {
-                return;
-            }
 
-            eventsOnDate.push({
-                facility,
-                type: 'status',
-                status: status,
-                date: selectedDate
-            });
+            // Only add event if it matches the current status filter or if filter is 'ALL'
+            if (selectedStatusFilter === 'ALL' || status === selectedStatusFilter) {
+                eventsOnDate.push({
+                    facility,
+                    type: 'status',
+                    status: status,
+                    date: selectedDate
+                });
+            }
         });
 
-        console.log(`Found ${eventsOnDate.length} events for ${dateString}`);
         return eventsOnDate;
-    }, [getFacilitiesForDisplay, selectedStatusFilter, getFacilityStatusOnDate]);
+    }, [getCurrentFacilities, selectedStatusFilter, getFacilityStatusOnDate]);
 
     // Handle date press
     const handleDatePress = useCallback((dateString) => {
@@ -3225,6 +3536,8 @@ const calender = ({ navigation }) => {
                 date: dateUtils.parseISO(dateString),
                 events: events,
             });
+        } else {
+            setSelectedPeriod(null); // Clear selected period if no events
         }
     }, [getEventsForDate]);
 
@@ -3239,9 +3552,8 @@ const calender = ({ navigation }) => {
         return names[type] || 'Rooms';
     };
 
-    // Calculate statistics
-    const calculateStatistics = useMemo(() => {
-        const facilities = getFacilitiesForDisplay;
+    const stats = useMemo(() => {
+        const facilities = getCurrentFacilities(); // Use all facilities for stats
         const total = facilities.length;
 
         let booked = 0;
@@ -3276,27 +3588,27 @@ const calender = ({ navigation }) => {
             if (facility.bookings && Array.isArray(facility.bookings)) {
                 facility.bookings.forEach(booking => {
                     if (!booking) return;
-                    
+
                     totalBookings++;
-                    
-                    const isCancelled = 
-                        booking.paymentStatus === 'CANCELLED' || 
+
+                    const isCancelled =
+                        booking.paymentStatus === 'CANCELLED' ||
                         booking.status === 'CANCELLED' ||
                         booking.bookingStatus === 'CANCELLED';
-                    
+
                     if (isCancelled) {
                         cancelledBookings++;
                         return;
                     }
-                    
+
                     // Check if booking is active (today is between check-in and check-out)
                     const checkIn = booking.checkIn ? dateUtils.parseISO(booking.checkIn) : null;
                     const checkOut = booking.checkOut ? dateUtils.parseISO(booking.checkOut) : null;
-                    
+
                     if (checkIn && checkOut) {
-                        const isActive = today >= dateUtils.startOfDay(checkIn) && 
-                                        today <= dateUtils.endOfDay(checkOut);
-                        
+                        const isActive = today >= dateUtils.startOfDay(checkIn) &&
+                            today <= dateUtils.endOfDay(checkOut);
+
                         if (isActive) {
                             activeBookings++;
                         } else if (checkIn > today) {
@@ -3319,15 +3631,25 @@ const calender = ({ navigation }) => {
             upcomingBookings,
             occupancyRate: total > 0 ? Math.round((booked / total) * 100) : 0,
             availabilityRate: total > 0 ? Math.round((available / total) * 100) : 0,
-            bookingCancellationRate: totalBookings > 0 ? 
+            bookingCancellationRate: totalBookings > 0 ?
                 Math.round((cancelledBookings / totalBookings) * 100) : 0,
         };
-    }, [getFacilitiesForDisplay, getFacilityStatusOnDate]);
+    }, [getCurrentFacilities, getFacilityStatusOnDate]);
+
+    const getStatForStatus = useCallback((status) => {
+        switch (status) {
+            case 'BOOKED': return stats.booked;
+            case 'AVAILABLE': return stats.available;
+            case 'RESERVED': return stats.reserved;
+            case 'MAINTENANCE': return stats.maintenance;
+            case 'ALL': return stats.total;
+            default: return 0;
+        }
+    }, [stats]);
 
     // Get unique room types
     const roomTypes = useMemo(() => {
         const types = [...new Set(rooms.map(room => room.roomType?.type).filter(Boolean))];
-        console.log('Room types found:', types);
         return types;
     }, [rooms]);
 
@@ -3350,34 +3672,34 @@ const calender = ({ navigation }) => {
     };
 
     const renderRoomItem = ({ item, index }) => {
-        const status = getFacilityStatusOnDate(item, new Date());
         const today = new Date();
-        
-        // Get current active booking for this room
-        const activeBooking = item.bookings?.find(booking => {
-            if (!booking) return false;
-            
-            const isCancelled = 
-                booking.paymentStatus === 'CANCELLED' || 
-                booking.status === 'CANCELLED';
+        const status = getFacilityStatusOnDate(item, today);
+        const name = getFacilityDisplayName(item, selectedFacilityType);
+
+        // Get current active booking
+        const activeBookingWrapper = item.bookings?.find(booking => {
+            const b = selectedFacilityType === 'ROOMS' ? booking.booking : booking;
+            if (!b) return false;
+
+            const isCancelled =
+                b.paymentStatus === 'CANCELLED' ||
+                b.status === 'CANCELLED';
             if (isCancelled) return false;
-            
-            const checkIn = booking.checkIn ? dateUtils.parseISO(booking.checkIn) : null;
-            const checkOut = booking.checkOut ? dateUtils.parseISO(booking.checkOut) : null;
-            
-            if (checkIn && checkOut) {
-                return today >= dateUtils.startOfDay(checkIn) && 
-                       today <= dateUtils.endOfDay(checkOut);
-            }
-            return false;
+
+            const checkIn = parseBookingDate(b.checkIn || b.bookingDate);
+            const checkOut = parseBookingDate(b.checkOut || b.endDate || b.bookingDate);
+
+            return today >= dateUtils.startOfDay(checkIn) && today <= dateUtils.endOfDay(checkOut);
         });
-        
+
+        const activeBooking = selectedFacilityType === 'ROOMS' ? activeBookingWrapper?.booking : activeBookingWrapper;
+
         return (
             <View style={styles.roomItemContainer}>
                 <View style={styles.roomItemHeader}>
                     <View style={styles.roomHeaderLeft}>
                         <Text style={styles.roomNumber}>
-                            Room {item.roomNumber || item.roomNo || 'N/A'}
+                            {name}
                         </Text>
                         <View style={[
                             styles.statusBadge,
@@ -3397,42 +3719,44 @@ const calender = ({ navigation }) => {
                         </View>
                     )}
                 </View>
-                
+
                 <View style={styles.roomDetails}>
-                    <Text style={styles.roomDetailText}>
-                        Type: {item.roomType?.type || 'Standard'}
-                    </Text>
+                    {selectedFacilityType === 'ROOMS' && (
+                        <Text style={styles.roomDetailText}>
+                            Type: {item.roomType?.type || 'Standard'}
+                        </Text>
+                    )}
                     {item.rate && (
                         <Text style={styles.roomRate}>
-                            Rate: PKR {parseInt(item.rate).toLocaleString()}/night
+                            Rate: PKR {parseInt(item.rate).toLocaleString()}{selectedFacilityType === 'ROOMS' ? '/night' : ''}
                         </Text>
                     )}
                 </View>
-                
+
                 {activeBooking && (
                     <View style={styles.bookingDetails}>
                         <View style={styles.bookingDetailRow}>
                             <Icon name="person" size={16} color="#64748B" />
                             <Text style={styles.bookingDetailText}>
-                                Guest: {activeBooking.memberName || activeBooking.guestName || 'N/A'}
+                                Guest: {activeBooking.memberName || activeBooking.member?.Name || activeBooking.guestName || 'N/A'}
                             </Text>
                         </View>
                         <View style={styles.bookingDetailRow}>
                             <Icon name="date-range" size={16} color="#64748B" />
                             <Text style={styles.bookingDetailText}>
-                                Dates: {activeBooking.checkIn ? 
-                                    dateUtils.format(dateUtils.parseISO(activeBooking.checkIn), 'MMM d') : 'N/A'
-                                } - {activeBooking.checkOut ? 
-                                    dateUtils.format(dateUtils.parseISO(activeBooking.checkOut), 'MMM d') : 'N/A'
+                                Dates: {(activeBooking.checkIn || activeBooking.bookingDate) ?
+                                    dateUtils.format(parseBookingDate(activeBooking.checkIn || activeBooking.bookingDate), 'MMM d') : 'N/A'
+                                } - {(activeBooking.checkOut || activeBooking.endDate || activeBooking.bookingDate) ?
+                                    dateUtils.format(parseBookingDate(activeBooking.checkOut || activeBooking.endDate || activeBooking.bookingDate), 'MMM d') : 'N/A'
                                 }
                             </Text>
                         </View>
                         {activeBooking.paymentStatus && (
                             <View style={[
                                 styles.paymentBadge,
-                                { 
-                                    backgroundColor: activeBooking.paymentStatus === 'PAID' ? '#10B981' : 
-                                                   activeBooking.paymentStatus === 'PENDING' ? '#F59E0B' : '#EF4444'
+                                {
+                                    backgroundColor: activeBooking.paymentStatus === 'PAID' ? '#10B981' :
+                                        activeBooking.paymentStatus === 'PENDING' ? '#F59E0B' : '#EF4444'
                                 }
                             ]}>
                                 <Text style={styles.paymentBadgeText}>
@@ -3455,8 +3779,6 @@ const calender = ({ navigation }) => {
             </View>
         );
     }
-
-    const stats = calculateStatistics;
 
     return (
         <SafeAreaView style={styles.container}>
@@ -3605,6 +3927,27 @@ const calender = ({ navigation }) => {
                     )}
                 </View>
 
+                {/* View Mode Toggle */}
+                <View style={styles.viewModeToggleContainer}>
+                    <Text style={styles.sectionTitle}>Select View</Text>
+                    <View style={styles.viewModeButtonsRow}>
+                        <TouchableOpacity
+                            style={[styles.viewModeButton, viewMode === 'CALENDAR' && styles.viewModeButtonActive]}
+                            onPress={() => setViewMode('CALENDAR')}
+                        >
+                            <CalendarIcon size={18} color={viewMode === 'CALENDAR' ? '#FFF' : '#64748B'} />
+                            <Text style={[styles.viewModeButtonText, viewMode === 'CALENDAR' && styles.viewModeButtonTextActive]}>Calendar</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.viewModeButton, viewMode === 'TIMELINE' && styles.viewModeButtonActive]}
+                            onPress={() => setViewMode('TIMELINE')}
+                        >
+                            <Menu size={18} color={viewMode === 'TIMELINE' ? '#FFF' : '#64748B'} />
+                            <Text style={[styles.viewModeButtonText, viewMode === 'TIMELINE' && styles.viewModeButtonTextActive]}>Timeline</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+
                 {/* Month Picker Modal */}
                 {showMonthPicker && (
                     <Modal
@@ -3696,7 +4039,14 @@ const calender = ({ navigation }) => {
                                     selectedStatusFilter === status && styles.statusFilterButtonActive,
                                     selectedStatusFilter === status && { backgroundColor: getStatusColor(status) },
                                 ]}
-                                onPress={() => setSelectedStatusFilter(status)}
+                                onPress={() => {
+                                    setSelectedStatusFilter(status);
+                                    if (status === 'BOOKED') {
+                                        showBookedRoomsModal();
+                                    } else if (status === 'AVAILABLE') {
+                                        showAvailableRoomsModal();
+                                    }
+                                }}
                                 activeOpacity={0.7}
                             >
                                 <Text
@@ -3707,6 +4057,17 @@ const calender = ({ navigation }) => {
                                 >
                                     {status.charAt(0) + status.slice(1).toLowerCase()}
                                 </Text>
+                                <View style={[
+                                    styles.statusFilterCounter,
+                                    selectedStatusFilter === status && styles.statusFilterCounterActive
+                                ]}>
+                                    <Text style={[
+                                        styles.statusFilterCounterText,
+                                        selectedStatusFilter === status && styles.statusFilterCounterTextActive
+                                    ]}>
+                                        {getStatForStatus(status)}
+                                    </Text>
+                                </View>
                             </TouchableOpacity>
                         ))}
                     </ScrollView>
@@ -3775,7 +4136,7 @@ const calender = ({ navigation }) => {
                                 </Text>
                             </View>
                         </View>
-                        
+
                         <View style={styles.bookingsSummaryGrid}>
                             {/* Total Bookings */}
                             <View style={styles.summaryItem}>
@@ -3787,7 +4148,7 @@ const calender = ({ navigation }) => {
                                     <Text style={styles.summaryLabel}>Total Bookings</Text>
                                 </View>
                             </View>
-                            
+
                             {/* Active Bookings */}
                             <View style={styles.summaryItem}>
                                 <View style={[styles.summaryIconContainer, { backgroundColor: '#10B981' }]}>
@@ -3798,7 +4159,7 @@ const calender = ({ navigation }) => {
                                     <Text style={styles.summaryLabel}>Active Now</Text>
                                 </View>
                             </View>
-                            
+
                             {/* Upcoming Bookings */}
                             <View style={styles.summaryItem}>
                                 <View style={[styles.summaryIconContainer, { backgroundColor: '#F59E0B' }]}>
@@ -3809,7 +4170,7 @@ const calender = ({ navigation }) => {
                                     <Text style={styles.summaryLabel}>Upcoming</Text>
                                 </View>
                             </View>
-                            
+
                             {/* Cancelled Bookings */}
                             <View style={styles.summaryItem}>
                                 <View style={[styles.summaryIconContainer, { backgroundColor: '#EF4444' }]}>
@@ -3821,7 +4182,7 @@ const calender = ({ navigation }) => {
                                 </View>
                             </View>
                         </View>
-                        
+
                         {/* Cancellation Rate */}
                         {stats.totalBookings > 0 && (
                             <View style={styles.cancellationRateContainer}>
@@ -3830,15 +4191,15 @@ const calender = ({ navigation }) => {
                                     <Text style={styles.rateValue}>{stats.bookingCancellationRate}%</Text>
                                 </View>
                                 <View style={styles.rateBar}>
-                                    <View 
+                                    <View
                                         style={[
-                                            styles.rateBarFill, 
-                                            { 
+                                            styles.rateBarFill,
+                                            {
                                                 width: `${Math.min(stats.bookingCancellationRate, 100)}%`,
-                                                backgroundColor: stats.bookingCancellationRate > 20 ? '#EF4444' : 
-                                                              stats.bookingCancellationRate > 10 ? '#F59E0B' : '#10B981'
+                                                backgroundColor: stats.bookingCancellationRate > 20 ? '#EF4444' :
+                                                    stats.bookingCancellationRate > 10 ? '#F59E0B' : '#10B981'
                                             }
-                                        ]} 
+                                        ]}
                                     />
                                 </View>
                             </View>
@@ -3869,13 +4230,7 @@ const calender = ({ navigation }) => {
                         {/* Booked Card */}
                         <TouchableOpacity
                             style={styles.statCardSecondary}
-                            onPress={() => {
-                                if (selectedFacilityType === 'ROOMS') {
-                                    showBookedRoomsModal();
-                                } else {
-                                    setSelectedStatusFilter('BOOKED');
-                                }
-                            }}
+                            onPress={() => showBookedRoomsModal()}
                             activeOpacity={0.7}
                         >
                             <View style={styles.statCardSecondaryHeader}>
@@ -3893,13 +4248,7 @@ const calender = ({ navigation }) => {
                         {/* Available Card */}
                         <TouchableOpacity
                             style={styles.statCardSecondary}
-                            onPress={() => {
-                                if (selectedFacilityType === 'ROOMS') {
-                                    showAvailableRoomsModal();
-                                } else {
-                                    setSelectedStatusFilter('AVAILABLE');
-                                }
-                            }}
+                            onPress={() => showAvailableRoomsModal()}
                             activeOpacity={0.7}
                         >
                             <View style={styles.statCardSecondaryHeader}>
@@ -4013,7 +4362,7 @@ const calender = ({ navigation }) => {
                             </TouchableOpacity>
                         </View>
                     </View>
-                    
+
                     <Calendar
                         current={dateUtils.format(currentDate, 'yyyy-MM-dd')}
                         onMonthChange={(month) => {
@@ -4048,6 +4397,28 @@ const calender = ({ navigation }) => {
                         style={styles.calendar}
                     />
                 </View>
+
+                {/* Timeline View */}
+                {viewMode === 'TIMELINE' && (
+                    <HorizontalTimeline
+                        facilities={normalizedFacilities}
+                        dateRange={dateRange}
+                        selectedFacilityType={selectedFacilityType}
+                        onEventPress={(period, facility) => {
+                            // Map timeline event back to existing handleDatePress or similar
+                            // For now, let's just show details
+                            setSelectedPeriod({
+                                date: period.start,
+                                events: [{
+                                    facility: { ...facility, ...period.data },
+                                    type: 'status',
+                                    status: period.status,
+                                    date: period.start
+                                }]
+                            });
+                        }}
+                    />
+                )}
 
                 {/* Occupancy State Table - Only for Rooms */}
                 {selectedFacilityType === 'ROOMS' && roomTypes.length > 0 && (
@@ -4086,16 +4457,16 @@ const calender = ({ navigation }) => {
                             {roomTypes.map((type) => {
                                 const roomsInType = rooms.filter(r => r.roomType?.type === type);
                                 const qty = roomsInType.length;
-                                const occupied = roomsInType.filter(r => 
+                                const occupied = roomsInType.filter(r =>
                                     getFacilityStatusOnDate(r, new Date()) === 'BOOKED'
                                 ).length;
-                                const available = roomsInType.filter(r => 
+                                const available = roomsInType.filter(r =>
                                     getFacilityStatusOnDate(r, new Date()) === 'AVAILABLE'
                                 ).length;
-                                const reserved = roomsInType.filter(r => 
+                                const reserved = roomsInType.filter(r =>
                                     getFacilityStatusOnDate(r, new Date()) === 'RESERVED'
                                 ).length;
-                                const maintenance = roomsInType.filter(r => 
+                                const maintenance = roomsInType.filter(r =>
                                     getFacilityStatusOnDate(r, new Date()) === 'MAINTENANCE'
                                 ).length;
 
@@ -4328,7 +4699,7 @@ const calender = ({ navigation }) => {
                                         <View key={index} style={styles.periodCard}>
                                             <View style={styles.periodCardHeader}>
                                                 <Text style={styles.periodFacilityName}>
-                                                    {selectedFacilityType === 'ROOMS' 
+                                                    {selectedFacilityType === 'ROOMS'
                                                         ? `Room ${event.facility.roomNumber || event.facility.roomNo || 'N/A'}`
                                                         : event.facility.name || event.facility.title || `Facility ${event.facility.id || 'N/A'}`
                                                     }
@@ -5479,6 +5850,187 @@ const styles = StyleSheet.create({
     maintenanceText: {
         color: '#EF4444',
         fontWeight: '600',
+    },
+    // View Mode Toggle Styles
+    viewModeToggleContainer: {
+        backgroundColor: '#FFFFFF',
+        marginHorizontal: 16,
+        marginTop: 16,
+        padding: 16,
+        borderRadius: 16,
+        shadowColor: '#1E3A5F',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
+        elevation: 3,
+    },
+    viewModeButtonsRow: {
+        flexDirection: 'row',
+        gap: 12,
+    },
+    viewModeButton: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 12,
+        borderRadius: 12,
+        backgroundColor: '#F1F5F9',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        gap: 8,
+    },
+    viewModeButtonActive: {
+        backgroundColor: '#002f79',
+        borderColor: '#002f79',
+    },
+    viewModeButtonText: {
+        fontSize: 14,
+        color: '#64748B',
+        fontWeight: '600',
+    },
+    viewModeButtonTextActive: {
+        color: '#FFFFFF',
+        fontWeight: '700',
+    },
+    // Filter Counter Styles
+    statusFilterCounter: {
+        backgroundColor: '#E2E8F0',
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 10,
+        marginLeft: 8,
+    },
+    statusFilterCounterActive: {
+        backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    },
+    statusFilterCounterText: {
+        fontSize: 12,
+        fontWeight: 'bold',
+        color: '#64748B',
+    },
+    statusFilterCounterTextActive: {
+        color: '#FFFFFF',
+    },
+    // Timeline Styles
+    timelineWrapper: {
+        backgroundColor: '#FFFFFF',
+        marginHorizontal: 16,
+        marginBottom: 24,
+        borderRadius: 20,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        elevation: 4,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+    },
+    timelineHeaderRow: {
+        flexDirection: 'row',
+        backgroundColor: '#F8FAFC',
+        borderBottomWidth: 1,
+        borderBottomColor: '#E2E8F0',
+    },
+    timelineHeaderLabel: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: '#1E293B',
+    },
+    timelineDateHeader: {
+        paddingVertical: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRightWidth: 1,
+        borderRightColor: '#E2E8F0',
+    },
+    timelineDateText: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#1E293B',
+    },
+    timelineDayText: {
+        fontSize: 10,
+        color: '#64748B',
+        textTransform: 'uppercase',
+    },
+    timelineRow: {
+        flexDirection: 'row',
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9',
+        minHeight: 70,
+    },
+    facilityLabelArea: {
+        width: 120,
+        padding: 10,
+        backgroundColor: '#F8FAFC',
+        borderRightWidth: 1,
+        borderRightColor: '#E2E8F0',
+        justifyContent: 'center',
+    },
+    facilityNameText: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#1E293B',
+    },
+    facilitySubDetails: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 4,
+        gap: 6,
+    },
+    facilityCategoryText: {
+        fontSize: 9,
+        color: '#64748B',
+        maxWidth: 60,
+    },
+    capacityBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 2,
+        backgroundColor: '#E2E8F0',
+        paddingHorizontal: 4,
+        borderRadius: 4,
+    },
+    capacityTextMini: {
+        fontSize: 9,
+        fontWeight: '700',
+        color: '#64748B',
+    },
+    timelineGrid: {
+        position: 'relative',
+        height: '100%',
+    },
+    timelineGridLine: {
+        position: 'absolute',
+        top: 0,
+        bottom: 0,
+        borderRightWidth: 1,
+        borderRightColor: '#F1F5F9',
+    },
+    timelineTodayLine: {
+        backgroundColor: 'rgba(59, 130, 246, 0.05)',
+    },
+    todayHeaderCell: {
+        backgroundColor: '#DBEAFE',
+    },
+    horizontalBar: {
+        position: 'absolute',
+        height: 22,
+        borderRadius: 6,
+        paddingHorizontal: 6,
+        justifyContent: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+        elevation: 2,
+    },
+    horizontalBarText: {
+        fontSize: 10,
+        color: '#FFFFFF',
+        fontWeight: 'bold',
     },
 });
 

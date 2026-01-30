@@ -16,6 +16,7 @@ end
 
 target 'PSC' do
   use_frameworks! :linkage => :static
+  pod 'RNVectorIcons', :path => '../node_modules/react-native-vector-icons'
   config = use_native_modules!
 
   use_react_native!(
