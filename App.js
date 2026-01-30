@@ -89,6 +89,7 @@ import ClubRulesScreen from './src/events/ClubRulesScreen';
 import MemberBookingsScreen from './src/view/MemberBookingsScreen';
 import BookingDetailsScreen from './src/view/BookingDetailsScreen';
 import AdminBookingsScreen from './src/view/AdminBookingsScreen';
+import feedbacks from './slides/feedbacks';
 
 // ===== Navigation Setup =====
 enableScreens();
@@ -196,6 +197,16 @@ function MemberDrawer() {
       <Drawer.Screen
         name="About PSC"
         component={about}
+        options={{
+          headerShown: false,
+          drawerIcon: ({ color, size }) => (
+            <Icon name="information-circle-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Drawer.Screen
+        name="Feedback"
+        component={feedbacks}
         options={{
           headerShown: false,
           drawerIcon: ({ color, size }) => (
@@ -359,7 +370,7 @@ function AdminDrawer() {
           ),
         }}
       /> */}
-       <Drawer.Screen
+      <Drawer.Screen
         name="Admin Reservations"
         component={ReservationsScreen}
         options={{
@@ -568,6 +579,7 @@ function AppContent() {
         <Stack.Screen name="AdminBookingsScreen" component={AdminBookingsScreen} options={{ headerShown: false }} />
         <Stack.Screen name="Announcements" component={Announcements} options={{ headerShown: false }} />
         <Stack.Screen name="ReservationsScreen" component={ReservationsScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="Feedback" component={feedbacks} options={{ headerShown: false }} />
       </Stack.Navigator>
       <FloatingTimer />
     </NavigationContainer>

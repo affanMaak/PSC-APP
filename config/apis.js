@@ -1629,3 +1629,32 @@ export const formatDateForInput = (dateString) => {
 };
 
 export { base_url, api };
+export const feedbackAPI = {
+  getCategories: async () => {
+    try {
+      const response = await api.get('/feedback/categories');
+      return response.data;
+    } catch (error) {
+      console.error('Get categories error:', error);
+      throw error;
+    }
+  },
+  getSubCategories: async () => {
+    try {
+      const response = await api.get('/feedback/subcategories');
+      return response.data;
+    } catch (error) {
+      console.error('Get subcategories error:', error);
+      throw error;
+    }
+  },
+  submitFeedback: async (feedbackData) => {
+    try {
+      const response = await api.post('/feedback', feedbackData);
+      return response.data;
+    } catch (error) {
+      console.error('Submit feedback error:', error);
+      throw error;
+    }
+  },
+};
