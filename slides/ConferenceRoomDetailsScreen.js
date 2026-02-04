@@ -115,7 +115,10 @@ const ConferenceRoomScreen = ({ navigation, route }) => {
               </View>
             </View>
 
-            {/* 🔹 Book Now Button */}
+          </ScrollView>
+
+          {/* Book Now Button - Fixed at bottom */}
+          <View style={styles.fixedButtonContainer}>
             <TouchableOpacity
               style={styles.bookButton}
               onPress={handleBookNow}
@@ -123,8 +126,7 @@ const ConferenceRoomScreen = ({ navigation, route }) => {
             >
               <Text style={styles.bookButtonText}>Book Now</Text>
             </TouchableOpacity>
-
-          </ScrollView>
+          </View>
         </SafeAreaView>
       </View>
     </>
@@ -246,10 +248,15 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginTop: 8,
   },
+  fixedButtonContainer: {
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    backgroundColor: 'transparent',
+  },
   bookButton: {
     backgroundColor: '#A3834C',
-    paddingVertical: 18,
-    borderRadius: 10,
+    paddingVertical: 16,
+    borderRadius: 12,
     alignItems: 'center',
     // marginTop: 4,
   },
