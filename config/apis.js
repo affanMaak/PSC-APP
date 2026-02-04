@@ -939,7 +939,7 @@ export const testApiConnection = async () => {
     };
   }
 };
-// config/apis/calendarAPI.js
+
 export const calendarAPI = {
   // Get all calendar data
   getAllCalendarData: async (params = {}) => {
@@ -1096,220 +1096,6 @@ export const calendarAPI = {
     }
   },
 };
-// export const calendarAPI = {
-//   // Get all calendar data
-//   getAllCalendarData: async (params = {}) => {
-//     try {
-//       console.log('Fetching all calendar data with params:', params);
-
-//       const [rooms, halls, lawns, photoshoots] = await Promise.all([
-//         calendarAPI.getCalendarRooms(params),
-//         calendarAPI.getHalls(params),
-//         calendarAPI.getLawns(params),
-//         calendarAPI.getPhotoshoots(params),
-//       ]);
-
-//       // Normalize data structure
-//       const normalizedRooms = (rooms || []).map(room => ({
-//         id: room.id || room._id,
-//         roomNumber: room.roomNumber || room.roomNo || room.id,
-//         roomName: room.roomName || `Room ${room.roomNumber || room.roomNo || room.id}`,
-//         roomType: room.roomType || { type: 'Standard' },
-//         rate: room.rate || room.price || 0,
-//         status: room.status || 'AVAILABLE',
-//         bookings: Array.isArray(room.bookings) ? room.bookings : [],
-//         reservations: Array.isArray(room.reservations) ? room.reservations : [],
-//         outOfOrders: Array.isArray(room.outOfOrders) ? room.outOfOrders : [],
-//         // Include all original properties
-//         ...room
-//       }));
-
-//       console.log('Normalized rooms data:', {
-//         total: normalizedRooms.length,
-//         sample: normalizedRooms[0] || 'No rooms'
-//       });
-
-//       return { 
-//         rooms: normalizedRooms, 
-//         halls: halls || [], 
-//         lawns: lawns || [], 
-//         photoshoots: photoshoots || [] 
-//       };
-//     } catch (error) {
-//       console.error('Error fetching all calendar data:', error);
-//       throw error;
-//     }
-//   },
-
-//   // Room endpoints
-//   getCalendarRooms: async (params = {}) => {
-//     try {
-//       console.log('Fetching rooms with params:', params);
-//       const response = await api.get(`${base_url}/room/calendar`, { params });
-//       const rooms = response.data || [];
-
-//       console.log('Raw rooms data received:', {
-//         count: rooms.length,
-//         firstRoom: rooms[0] || 'No rooms'
-//       });
-
-//       // Normalize room data
-//       return rooms.map(room => {
-//         const normalizedRoom = {
-//           id: room.id || room._id,
-//           roomNumber: room.roomNumber || room.roomNo || room.id,
-//           roomName: room.roomName || `Room ${room.roomNumber || room.roomNo || room.id}`,
-//           roomType: room.roomType || { type: 'Standard' },
-//           rate: room.rate || room.price || 0,
-//           status: room.status || 'AVAILABLE',
-//           bookings: [],
-//           reservations: [],
-//           outOfOrders: [],
-//           // Include all original properties
-//           ...room
-//         };
-
-//         // Ensure arrays are properly initialized
-//         if (room.bookings && Array.isArray(room.bookings)) {
-//           normalizedRoom.bookings = room.bookings.map(booking => ({
-//             id: booking.id || booking._id,
-//             checkIn: booking.checkIn,
-//             checkOut: booking.checkOut,
-//             bookingDate: booking.bookingDate,
-//             paymentStatus: booking.paymentStatus,
-//             status: booking.status,
-//             memberName: booking.memberName,
-//             guestName: booking.guestName,
-//             totalPrice: booking.totalPrice,
-//             ...booking
-//           }));
-//         }
-
-//         if (room.reservations && Array.isArray(room.reservations)) {
-//           normalizedRoom.reservations = room.reservations.map(reservation => ({
-//             id: reservation.id || reservation._id,
-//             reservedFrom: reservation.reservedFrom,
-//             reservedTo: reservation.reservedTo,
-//             startDate: reservation.startDate,
-//             endDate: reservation.endDate,
-//             admin: reservation.admin,
-//             ...reservation
-//           }));
-//         }
-
-//         if (room.outOfOrders && Array.isArray(room.outOfOrders)) {
-//           normalizedRoom.outOfOrders = room.outOfOrders.map(order => ({
-//             id: order.id || order._id,
-//             startDate: order.startDate,
-//             endDate: order.endDate,
-//             reason: order.reason,
-//             ...order
-//           }));
-//         }
-
-//         return normalizedRoom;
-//       });
-//     } catch (error) {
-//       console.error('Error fetching calendar rooms:', error.message);
-//       return [];
-//     }
-//   },
-
-//   // Hall endpoints
-//   getHalls: async (params = {}) => {
-//     try {
-//       const response = await api.get(`${base_url}/hall/get/halls`, { params });
-//       return response.data || [];
-//     } catch (error) {
-//       console.error('Error fetching halls:', error.message);
-//       return [];
-//     }
-//   },
-
-//   // Lawn endpoints
-//   getLawns: async (params = {}) => {
-//     try {
-//       const response = await api.get(`${base_url}/lawn/get/lawns`, { params });
-//       return response.data || [];
-//     } catch (error) {
-//       console.error('Error fetching lawns:', error.message);
-//       return [];
-//     }
-//   },
-
-//   // Photoshoot endpoints
-//   getPhotoshoots: async (params = {}) => {
-//     try {
-//       const response = await api.get(`${base_url}/photoShoot/get/photoShoots`, { params });
-//       return response.data || [];
-//     } catch (error) {
-//       console.error('Error fetching photoshoots:', error.message);
-//       return [];
-//     }
-//   },
-// };
-// export const calendarAPI = {
-//   // Get all calendar data
-//   getAllCalendarData: async (params = {}) => {
-//     try {
-//       const [rooms, halls, lawns, photoshoots] = await Promise.all([
-//         calendarAPI.getCalendarRooms(params),
-//         calendarAPI.getHalls(params),
-//         calendarAPI.getLawns(params),
-//         calendarAPI.getPhotoshoots(params),
-//       ]);
-//       return { rooms, halls, lawns, photoshoots };
-//     } catch (error) {
-//       console.error('Error fetching all calendar data:', error);
-//       throw error;
-//     }
-//   },
-
-//   // Room endpoints - Same as web portal
-//   getCalendarRooms: async (params = {}) => {
-//     try {
-//       const response = await api.get(`${base_url}/room/calendar`, { params });
-//       return response.data || [];
-//     } catch (error) {
-//       console.error('Error fetching calendar rooms:', error.message);
-//       return [];
-//     }
-//   },
-
-//   // Hall endpoints - Same as web portal
-//   getHalls: async (params = {}) => {
-//     try {
-//       const response = await api.get(`${base_url}/hall/get/halls`, { params });
-//       return response.data || [];
-//     } catch (error) {
-//       console.error('Error fetching halls:', error.message);
-//       return [];
-//     }
-//   },
-
-//   // Lawn endpoints - Same as web portal
-//   getLawns: async (params = {}) => {
-//     try {
-//       const response = await api.get(`${base_url}/lawn/get/lawns`, { params });
-//       return response.data || [];
-//     } catch (error) {
-//       console.error('Error fetching lawns:', error.message);
-//       return [];
-//     }
-//   },
-
-//   // Photoshoot endpoints - Same as web portal
-//   getPhotoshoots: async (params = {}) => {
-//     try {
-//       const response = await api.get(`${base_url}/photoShoot/get/photoShoots`, { params });
-//       return response.data || [];
-//     } catch (error) {
-//       console.error('Error fetching photoshoots:', error.message);
-//       return [];
-//     }
-//   },
-
-// };
 
 export const getHallRule = async () => {
   try {
@@ -1628,33 +1414,78 @@ export const formatDateForInput = (dateString) => {
   }
 };
 
-export { base_url, api };
 export const feedbackAPI = {
   getCategories: async () => {
     try {
-      const response = await api.get('/feedback/categories');
+      const response = await api.get(`${base_url}/feedback/categories`);
       return response.data;
     } catch (error) {
       console.error('Get categories error:', error);
       throw error;
     }
   },
+
   getSubCategories: async () => {
     try {
-      const response = await api.get('/feedback/subcategories');
+      const response = await api.get(`${base_url}/feedback/subcategories`);
       return response.data;
     } catch (error) {
       console.error('Get subcategories error:', error);
       throw error;
     }
   },
+
+  // FIXED: This should call the CREATE endpoint, not add remark
   submitFeedback: async (feedbackData) => {
     try {
-      const response = await api.post('/feedback', feedbackData);
+      const response = await api.post(`${base_url}/feedback`, feedbackData);
       return response.data;
     } catch (error) {
       console.error('Submit feedback error:', error);
       throw error;
     }
   },
+
+  // Add remark to existing feedback (if needed later)
+  addRemark: async (feedbackId, remarkData) => {
+    try {
+      const response = await api.post(`${base_url}/feedback/${feedbackId}/remark`, remarkData);
+      return response.data;
+    } catch (error) {
+      console.error('Add remark error:', error);
+      throw error;
+    }
+  },
 };
+// export const feedbackAPI = {
+//   getCategories: async () => {
+//     try {
+//       const response = await api.get(`${base_url}/feedback/categories`);
+//       return response.data;
+//     } catch (error) {
+//       console.error('Get categories error:', error);
+//       throw error;
+//     }
+//   },
+//   getSubCategories: async () => {
+//     try {
+//       const response = await api.get(`${base_url}/feedback/subcategories`);
+//       return response.data;
+//     } catch (error) {
+//       console.error('Get subcategories error:', error);
+//       throw error;
+//     }
+//   },
+//   submitFeedback: async (feedbackData) => {
+//     try {
+//       const response = await api.post(`${base_url}/:id/remark`, feedbackData);
+//       return response.data;
+//     } catch (error) {
+//       console.error('Submit feedback error:', error);
+//       throw error;
+//     }
+//   },
+// };
+
+export { base_url, api };
+

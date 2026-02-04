@@ -1,3 +1,1551 @@
+// import React, { useState, useRef, useEffect } from 'react';
+// import {
+//     SafeAreaView,
+//     StyleSheet,
+//     Text,
+//     View,
+//     StatusBar,
+//     ScrollView,
+//     Image,
+//     TouchableOpacity,
+//     ActivityIndicator,
+//     Dimensions,
+//     FlatList,
+//     Modal,
+//     Alert,
+//     ImageBackground,
+// } from 'react-native';
+// import Icon from 'react-native-vector-icons/MaterialIcons';
+// import { useNavigation } from '@react-navigation/native';
+// import HtmlRenderer from '../events/HtmlRenderer'; // Adjust path as needed
+// import Swiper from 'react-native-swiper';
+
+// const { width } = Dimensions.get('window');
+
+// // Helper to check if HTML content is effectively empty
+// const isHtmlEmpty = (html) => {
+//     if (!html) return true;
+//     // Strip tags and trim to see if any actual text exists
+//     const stripped = html.replace(/<[^>]*>?/gm, '').replace(/&nbsp;/g, ' ').trim();
+//     return stripped.length === 0;
+// };
+
+// // Helper function to format currency
+// const formatCurrency = (amount) => {
+//     if (!amount && amount !== 0) return '0.00';
+//     const num = parseFloat(amount) || 0;
+//     return new Intl.NumberFormat('en-PK', {
+//         minimumFractionDigits: 2,
+//         maximumFractionDigits: 2,
+//     }).format(num);
+// };
+
+// // Helper function to get charge type label
+// const getChargeLabel = (type) => {
+//     if (!type) return 'N/A';
+//     const types = {
+//         PER_DAY: 'Per Day',
+//         PER_MONTH: 'Per Month',
+//         PER_GAME: 'Per Game',
+//         PER_HOUR: 'Per Hour',
+//         PER_SESSION: 'Per Session',
+//     };
+//     return types[type] || type.replace(/_/g, ' ').toLowerCase();
+// };
+
+// const RatesTable = ({ data, title }) => {
+//     if (!data) return null;
+
+//     const rateRows = [
+//         { label: 'Member', value: data.memberCharges },
+//         { label: 'Spouse', value: data.spouseCharges },
+//         { label: 'Children', value: data.childrenCharges },
+//         { label: 'Guest', value: data.guestCharges },
+//         { label: 'Affiliated Clubs', value: data.affiliatedClubCharges },
+//     ];
+
+//     return (
+//         <View style={styles.tableWrapper}>
+//             {title && <Text style={styles.tableMainTitle}>{title.toUpperCase()}</Text>}
+//             <View style={styles.tableContainer}>
+//                 {/* Header Row */}
+//                 <View style={styles.tableHeader}>
+//                     <Text style={[styles.headerText, { flex: 2 }]}>CATEGORY</Text>
+//                     <Text style={[styles.headerText, { flex: 1.2, textAlign: 'right' }]}>CHARGE</Text>
+//                 </View>
+
+//                 {/* Data Rows */}
+//                 {rateRows.map((row, index) => {
+//                     const val = parseFloat(row.value) || 0;
+//                     return (
+//                         <View key={row.label} style={[styles.tableRow, index === rateRows.length - 1 && { borderBottomWidth: 0 }]}>
+//                             <Text style={[styles.rowDayText, { flex: 2 }]}>{row.label}</Text>
+//                             <Text style={[styles.rowTimeText, { flex: 1.2, textAlign: 'right', fontWeight: 'bold', color: val === 0 ? '#A3834C' : '#333' }]}>
+//                                 {val === 0 ? 'Free' : `PKR ${formatCurrency(row.value)}`}
+//                             </Text>
+//                         </View>
+//                     );
+//                 })}
+//             </View>
+//         </View>
+//     );
+// };
+
+// const TimingTable = ({ data, title }) => {
+//     const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+//     const dayLabels = {
+//         monday: 'Mon',
+//         tuesday: 'Tue',
+//         wednesday: 'Wed',
+//         thursday: 'Thu',
+//         friday: 'Fri',
+//         saturday: 'Sat',
+//         sunday: 'Sun'
+//     };
+
+//     // Check if there's data for at least one day
+//     const hasAnyData = days.some(day => data[day]);
+//     if (!hasAnyData) return null;
+//     return (
+//         <View style={styles.tableWrapper}>
+//             {title && <Text style={styles.tableMainTitle}>{title.toUpperCase()}</Text>}
+//             <View style={styles.tableContainer}>
+//                 {/* Header Row */}
+//                 <View style={styles.tableHeader}>
+//                     <Text style={[styles.headerText, { flex: 1.2 }]}>DAY</Text>
+//                     <Text style={[styles.headerText, { flex: 2, textAlign: 'center' }]}>TIMINGS</Text>
+//                     <Text style={[styles.headerText, { flex: 1, textAlign: 'right' }]}>STATUS</Text>
+//                 </View>
+
+//                 {/* Data Rows */}
+//                 {days.map((day, index) => {
+//                     const dayData = data[day];
+//                     if (!dayData) return null;
+
+//                     const isClosed = dayData.isClosed;
+//                     const timeRange = isClosed ? '-' : `${dayData.open || '09:00 AM'} - ${dayData.close || '05:00 PM'}`;
+
+//                     return (
+//                         <View key={day} style={[styles.tableRow, index === days.length - 1 && { borderBottomWidth: 0 }]}>
+//                             <Text style={[styles.rowDayText, { flex: 1.2 }]}>{dayLabels[day]}</Text>
+//                             <Text style={[styles.rowTimeText, { flex: 2, color: isClosed ? '#AAA' : '#333' }]}>
+//                                 {timeRange}
+//                             </Text>
+//                             <View style={[styles.statusCell, { flex: 1 }]}>
+//                                 <View style={[
+//                                     styles.statusMark,
+//                                     { backgroundColor: isClosed ? '#FFCDD2' : '#C8E6C9' }
+//                                 ]}>
+//                                     <Text style={[
+//                                         styles.statusMarkText,
+//                                         { color: isClosed ? '#D32F2F' : '#388E3C' }
+//                                     ]}>
+//                                         {isClosed ? 'Closed' : 'Open'}
+//                                     </Text>
+//                                 </View>
+//                             </View>
+//                         </View>
+//                     );
+//                 })}
+//             </View>
+//         </View>
+//     );
+// };
+
+// const SportDetailsScreen = ({ route }) => {
+//     const { sport } = route.params;
+//     const navigation = useNavigation();
+//     const [activeTab, setActiveTab] = useState('More About');
+//     const [imageModalVisible, setImageModalVisible] = useState(false);
+//     const [selectedImage, setSelectedImage] = useState('');
+//     const [loading, setLoading] = useState(false);
+//     const [moreAboutModalVisible, setMoreAboutModalVisible] = useState(false);
+//     const [moreAboutModalContent, setMoreAboutModalContent] = useState({ title: '', data: [], sections: null, numbered: false });
+
+//     const tabs = [
+//         { key: 'More About', title: 'More About' },
+//         { key: 'overview', title: 'Overview' },
+//     ];
+
+//     useEffect(() => {
+//         console.log('Sport details data:', JSON.stringify(sport, null, 2));
+//     }, [sport]);
+
+//     // Helper function to format day name
+//     const formatDayName = (day) => {
+//         return day.charAt(0).toUpperCase() + day.slice(1);
+//     };
+
+//     // Extract timing data from API format
+//     const getTimingData = () => {
+//         const timing = sport.timing || {};
+
+//         // If timing is a string (old format), convert to object
+//         if (typeof timing === 'string') {
+//             try {
+//                 return JSON.parse(timing);
+//             } catch (e) {
+//                 console.log('Error parsing timing string:', e);
+//                 return {};
+//             }
+//         }
+
+//         return timing;
+//     };
+
+//     const getLadiesTimingData = () => {
+//         const timingLadies = sport.timingLadies || {};
+
+//         // If timingLadies is a string (old format), convert to object
+//         if (typeof timingLadies === 'string') {
+//             try {
+//                 return JSON.parse(timingLadies);
+//             } catch (e) {
+//                 console.log('Error parsing timingLadies string:', e);
+//                 return {};
+//             }
+//         }
+
+//         return timingLadies;
+//     };
+
+//     // Extract charges data
+//     const getCharges = () => {
+//         return sport.sportCharge || [];
+//     };
+
+//     // Function to open More About modal
+//     const openMoreAboutModal = (type) => {
+//         const charges = getCharges();
+//         const timingGents = getTimingData();
+//         const timingLadies = getLadiesTimingData();
+
+//         let content = { title: '', data: [], sections: null, numbered: false };
+
+//         switch (type) {
+//             case 'rates':
+//                 content = {
+//                     title: 'Rates',
+//                     isRates: true,
+//                     charges: charges,
+//                     data: charges.length === 0 ? ['No rates available'] : []
+//                 };
+//                 break;
+
+//             case 'timings':
+//                 content = {
+//                     title: 'Timings',
+//                     subtitle: sport.closedDay ? `Closed on ${sport.closedDay}` : '',
+//                     isTiming: true,
+//                     gentsTiming: timingGents,
+//                     ladiesTiming: timingLadies,
+//                     data: [] // Old fallback data not needed if isTiming is handled
+//                 };
+//                 break;
+
+//             case 'dressCode':
+//                 const dressCodeSections = [];
+//                 if (!isHtmlEmpty(sport.dressCodeDos)) {
+//                     dressCodeSections.push({
+//                         subtitle: "Do's",
+//                         htmlContent: sport.dressCodeDos
+//                     });
+//                 }
+//                 content = {
+//                     title: 'Dress Code',
+//                     sections: dressCodeSections.length > 0 ? dressCodeSections : null,
+//                     data: dressCodeSections.length === 0 ? ['No dress code information available'] : [],
+//                     isHtml: true,
+//                     hideSubtitles: true
+//                 };
+//                 break;
+
+//             case 'dosAndDonts':
+//                 const ruleSections = [];
+//                 if (!isHtmlEmpty(sport.dos)) {
+//                     ruleSections.push({
+//                         subtitle: "Do's",
+//                         htmlContent: sport.dos
+//                     });
+//                 }
+//                 if (!isHtmlEmpty(sport.donts)) {
+//                     ruleSections.push({
+//                         subtitle: "Don'ts",
+//                         htmlContent: sport.donts
+//                     });
+//                 }
+
+//                 content = {
+//                     title: "Do's & Don'ts",
+//                     sections: ruleSections.length > 0 ? ruleSections : null,
+//                     data: ruleSections.length === 0 ? ['No rules available'] : [],
+//                     isHtml: true,
+//                     subtitle: 'NOTE'
+//                 };
+//                 break;
+
+//             default:
+//                 content = { title: 'Information', data: ['No information available'] };
+//         }
+
+//         setMoreAboutModalContent(content);
+//         setMoreAboutModalVisible(true);
+//     };
+
+//     // Render More About Tab
+//     const renderMoreAboutTab = () => (
+//         <View style={styles.moreAboutContainer}>
+//             {/* <Text style={styles.moreAboutTitle}>
+//                 MORE ABOUT <Text style={styles.moreAboutTitleGold}>SPORTS</Text>
+//             </Text> */}
+
+//             {/* Info Cards Grid */}
+//             <View style={styles.cardsContainer}>
+//                 {/* First Row - 3 Cards */}
+//                 <View style={styles.cardRow}>
+//                     {/* Rates Card */}
+//                     <TouchableOpacity style={styles.card} onPress={() => openMoreAboutModal('rates')}>
+//                         <View style={styles.iconContainer}>
+//                             <Icon name="attach-money" size={40} color="#000" />
+//                         </View>
+//                         <Text style={styles.cardText}>Rates</Text>
+//                     </TouchableOpacity>
+
+//                     {/* Timings Card */}
+//                     <TouchableOpacity style={styles.card} onPress={() => openMoreAboutModal('timings')}>
+//                         <View style={styles.iconContainer}>
+//                             <Icon name="access-time" size={40} color="#000" />
+//                         </View>
+//                         <Text style={styles.cardText}>Timings</Text>
+//                     </TouchableOpacity>
+
+//                     {/* Dress Code Card */}
+//                     <TouchableOpacity style={styles.card} onPress={() => openMoreAboutModal('dressCode')}>
+//                         <View style={styles.iconContainer}>
+//                             <Icon name="person" size={40} color="#000" />
+//                         </View>
+//                         <Text style={styles.cardText}>Dress Code</Text>
+//                     </TouchableOpacity>
+//                 </View>
+
+//                 {/* Second Row - 1 Card aligned left */}
+//                 <View style={styles.cardRowLeft}>
+//                     {/* Do's & Don'ts Card */}
+//                     <TouchableOpacity style={styles.card} onPress={() => openMoreAboutModal('dosAndDonts')}>
+//                         <View style={styles.iconContainerDark}>
+//                             <Icon name="close" size={28} color="#FFF" />
+//                         </View>
+//                         <Text style={styles.cardText}>Do's & Don'ts</Text>
+//                     </TouchableOpacity>
+//                 </View>
+//             </View>
+//         </View>
+//     );
+
+//     // Render images gallery
+//     const renderImagesGallery = () => {
+//         const images = sport.images || [];
+
+//         if (images.length === 0) {
+//             return (
+//                 <View style={styles.noImagesContainer}>
+//                     <Icon name="image" size={50} color="#CCCCCC" />
+//                     <Text style={styles.noImagesText}>No images available</Text>
+//                 </View>
+//             );
+//         }
+
+//         return (
+//             <View style={styles.imagesSection}>
+//                 <Text style={styles.sectionTitle}>Gallery</Text>
+//                 <FlatList
+//                     data={images}
+//                     horizontal
+//                     showsHorizontalScrollIndicator={false}
+//                     keyExtractor={(item, index) => index.toString()}
+//                     renderItem={({ item, index }) => (
+//                         <TouchableOpacity
+//                             onPress={() => {
+//                                 setSelectedImage(item);
+//                                 setImageModalVisible(true);
+//                             }}
+//                             style={styles.imageTouchable}
+//                         >
+//                             <Image
+//                                 source={{ uri: item }}
+//                                 style={styles.galleryImage}
+//                                 resizeMode="cover"
+//                             />
+//                         </TouchableOpacity>
+//                     )}
+//                     contentContainerStyle={styles.galleryContainer}
+//                 />
+//             </View>
+//         );
+//     };
+
+//     // Overview Tab Content
+//     const renderOverviewTab = () => (
+//         <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
+//             {/* Status Badge */}
+//             {/* <View style={[
+//                 styles.statusContainer,
+//                 sport.isActive ? styles.activeContainer : styles.inactiveContainer
+//             ]}>
+//                 <Icon
+//                     name={sport.isActive ? "check-circle" : "cancel"}
+//                     size={20}
+//                     color={sport.isActive ? "#4CAF50" : "#9E9E9E"}
+//                 />
+//                 <Text style={[
+//                     styles.statusText,
+//                     sport.isActive ? styles.activeText : styles.inactiveText
+//                 ]}>
+//                     {sport.isActive ? 'Active' : 'Inactive'}
+//                 </Text>
+//             </View> */}
+
+//             {/* Description */}
+//             {sport.description && (
+//                 <View style={styles.descriptionSection}>
+//                     <Text style={styles.sectionTitle}>Description</Text>
+//                     <HtmlRenderer
+//                         htmlContent={sport.description}
+//                         textStyle={styles.descriptionText}
+//                     />
+//                 </View>
+//             )}
+
+//             {/* Images Gallery */}
+//             {renderImagesGallery()}
+//         </ScrollView>
+//     );
+
+//     // Pricing Tab Content
+//     const renderPricingTab = () => {
+//         const charges = getCharges();
+//         console.log('charges', charges);
+
+//         if (charges.length === 0) {
+//             return (
+//                 <View style={styles.emptyTab}>
+//                     <Icon name="attach-money" size={50} color="#CCCCCC" />
+//                     <Text style={styles.emptyTabText}>No pricing information available</Text>
+//                 </View>
+//             );
+//         }
+
+//         return (
+//             <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
+//                 <Text style={styles.sectionTitle}>Pricing Details</Text>
+//                 {charges.map((charge, index) => (
+//                     <View key={index} style={styles.chargeCard}>
+//                         <View style={styles.chargeHeader}>
+//                             <Text style={styles.chargeType}>{getChargeLabel(charge.chargeType)}</Text>
+//                             <View style={styles.priceBadge}>
+//                                 <Text style={styles.priceBadgeText}>
+//                                     {parseFloat(charge.memberCharges) === 0 ? 'Free' : `PKR ${formatCurrency(charge.memberCharges || 0)}`}
+//                                 </Text>
+//                             </View>
+//                         </View>
+
+//                         <View style={styles.chargeDetails}>
+//                             <View style={styles.chargeRow}>
+//                                 <Text style={styles.chargeLabel}>Member:</Text>
+//                                 <Text style={[styles.chargeValue, parseFloat(charge.memberCharges) === 0 && { color: '#A3834C' }]}>
+//                                     {parseFloat(charge.memberCharges) === 0 ? 'Free' : `PKR ${formatCurrency(charge.memberCharges || 0)}`}
+//                                 </Text>
+//                             </View>
+//                             <View style={styles.chargeRow}>
+//                                 <Text style={styles.chargeLabel}>Spouse:</Text>
+//                                 <Text style={[styles.chargeValue, parseFloat(charge.spouseCharges) === 0 && { color: '#A3834C' }]}>
+//                                     {parseFloat(charge.spouseCharges) === 0 ? 'Free' : `PKR ${formatCurrency(charge.spouseCharges || 0)}`}
+//                                 </Text>
+//                             </View>
+//                             <View style={styles.chargeRow}>
+//                                 <Text style={styles.chargeLabel}>Children:</Text>
+//                                 <Text style={[styles.chargeValue, parseFloat(charge.childrenCharges) === 0 && { color: '#A3834C' }]}>
+//                                     {parseFloat(charge.childrenCharges) === 0 ? 'Free' : `PKR ${formatCurrency(charge.childrenCharges || 0)}`}
+//                                 </Text>
+//                             </View>
+//                             <View style={styles.chargeRow}>
+//                                 <Text style={styles.chargeLabel}>Guest:</Text>
+//                                 <Text style={[styles.chargeValue, parseFloat(charge.guestCharges) === 0 && { color: '#A3834C' }]}>
+//                                     {parseFloat(charge.guestCharges) === 0 ? 'Free' : `PKR ${formatCurrency(charge.guestCharges || 0)}`}
+//                                 </Text>
+//                             </View>
+//                             <View style={styles.chargeRow}>
+//                                 <Text style={styles.chargeLabel}>Affiliated Club:</Text>
+//                                 <Text style={[styles.chargeValue, parseFloat(charge.affiliatedClubCharges) === 0 && { color: '#A3834C' }]}>
+//                                     {parseFloat(charge.affiliatedClubCharges) === 0 ? 'Free' : `PKR ${formatCurrency(charge.affiliatedClubCharges || 0)}`}
+//                                 </Text>
+//                             </View>
+//                         </View>
+//                     </View>
+//                 ))}
+//             </ScrollView>
+//         );
+//     };
+
+//     // Timing Tab Content
+//     const renderTimingTab = () => {
+//         const timingGents = getTimingData();
+//         const timingLadies = getLadiesTimingData();
+
+//         const hasGentsTiming = timingGents && Object.keys(timingGents).length > 0;
+//         const hasLadiesTiming = timingLadies && Object.keys(timingLadies).length > 0;
+
+//         if (!hasGentsTiming && !hasLadiesTiming) {
+//             return (
+//                 <View style={styles.emptyTab}>
+//                     <Icon name="schedule" size={50} color="#CCCCCC" />
+//                     <Text style={styles.emptyTabText}>No timing information available</Text>
+//                 </View>
+//             );
+//         }
+
+//         return (
+//             <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
+//                 {hasGentsTiming && (
+//                     <TimingTable
+//                         data={timingGents}
+//                         title={sport.activity?.toLowerCase() === 'martial arts' ? '' : 'Gents Timing'}
+//                     />
+//                 )}
+//                 {hasLadiesTiming && <TimingTable data={timingLadies} title="Ladies Timing" />}
+//                 {sport.closedDay && (
+//                     <Text style={styles.closedDayNotice}>Note: Closed on {sport.closedDay}</Text>
+//                 )}
+//             </ScrollView>
+//         );
+//     };
+
+//     // Rules Tab Content
+//     const renderRulesTab = () => {
+//         const hasDressCode = sport.dressCodeDos || sport.dressCodeDonts;
+//         const hasGeneralRules = sport.dos || sport.donts;
+
+//         if (!hasDressCode && !hasGeneralRules) {
+//             return (
+//                 <View style={styles.emptyTab}>
+//                     <Icon name="rule" size={50} color="#CCCCCC" />
+//                     <Text style={styles.emptyTabText}>No rules information available</Text>
+//                 </View>
+//             );
+//         }
+
+//         return (
+//             <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
+//                 {/* Dress Code */}
+//                 {hasDressCode && (
+//                     <View style={styles.rulesSection}>
+//                         <Text style={styles.sectionTitle}>Dress Code</Text>
+
+//                         {sport.dressCodeDos && (
+//                             <View style={[styles.ruleCard, styles.dosCard]}>
+//                                 <View style={styles.ruleHeader}>
+//                                     <Icon name="check-circle" size={20} color="#4CAF50" />
+//                                     <Text style={styles.ruleTitle}>Do's</Text>
+//                                 </View>
+//                                 <View style={styles.htmlContainer}>
+//                                     <HtmlRenderer
+//                                         htmlContent={sport.dressCodeDos}
+//                                         textStyle={styles.htmlContent}
+//                                     />
+//                                 </View>
+//                             </View>
+//                         )}
+
+//                         {sport.dressCodeDonts && (
+//                             <View style={[styles.ruleCard, styles.dontsCard]}>
+//                                 <View style={styles.ruleHeader}>
+//                                     <Icon name="cancel" size={20} color="#F44336" />
+//                                     <Text style={styles.ruleTitle}>Don'ts</Text>
+//                                 </View>
+//                                 <View style={styles.htmlContainer}>
+//                                     <HtmlRenderer
+//                                         htmlContent={sport.dressCodeDonts}
+//                                         textStyle={styles.htmlContent}
+//                                     />
+//                                 </View>
+//                             </View>
+//                         )}
+//                     </View>
+//                 )}
+
+//                 {/* General Rules */}
+//                 {hasGeneralRules && (
+//                     <View style={styles.rulesSection}>
+//                         <Text style={styles.sectionTitle}>General Rules</Text>
+
+//                         {sport.dos && (
+//                             <View style={[styles.ruleCard, styles.dosCard]}>
+//                                 <View style={styles.ruleHeader}>
+//                                     <Icon name="check-circle" size={20} color="#4CAF50" />
+//                                     <Text style={styles.ruleTitle}>Do's</Text>
+//                                 </View>
+//                                 <View style={styles.htmlContainer}>
+//                                     <HtmlRenderer
+//                                         htmlContent={sport.dos}
+//                                         textStyle={styles.htmlContent}
+//                                     />
+//                                 </View>
+//                             </View>
+//                         )}
+
+//                         {sport.donts && (
+//                             <View style={[styles.ruleCard, styles.dontsCard]}>
+//                                 <View style={styles.ruleHeader}>
+//                                     <Icon name="cancel" size={20} color="#F44336" />
+//                                     <Text style={styles.ruleTitle}>Don'ts</Text>
+//                                 </View>
+//                                 <View style={styles.htmlContainer}>
+//                                     <HtmlRenderer
+//                                         htmlContent={sport.donts}
+//                                         textStyle={styles.htmlContent}
+//                                     />
+//                                 </View>
+//                             </View>
+//                         )}
+//                     </View>
+//                 )}
+//             </ScrollView>
+//         );
+//     };
+
+//     // Render active tab content
+//     const renderActiveTab = () => {
+//         switch (activeTab) {
+//             case 'overview':
+//                 return renderOverviewTab();
+//             case 'More About':
+//                 return renderMoreAboutTab();
+//             case 'pricing':
+//                 return renderPricingTab();
+//             case 'timing':
+//                 return renderTimingTab();
+//             case 'rules':
+//                 return renderRulesTab();
+//             default:
+//                 return renderOverviewTab();
+//         }
+//     };
+
+//     if (loading) {
+//         return (
+//             <View style={styles.loaderContainer}>
+//                 <ActivityIndicator size="large" color="#007AFF" />
+//                 <Text style={styles.loadingText}>Loading sport details...</Text>
+//             </View>
+//         );
+//     }
+
+//     if (!sport) {
+//         return (
+//             <View style={styles.errorContainer}>
+//                 <Icon name="error" size={60} color="#FF6B6B" />
+//                 <Text style={styles.errorText}>No sport data available</Text>
+//                 <TouchableOpacity
+//                     style={styles.retryButton}
+//                     onPress={() => navigation.goBack()}
+//                 >
+//                     <Text style={styles.retryText}>Go Back</Text>
+//                 </TouchableOpacity>
+//             </View>
+//         );
+//     }
+
+//     return (
+//         <>
+//             <StatusBar barStyle="light-content" />
+//             <View style={styles.container}>
+//                 {/* 🔹 Notch Header with Back Button */}
+//                 <ImageBackground
+//                     source={require('../../assets/notch.jpg')}
+//                     style={styles.notch}
+//                     imageStyle={styles.notchImage}
+//                 >
+//                     <View style={styles.notchContent}>
+//                         <TouchableOpacity
+//                             style={styles.backButton}
+//                             onPress={() => navigation.goBack()}
+//                             activeOpacity={0.7}
+//                         >
+//                             <Icon name="arrow-back" size={28} color="#000" />
+//                         </TouchableOpacity>
+//                         <Text style={styles.headerTitle}>{sport.activity || 'Sport Details'}</Text>
+//                         <View style={styles.placeholder} />
+//                     </View>
+//                 </ImageBackground>
+
+//                 {/* 🔹 Image Slider */}
+//                 {sport.images && sport.images.length > 0 ? (
+//                     <View style={styles.sliderContainer}>
+//                         <Swiper
+//                             autoplay
+//                             autoplayTimeout={4}
+//                             loop
+//                             showsPagination
+//                             activeDotColor="#A3834C"
+//                             dotColor="#D3D3D3"
+//                         >
+//                             {sport.images.map((image, index) => (
+//                                 <Image
+//                                     key={index}
+//                                     source={{ uri: image }}
+//                                     style={styles.sliderImage}
+//                                     resizeMode="cover"
+//                                 />
+//                             ))}
+//                         </Swiper>
+//                     </View>
+//                 ) : (
+//                     <View style={styles.sliderContainer}>
+//                         <Image
+//                             source={require('../../assets/logo.jpeg')}
+//                             style={styles.sliderImage}
+//                             resizeMode="cover"
+//                         />
+//                     </View>
+//                 )}
+
+//                 {/* Custom Tab Bar */}
+//                 <View style={styles.tabBarContainer}>
+//                     <ScrollView
+//                         horizontal
+//                         showsHorizontalScrollIndicator={false}
+//                         contentContainerStyle={styles.tabScrollContainer}
+//                     >
+//                         {tabs.map((tab) => (
+//                             <TouchableOpacity
+//                                 key={tab.key}
+//                                 style={[
+//                                     styles.tabItem,
+//                                     activeTab === tab.key && styles.activeTabItem
+//                                 ]}
+//                                 onPress={() => setActiveTab(tab.key)}
+//                                 activeOpacity={0.7}
+//                             >
+//                                 <Text style={[
+//                                     styles.tabText,
+//                                     activeTab === tab.key && styles.activeTabText
+//                                 ]}>
+//                                     {tab.title}
+//                                 </Text>
+//                                 {activeTab === tab.key && (
+//                                     <View style={styles.tabIndicator} />
+//                                 )}
+//                             </TouchableOpacity>
+//                         ))}
+//                     </ScrollView>
+//                 </View>
+
+//                 {/* Tab Content */}
+//                 <SafeAreaView style={styles.safeArea}>
+//                     <View style={styles.tabContentContainer}>
+//                         {renderActiveTab()}
+//                     </View>
+//                 </SafeAreaView>
+
+//                 {/* Image Modal */}
+//                 <Modal
+//                     animationType="fade"
+//                     transparent={true}
+//                     visible={imageModalVisible}
+//                     onRequestClose={() => setImageModalVisible(false)}
+//                 >
+//                     <View style={styles.modalContainer}>
+//                         <TouchableOpacity
+//                             style={styles.modalCloseButton}
+//                             onPress={() => setImageModalVisible(false)}
+//                         >
+//                             <Icon name="close" size={30} color="#FFF" />
+//                         </TouchableOpacity>
+//                         <Image
+//                             source={{ uri: selectedImage || sport.images?.[0] }}
+//                             style={styles.modalImage}
+//                             resizeMode="contain"
+//                         />
+//                     </View>
+//                 </Modal>
+
+//                 {/* More About Modal */}
+//                 <Modal
+//                     animationType="fade"
+//                     transparent={true}
+//                     visible={moreAboutModalVisible}
+//                     onRequestClose={() => setMoreAboutModalVisible(false)}
+//                 >
+//                     <View style={styles.moreAboutModalOverlay}>
+//                         <View style={styles.moreAboutModalContainer}>
+//                             {/* Modal Header */}
+//                             <View style={styles.moreAboutModalHeader}>
+//                                 <Text style={styles.moreAboutModalTitle}>{moreAboutModalContent.title}</Text>
+//                                 <TouchableOpacity
+//                                     style={styles.moreAboutCloseButton}
+//                                     onPress={() => setMoreAboutModalVisible(false)}
+//                                     activeOpacity={0.7}
+//                                 >
+//                                     <Icon name="close" size={20} color="#FFF" />
+//                                 </TouchableOpacity>
+//                             </View>
+
+//                             {/* Modal Content - Check if sections exist (for Rates/Dress Code/Rules) */}
+//                             {moreAboutModalContent.isRates ? (
+//                                 <ScrollView style={styles.moreAboutModalScrollView} showsVerticalScrollIndicator={false}>
+//                                     {moreAboutModalContent.charges.map((charge, index) => (
+//                                         <RatesTable
+//                                             key={index}
+//                                             data={charge}
+//                                             title={getChargeLabel(charge.chargeType)}
+//                                         />
+//                                     ))}
+//                                     {moreAboutModalContent.charges.length === 0 && (
+//                                         <Text style={{ textAlign: 'center', marginTop: 20, color: '#666' }}>No rates available</Text>
+//                                     )}
+//                                 </ScrollView>
+//                             ) : moreAboutModalContent.sections ? (
+//                                 <ScrollView style={styles.moreAboutModalScrollView} showsVerticalScrollIndicator={false}>
+//                                     {moreAboutModalContent.sections.map((section, sectionIndex) => (
+//                                         <View key={sectionIndex} style={styles.moreAboutSectionContainer}>
+//                                             {section.subtitle && !moreAboutModalContent.hideSubtitles ? (
+//                                                 <Text style={styles.moreAboutModalSubtitle}>{section.subtitle}</Text>
+//                                             ) : null}
+//                                             <View style={styles.moreAboutModalContent}>
+//                                                 {moreAboutModalContent.isHtml ? (
+//                                                     <HtmlRenderer
+//                                                         htmlContent={section.htmlContent}
+//                                                         textStyle={styles.moreAboutListText}
+//                                                     />
+//                                                 ) : (
+//                                                     section.items.map((item, index) => (
+//                                                         <View key={index} style={styles.moreAboutListItem}>
+//                                                             <Text style={styles.moreAboutBullet}>•</Text>
+//                                                             <Text style={styles.moreAboutListText}>{item}</Text>
+//                                                         </View>
+//                                                     ))
+//                                                 )}
+//                                             </View>
+//                                         </View>
+//                                     ))}
+//                                 </ScrollView>
+//                             ) : moreAboutModalContent.numbered ? (
+//                                 <>
+//                                     <Text style={styles.moreAboutModalSubtitle}>{moreAboutModalContent.subtitle}</Text>
+//                                     <ScrollView style={styles.moreAboutModalScrollView} showsVerticalScrollIndicator={false}>
+//                                         <View style={styles.moreAboutModalContent}>
+//                                             {moreAboutModalContent.data?.map((item, index) => (
+//                                                 <View key={index} style={styles.moreAboutNumberedListItem}>
+//                                                     <Text style={styles.moreAboutNumberText}>{index + 1}.</Text>
+//                                                     <Text style={styles.moreAboutListText}>{item}</Text>
+//                                                 </View>
+//                                             ))}
+//                                         </View>
+//                                     </ScrollView>
+//                                 </>
+//                             ) : moreAboutModalContent.isTiming ? (
+//                                 <ScrollView style={styles.moreAboutModalScrollView} showsVerticalScrollIndicator={false}>
+//                                     {moreAboutModalContent.gentsTiming && (
+//                                         <TimingTable
+//                                             data={moreAboutModalContent.gentsTiming}
+//                                             title={sport.activity?.toLowerCase() === 'martial arts' ? '' : 'Gents Timing'}
+//                                         />
+//                                     )}
+//                                     {moreAboutModalContent.ladiesTiming && (
+//                                         <TimingTable data={moreAboutModalContent.ladiesTiming} title="Ladies Timing" />
+//                                     )}
+//                                     {moreAboutModalContent.subtitle && (
+//                                         <Text style={styles.closedDayNoticeModal}>{moreAboutModalContent.subtitle}</Text>
+//                                     )}
+//                                 </ScrollView>
+//                             ) : (
+//                                 <>
+//                                     {moreAboutModalContent.subtitle && (
+//                                         <Text style={styles.moreAboutModalSubtitle}>{moreAboutModalContent.subtitle}</Text>
+//                                     )}
+//                                     <ScrollView style={styles.moreAboutModalScrollView} showsVerticalScrollIndicator={false}>
+//                                         <View style={styles.moreAboutModalContent}>
+//                                             {moreAboutModalContent.data?.map((item, index) => (
+//                                                 <View key={index} style={styles.moreAboutListItem}>
+//                                                     <Text style={styles.moreAboutBullet}>•</Text>
+//                                                     <Text style={styles.moreAboutListText}>{item}</Text>
+//                                                 </View>
+//                                             ))}
+//                                         </View>
+//                                     </ScrollView>
+//                                 </>
+//                             )}
+//                         </View>
+//                     </View>
+//                 </Modal>
+//             </View>
+//         </>
+//     );
+// };
+
+// const styles = StyleSheet.create({
+//     container: {
+//         flex: 1,
+//         backgroundColor: '#FEF9F3',
+//     },
+//     notch: {
+//         paddingTop: 50,
+//         paddingBottom: 20,
+//         paddingHorizontal: 20,
+//         borderBottomEndRadius: 30,
+//         borderBottomStartRadius: 30,
+//         overflow: 'hidden',
+//         minHeight: 120,
+//     },
+//     notchImage: {
+//         resizeMode: 'cover',
+//     },
+//     notchContent: {
+//         flexDirection: 'row',
+//         justifyContent: 'space-between',
+//         alignItems: 'center',
+//     },
+//     backButton: {
+//         width: 40,
+//         height: 40,
+//         justifyContent: 'center',
+//         alignItems: 'flex-start',
+//     },
+//     headerTitle: {
+//         fontSize: 22,
+//         fontWeight: 'bold',
+//         color: '#000',
+//         textAlign: 'center',
+//         flex: 1,
+//     },
+//     placeholder: {
+//         width: 40,
+//     },
+//     sliderContainer: {
+//         height: 200,
+//         width: '90%',
+//         alignSelf: 'center',
+//         marginTop: 20,
+//         borderRadius: 15,
+//         overflow: 'hidden',
+//         elevation: 5,
+//         shadowColor: '#000',
+//         shadowOffset: { width: 0, height: 2 },
+//         shadowOpacity: 0.25,
+//         shadowRadius: 3.84,
+//     },
+//     sliderImage: {
+//         width: '100%',
+//         height: '100%',
+//         resizeMode: 'cover',
+//     },
+//     loaderContainer: {
+//         flex: 1,
+//         justifyContent: 'center',
+//         alignItems: 'center',
+//         backgroundColor: '#FEF9F3',
+//     },
+//     loadingText: {
+//         marginTop: 12,
+//         fontSize: 16,
+//         color: '#666',
+//     },
+//     errorContainer: {
+//         flex: 1,
+//         justifyContent: 'center',
+//         alignItems: 'center',
+//         backgroundColor: '#FEF9F3',
+//         padding: 20,
+//     },
+//     errorText: {
+//         fontSize: 18,
+//         color: '#333',
+//         marginTop: 16,
+//         marginBottom: 24,
+//         textAlign: 'center',
+//     },
+//     retryButton: {
+//         backgroundColor: '#A3834C',
+//         paddingHorizontal: 24,
+//         paddingVertical: 12,
+//         borderRadius: 8,
+//     },
+//     retryText: {
+//         color: '#FFF',
+//         fontSize: 16,
+//         fontWeight: '600',
+//     },
+//     safeArea: {
+//         flex: 1,
+//     },
+//     activeIndicator: {
+//         flexDirection: 'row',
+//         alignItems: 'center',
+//         backgroundColor: 'rgba(76, 175, 80, 0.2)',
+//         alignSelf: 'flex-start',
+//         paddingHorizontal: 8,
+//         paddingVertical: 4,
+//         borderRadius: 12,
+//     },
+//     inactiveIndicator: {
+//         flexDirection: 'row',
+//         alignItems: 'center',
+//         backgroundColor: 'rgba(158, 158, 158, 0.2)',
+//         alignSelf: 'flex-start',
+//         paddingHorizontal: 8,
+//         paddingVertical: 4,
+//         borderRadius: 12,
+//     },
+//     activeTextSmall: {
+//         fontSize: 12,
+//         color: '#4CAF50',
+//         marginLeft: 4,
+//         fontWeight: '600',
+//     },
+//     inactiveTextSmall: {
+//         fontSize: 12,
+//         color: '#9E9E9E',
+//         marginLeft: 4,
+//         fontWeight: '600',
+//     },
+//     // Custom Tab Bar Styles - Enhanced
+//     tabBarContainer: {
+//         backgroundColor: '#FFFFFF',
+//         borderBottomWidth: 2,
+//         borderBottomColor: '#E8D4B8',
+//         marginTop: 20,
+//         marginHorizontal: 20,
+//         borderRadius: 12,
+//         elevation: 4,
+//         shadowColor: '#000',
+//         shadowOffset: { width: 0, height: 2 },
+//         shadowOpacity: 0.1,
+//         shadowRadius: 4,
+//         overflow: 'hidden',
+//     },
+//     tabScrollContainer: {
+//         flexDirection: 'row',
+//         alignItems: 'center',
+//         justifyContent: 'center',
+//         flexGrow: 1,
+//         paddingHorizontal: 8,
+//     },
+//     tabItem: {
+//         paddingHorizontal: 24,
+//         paddingVertical: 16,
+//         position: 'relative',
+//         marginHorizontal: 4,
+//         borderRadius: 8,
+//         minWidth: 120,
+//         alignItems: 'center',
+//     },
+//     activeTabItem: {
+//         backgroundColor: '#FEF9F3',
+//     },
+//     tabText: {
+//         fontSize: 15,
+//         fontWeight: '600',
+//         color: '#888888',
+//         letterSpacing: 0.3,
+//     },
+//     activeTabText: {
+//         color: '#A3834C',
+//         fontWeight: '700',
+//         fontSize: 16,
+//     },
+//     tabIndicator: {
+//         position: 'absolute',
+//         bottom: 0,
+//         left: 8,
+//         right: 8,
+//         height: 4,
+//         backgroundColor: '#A3834C',
+//         borderTopLeftRadius: 4,
+//         borderTopRightRadius: 4,
+//         shadowColor: '#A3834C',
+//         shadowOffset: { width: 0, height: -2 },
+//         shadowOpacity: 0.3,
+//         shadowRadius: 3,
+//         elevation: 2,
+//     },
+//     tabContentContainer: {
+//         flex: 1,
+//         backgroundColor: '#FEF9F3',
+//     },
+//     tabContent: {
+//         flex: 1,
+//         padding: 16,
+//         backgroundColor: '#FEF9F3',
+//     },
+//     statusContainer: {
+//         flexDirection: 'row',
+//         alignItems: 'center',
+//         alignSelf: 'flex-start',
+//         paddingHorizontal: 12,
+//         paddingVertical: 6,
+//         borderRadius: 16,
+//         marginBottom: 20,
+//     },
+//     activeContainer: {
+//         backgroundColor: 'rgba(76, 175, 80, 0.1)',
+//         borderWidth: 1,
+//         borderColor: '#4CAF50',
+//     },
+//     inactiveContainer: {
+//         backgroundColor: 'rgba(158, 158, 158, 0.1)',
+//         borderWidth: 1,
+//         borderColor: '#9E9E9E',
+//     },
+//     statusText: {
+//         fontSize: 14,
+//         fontWeight: '600',
+//         marginLeft: 6,
+//     },
+//     activeText: {
+//         color: '#4CAF50',
+//     },
+//     inactiveText: {
+//         color: '#9E9E9E',
+//     },
+//     sectionTitle: {
+//         fontSize: 18,
+//         fontWeight: 'bold',
+//         color: '#333',
+//         marginBottom: 16,
+//     },
+//     descriptionSection: {
+//         marginBottom: 24,
+//     },
+//     descriptionText: {
+//         fontSize: 16,
+//         lineHeight: 24,
+//         color: '#666',
+//     },
+//     imagesSection: {
+//         marginBottom: 24,
+//     },
+//     galleryContainer: {
+//         paddingRight: 16,
+//     },
+//     imageTouchable: {
+//         marginRight: 12,
+//     },
+//     galleryImage: {
+//         width: 120,
+//         height: 120,
+//         borderRadius: 8,
+//     },
+//     noImagesContainer: {
+//         alignItems: 'center',
+//         justifyContent: 'center',
+//         padding: 40,
+//     },
+//     noImagesText: {
+//         fontSize: 16,
+//         color: '#999',
+//         marginTop: 12,
+//     },
+//     emptyTab: {
+//         flex: 1,
+//         alignItems: 'center',
+//         justifyContent: 'center',
+//         padding: 40,
+//     },
+//     emptyTabText: {
+//         fontSize: 16,
+//         color: '#999',
+//         marginTop: 12,
+//         textAlign: 'center',
+//     },
+//     chargeCard: {
+//         backgroundColor: '#FFF',
+//         borderRadius: 12,
+//         padding: 16,
+//         marginBottom: 16,
+//         elevation: 2,
+//         shadowColor: '#000',
+//         shadowOffset: { width: 0, height: 1 },
+//         shadowOpacity: 0.1,
+//         shadowRadius: 2,
+//     },
+//     chargeHeader: {
+//         flexDirection: 'row',
+//         justifyContent: 'space-between',
+//         alignItems: 'center',
+//         marginBottom: 12,
+//     },
+//     chargeType: {
+//         fontSize: 16,
+//         fontWeight: 'bold',
+//         color: '#333',
+//     },
+//     priceBadge: {
+//         backgroundColor: '#007AFF',
+//         paddingHorizontal: 12,
+//         paddingVertical: 6,
+//         borderRadius: 8,
+//     },
+//     priceBadgeText: {
+//         color: '#FFF',
+//         fontWeight: '600',
+//         fontSize: 14,
+//     },
+//     chargeDetails: {
+//         borderTopWidth: 1,
+//         borderTopColor: '#EEE',
+//         paddingTop: 12,
+//     },
+//     chargeRow: {
+//         flexDirection: 'row',
+//         justifyContent: 'space-between',
+//         alignItems: 'center',
+//         paddingVertical: 6,
+//     },
+//     chargeLabel: {
+//         fontSize: 14,
+//         color: '#666',
+//     },
+//     chargeValue: {
+//         fontSize: 14,
+//         fontWeight: '600',
+//         color: '#333',
+//     },
+//     timingSection: {
+//         backgroundColor: '#FFF',
+//         borderRadius: 12,
+//         padding: 16,
+//         marginBottom: 16,
+//         elevation: 2,
+//         shadowColor: '#000',
+//         shadowOffset: { width: 0, height: 1 },
+//         shadowOpacity: 0.1,
+//         shadowRadius: 2,
+//     },
+//     timingSectionTitle: {
+//         fontSize: 16,
+//         fontWeight: 'bold',
+//         color: '#333',
+//         marginBottom: 12,
+//     },
+//     timingRow: {
+//         flexDirection: 'row',
+//         justifyContent: 'space-between',
+//         alignItems: 'center',
+//         paddingVertical: 8,
+//         borderBottomWidth: 1,
+//         borderBottomColor: '#F5F5F5',
+//     },
+//     dayText: {
+//         fontSize: 14,
+//         color: '#333',
+//         fontWeight: '500',
+//         flex: 1,
+//     },
+//     timeText: {
+//         fontSize: 14,
+//         color: '#666',
+//         flex: 1,
+//         textAlign: 'right',
+//     },
+//     closedText: {
+//         fontSize: 14,
+//         color: '#F44336',
+//         fontWeight: '500',
+//         flex: 1,
+//         textAlign: 'right',
+//     },
+//     rulesSection: {
+//         marginBottom: 24,
+//     },
+//     ruleCard: {
+//         borderRadius: 12,
+//         padding: 16,
+//         marginBottom: 12,
+//     },
+//     dosCard: {
+//         backgroundColor: 'rgba(76, 175, 80, 0.1)',
+//         borderWidth: 1,
+//         borderColor: 'rgba(76, 175, 80, 0.3)',
+//     },
+//     dontsCard: {
+//         backgroundColor: 'rgba(244, 67, 54, 0.1)',
+//         borderWidth: 1,
+//         borderColor: 'rgba(244, 67, 54, 0.3)',
+//     },
+//     ruleHeader: {
+//         flexDirection: 'row',
+//         alignItems: 'center',
+//         marginBottom: 12,
+//     },
+//     ruleTitle: {
+//         fontSize: 16,
+//         fontWeight: 'bold',
+//         marginLeft: 8,
+//     },
+//     htmlContainer: {
+//         marginTop: 8,
+//     },
+//     htmlContent: {
+//         fontSize: 14,
+//         lineHeight: 20,
+//         color: '#666',
+//     },
+//     modalContainer: {
+//         flex: 1,
+//         backgroundColor: 'rgba(0, 0, 0, 0.9)',
+//         justifyContent: 'center',
+//         alignItems: 'center',
+//     },
+//     modalCloseButton: {
+//         position: 'absolute',
+//         top: 40,
+//         right: 20,
+//         zIndex: 1,
+//     },
+//     modalImage: {
+//         width: width * 0.9,
+//         height: width * 0.9,
+//     },
+//     // More About Section Styles
+//     moreAboutContainer: {
+//         width: '90%',
+//         alignSelf: 'center',
+//         marginTop: 30,
+//         backgroundColor: '#FFF',
+//         borderRadius: 15,
+//         padding: 20,
+//         elevation: 3,
+//         shadowColor: '#000',
+//         shadowOffset: { width: 0, height: 2 },
+//         shadowOpacity: 0.1,
+//         shadowRadius: 3.84,
+//     },
+//     moreAboutTitle: {
+//         fontSize: 18,
+//         fontWeight: '600',
+//         color: '#000',
+//         textAlign: 'center',
+//         marginBottom: 20,
+//     },
+//     moreAboutTitleGold: {
+//         color: '#A3834C',
+//     },
+//     cardsContainer: {
+//         width: '100%',
+//     },
+//     cardRow: {
+//         flexDirection: 'row',
+//         justifyContent: 'space-between',
+//         marginBottom: 15,
+//     },
+//     cardRowLeft: {
+//         flexDirection: 'row',
+//         justifyContent: 'flex-start',
+//     },
+//     card: {
+//         backgroundColor: '#C4A570',
+//         borderRadius: 12,
+//         padding: 15,
+//         alignItems: 'center',
+//         justifyContent: 'center',
+//         width: '31%',
+//         minHeight: 110,
+//         elevation: 2,
+//         shadowColor: '#000',
+//         shadowOffset: { width: 0, height: 1 },
+//         shadowOpacity: 0.2,
+//         shadowRadius: 2,
+//     },
+//     iconContainer: {
+//         marginBottom: 8,
+//     },
+//     iconContainerDark: {
+//         backgroundColor: '#2C2C2C',
+//         borderRadius: 8,
+//         padding: 8,
+//         marginBottom: 8,
+//     },
+//     cardText: {
+//         fontSize: 13,
+//         fontWeight: '600',
+//         color: '#000',
+//         textAlign: 'center',
+//     },
+//     // More About Modal Styles
+//     moreAboutModalOverlay: {
+//         flex: 1,
+//         backgroundColor: 'rgba(0, 0, 0, 0.5)',
+//         justifyContent: 'center',
+//         alignItems: 'center',
+//     },
+//     moreAboutModalContainer: {
+//         width: '85%',
+//         backgroundColor: '#FFF',
+//         borderRadius: 20,
+//         padding: 20,
+//         elevation: 10,
+//         shadowColor: '#000',
+//         shadowOffset: { width: 0, height: 5 },
+//         shadowOpacity: 0.3,
+//         shadowRadius: 10,
+//         maxHeight: '80%',
+//     },
+//     moreAboutModalHeader: {
+//         flexDirection: 'row',
+//         justifyContent: 'space-between',
+//         alignItems: 'center',
+//         marginBottom: 10,
+//     },
+//     moreAboutModalTitle: {
+//         fontSize: 24,
+//         fontWeight: 'bold',
+//         color: '#000',
+//     },
+//     moreAboutCloseButton: {
+//         backgroundColor: '#E57373',
+//         borderRadius: 20,
+//         width: 36,
+//         height: 36,
+//         justifyContent: 'center',
+//         alignItems: 'center',
+//     },
+//     moreAboutModalSubtitle: {
+//         fontSize: 16,
+//         color: '#C4A570',
+//         fontWeight: '600',
+//         marginBottom: 2,
+//     },
+//     moreAboutModalContent: {
+//         paddingLeft: 5,
+//     },
+//     moreAboutModalScrollView: {
+//         maxHeight: 400,
+//     },
+//     moreAboutSectionContainer: {
+//         marginBottom: 8,
+//     },
+//     moreAboutListItem: {
+//         flexDirection: 'row',
+//         alignItems: 'flex-start',
+//         marginBottom: 10,
+//     },
+//     moreAboutNumberedListItem: {
+//         flexDirection: 'row',
+//         alignItems: 'flex-start',
+//         marginBottom: 12,
+//     },
+//     moreAboutNumberText: {
+//         fontSize: 16,
+//         color: '#000',
+//         fontWeight: '500',
+//         marginRight: 10,
+//         minWidth: 24,
+//         lineHeight: 22,
+//     },
+//     moreAboutBullet: {
+//         fontSize: 18,
+//         color: '#000',
+//         marginRight: 10,
+//         lineHeight: 22,
+//     },
+//     moreAboutListText: {
+//         fontSize: 16,
+//         color: '#333',
+//         flex: 1,
+//         lineHeight: 22,
+//     },
+//     // Timing Table Styles
+//     tableWrapper: {
+//         marginBottom: 25,
+//         width: '100%',
+//     },
+//     tableMainTitle: {
+//         fontSize: 18,
+//         fontWeight: '700',
+//         color: '#A3834C',
+//         marginBottom: 12,
+//         letterSpacing: 0.5,
+//     },
+//     tableContainer: {
+//         backgroundColor: '#FFF',
+//         borderRadius: 12,
+//         overflow: 'hidden',
+//         borderWidth: 1,
+//         borderColor: '#E8D4B8',
+//         elevation: 2,
+//         shadowColor: '#000',
+//         shadowOffset: { width: 0, height: 1 },
+//         shadowOpacity: 0.1,
+//         shadowRadius: 2,
+//     },
+//     tableHeader: {
+//         flexDirection: 'row',
+//         backgroundColor: '#F9F4EB',
+//         paddingVertical: 12,
+//         paddingHorizontal: 15,
+//         borderBottomWidth: 2,
+//         borderBottomColor: '#E8D4B8',
+//     },
+//     headerText: {
+//         fontSize: 12,
+//         fontWeight: '800',
+//         color: '#A3834C',
+//         letterSpacing: 1,
+//     },
+//     tableRow: {
+//         flexDirection: 'row',
+//         alignItems: 'center',
+//         paddingVertical: 12,
+//         paddingHorizontal: 15,
+//         borderBottomWidth: 1,
+//         borderBottomColor: '#F0F0F0',
+//     },
+//     rowDayText: {
+//         fontSize: 14,
+//         fontWeight: 'bold',
+//         color: '#333',
+//     },
+//     rowTimeText: {
+//         fontSize: 13,
+//         color: '#555',
+//         textAlign: 'center',
+//     },
+//     statusCell: {
+//         alignItems: 'flex-end',
+//     },
+//     statusMark: {
+//         paddingHorizontal: 8,
+//         paddingVertical: 3,
+//         borderRadius: 6,
+//         minWidth: 55,
+//         alignItems: 'center',
+//     },
+//     statusMarkText: {
+//         fontSize: 10,
+//         fontWeight: 'bold',
+//         textTransform: 'uppercase',
+//     },
+//     closedDayNotice: {
+//         textAlign: 'center',
+//         marginTop: 10,
+//         fontSize: 13,
+//         color: '#D32F2F',
+//         fontWeight: '600',
+//         fontStyle: 'italic',
+//     },
+//     closedDayNoticeModal: {
+//         textAlign: 'center',
+//         paddingVertical: 15,
+//         fontSize: 14,
+//         color: '#D32F2F',
+//         fontWeight: '600',
+//         borderTopWidth: 1,
+//         borderTopColor: '#EEE',
+//     },
+// });
+
+// export default SportDetailsScreen;
+
 import React, { useState, useRef, useEffect } from 'react';
 import {
     SafeAreaView,
@@ -32,11 +1580,11 @@ const isHtmlEmpty = (html) => {
 
 // Helper function to format currency
 const formatCurrency = (amount) => {
-    if (!amount && amount !== 0) return '0.00';
-    const num = parseFloat(amount) || 0;
+    if (!amount && amount !== 0) return '0';
+    const num = Math.round(parseFloat(amount) || 0);
     return new Intl.NumberFormat('en-PK', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
     }).format(num);
 };
 
@@ -81,7 +1629,7 @@ const RatesTable = ({ data, title }) => {
                         <View key={row.label} style={[styles.tableRow, index === rateRows.length - 1 && { borderBottomWidth: 0 }]}>
                             <Text style={[styles.rowDayText, { flex: 2 }]}>{row.label}</Text>
                             <Text style={[styles.rowTimeText, { flex: 1.2, textAlign: 'right', fontWeight: 'bold', color: val === 0 ? '#A3834C' : '#333' }]}>
-                                {val === 0 ? 'Free' : `PKR ${formatCurrency(row.value)}`}
+                                {val === 0 ? 'Free' : `Rs. ${formatCurrency(row.value)}`}
                             </Text>
                         </View>
                     );
@@ -464,19 +2012,19 @@ const SportDetailsScreen = ({ route }) => {
                             </View>
                             <View style={styles.chargeRow}>
                                 <Text style={styles.chargeLabel}>Children:</Text>
-                                <Text style={[styles.chargeValue, parseFloat(charge.childrenCharges) === 0 && { color: '#A3834C' }]}>
+                                <Text style={[styles.chargeValue, parseFloat(charge.childrenCharges) === 0 && { color: '#b48a64' }]}>
                                     {parseFloat(charge.childrenCharges) === 0 ? 'Free' : `PKR ${formatCurrency(charge.childrenCharges || 0)}`}
                                 </Text>
                             </View>
                             <View style={styles.chargeRow}>
                                 <Text style={styles.chargeLabel}>Guest:</Text>
-                                <Text style={[styles.chargeValue, parseFloat(charge.guestCharges) === 0 && { color: '#A3834C' }]}>
+                                <Text style={[styles.chargeValue, parseFloat(charge.guestCharges) === 0 && { color: '#b48a64' }]}>
                                     {parseFloat(charge.guestCharges) === 0 ? 'Free' : `PKR ${formatCurrency(charge.guestCharges || 0)}`}
                                 </Text>
                             </View>
                             <View style={styles.chargeRow}>
                                 <Text style={styles.chargeLabel}>Affiliated Club:</Text>
-                                <Text style={[styles.chargeValue, parseFloat(charge.affiliatedClubCharges) === 0 && { color: '#A3834C' }]}>
+                                <Text style={[styles.chargeValue, parseFloat(charge.affiliatedClubCharges) === 0 && { color: '#b48a64' }]}>
                                     {parseFloat(charge.affiliatedClubCharges) === 0 ? 'Free' : `PKR ${formatCurrency(charge.affiliatedClubCharges || 0)}`}
                                 </Text>
                             </View>
@@ -686,7 +2234,7 @@ const SportDetailsScreen = ({ route }) => {
                             autoplayTimeout={4}
                             loop
                             showsPagination
-                            activeDotColor="#A3834C"
+                            activeDotColor="#b48a64"
                             dotColor="#D3D3D3"
                         >
                             {sport.images.map((image, index) => (
@@ -965,7 +2513,7 @@ const styles = StyleSheet.create({
         textAlign: 'center',
     },
     retryButton: {
-        backgroundColor: '#A3834C',
+        backgroundColor: '#b48a64',
         paddingHorizontal: 24,
         paddingVertical: 12,
         borderRadius: 8,
@@ -1049,7 +2597,7 @@ const styles = StyleSheet.create({
         letterSpacing: 0.3,
     },
     activeTabText: {
-        color: '#A3834C',
+        color: '#b48a64',
         fontWeight: '700',
         fontSize: 16,
     },
@@ -1059,7 +2607,7 @@ const styles = StyleSheet.create({
         left: 8,
         right: 8,
         height: 4,
-        backgroundColor: '#A3834C',
+        backgroundColor: '#b48a64',
         borderTopLeftRadius: 4,
         borderTopRightRadius: 4,
         shadowColor: '#A3834C',
@@ -1328,7 +2876,7 @@ const styles = StyleSheet.create({
         marginBottom: 20,
     },
     moreAboutTitleGold: {
-        color: '#A3834C',
+        color: '#b48a64',
     },
     cardsContainer: {
         width: '100%',
@@ -1343,13 +2891,13 @@ const styles = StyleSheet.create({
         justifyContent: 'flex-start',
     },
     card: {
-        backgroundColor: '#C4A570',
+        backgroundColor: '#b48a64',
         borderRadius: 12,
         padding: 15,
         alignItems: 'center',
         justifyContent: 'center',
         width: '31%',
-        minHeight: 110,
+        aspectRatio: 1,
         elevation: 2,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 1 },
@@ -1506,7 +3054,7 @@ const styles = StyleSheet.create({
         color: '#333',
     },
     rowTimeText: {
-        fontSize: 13,
+        fontSize: 11,
         color: '#555',
         textAlign: 'center',
     },

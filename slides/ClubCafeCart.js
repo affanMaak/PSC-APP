@@ -181,6 +181,7 @@ const styles = StyleSheet.create({
         borderBottomEndRadius: 30,
         borderBottomStartRadius: 30,
         overflow: "hidden",
+        minHeight: 120,
     },
     notchImage: {
         resizeMode: "cover"
@@ -201,7 +202,7 @@ const styles = StyleSheet.create({
 
     headerText: {
         fontSize: 22,
-        fontWeight: "bold",
+        fontWeight: "600",
         color: "#000",
         textAlign: "center",
         flex: 1,

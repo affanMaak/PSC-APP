@@ -309,13 +309,8 @@ const FoodMenuScreen = ({ navigation }) => {
             >
               <Icon name="arrow-back" size={28} color="#000" />
             </TouchableOpacity>
-            <Text style={styles.ctext}>F&B</Text>
-            <TouchableOpacity
-              style={styles.bellIcon}
-              activeOpacity={0.7}
-            >
-
-            </TouchableOpacity>
+            <Text style={styles.headerTitle}>F&B</Text>
+            <View style={{ width: 40 }} />
           </View>
         </ImageBackground>
 
@@ -411,7 +406,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
   },
   backButton: {
     width: 40,
@@ -419,18 +413,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  ctext: {
+  headerTitle: {
     fontSize: 22,
-    fontWeight: 'bold',
+    fontWeight: '600',
     color: '#000',
     textAlign: 'center',
     flex: 1,
-  },
-  bellIcon: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   scrollView: {
     flex: 1,

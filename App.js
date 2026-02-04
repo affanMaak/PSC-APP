@@ -417,6 +417,7 @@ function RoleBasedDrawer() {
 import messaging from '@react-native-firebase/messaging';
 import notifee from '@notifee/react-native';
 import ReservationsScreen from './src/adminOnly/ReservationsScreen.js';
+import RoomBookingScreen from './src/rooms/RoomBookingScreen.js';
 
 // ... (imports)
 
@@ -580,6 +581,7 @@ function AppContent() {
         <Stack.Screen name="Announcements" component={Announcements} options={{ headerShown: false }} />
         <Stack.Screen name="ReservationsScreen" component={ReservationsScreen} options={{ headerShown: false }} />
         <Stack.Screen name="Feedback" component={feedbacks} options={{ headerShown: false }} />
+        <Stack.Screen name="RoomBookingScreen" component={RoomBookingScreen} options={{ headerShown: false }} />
       </Stack.Navigator>
       <FloatingTimer />
     </NavigationContainer>
