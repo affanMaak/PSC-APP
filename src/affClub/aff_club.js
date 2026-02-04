@@ -1277,7 +1277,9 @@ import {
   getAffiliatedClubs,
   createAffiliatedClubRequest,
   getUserData,
-  getUserAffiliatedClubRequests
+  getUserAffiliatedClubRequests,
+  getAffiliatedClubRequests,
+  getCurrentAdmin
 } from '../../config/apis';
 
 const aff_club = () => {
@@ -1292,6 +1294,10 @@ const aff_club = () => {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Admin Stats State
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [clubStats, setClubStats] = useState({});
+
   // Form state - only these 3 fields are needed as per web portal
   const [visitDate, setVisitDate] = useState(new Date());
   const [memberId, setMemberId] = useState('');
@@ -1303,11 +1309,43 @@ const aff_club = () => {
   const [requestsLoading, setRequestsLoading] = useState(false);
 
   useEffect(() => {
+    checkAdminStatus();
     fetchUserProfile();
     fetchAffiliatedClubs();
     // Show instructions modal on first visit
     setInstructionsModalVisible(true);
   }, []);
+
+  const checkAdminStatus = async () => {
+    const admin = await getCurrentAdmin();
+    if (admin) {
+      setIsAdmin(true);
+      fetchClubStats();
+    }
+  };
+
+  const fetchClubStats = async () => {
+    try {
+      // Frontend Logic: Fetch all requests and count them per club
+      // Passing no arguments to get ALL requests (might require backend support for no-filter)
+      // If backend requires filters, this might need adjustment, but user prompt implies no specific clubId gets everything.
+      const allRequests = await getAffiliatedClubRequests();
+
+      const statsMap = {};
+      if (Array.isArray(allRequests)) {
+        allRequests.forEach(req => {
+          const clubId = req.affiliatedClubId;
+          if (clubId) {
+            statsMap[clubId] = (statsMap[clubId] || 0) + 1;
+          }
+        });
+      }
+      setClubStats(statsMap);
+      console.log('📊 Calculated Club Stats:', statsMap);
+    } catch (error) {
+      console.log('Error fetching/calculating stats:', error);
+    }
+  };
 
   const fetchUserProfile = async () => {
     try {
@@ -1535,6 +1573,16 @@ const aff_club = () => {
                   <Text style={styles.cardDescription}>
                     📍 {club.location}
                   </Text>
+                )}
+
+                {/* Admin Stats Badge */}
+                {isAdmin && clubStats[club.id] !== undefined && (
+                  <View style={styles.statBadge}>
+                    <Icon name="people" size={14} color="#FFF" />
+                    <Text style={styles.statText}>
+                      {clubStats[club.id]} Visitors
+                    </Text>
+                  </View>
                 )}
 
                 {/* {club.email && (
@@ -1896,6 +1944,24 @@ const aff_club = () => {
 };
 
 const styles = StyleSheet.create({
+  statBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    marginTop: 8,
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)'
+  },
+  statText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginLeft: 5,
+  },
   container: {
     flex: 1,
     backgroundColor: '#FEF9F3',
