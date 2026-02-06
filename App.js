@@ -4,12 +4,24 @@ import { enableScreens } from 'react-native-screens';
 import { View, Button, Alert, LogBox, Image, StyleSheet, Text, TouchableOpacity, StatusBar, Linking } from 'react-native';
 import { AuthProvider, useAuth } from './src/auth/contexts/AuthContext';
 import { VoucherProvider } from './src/auth/contexts/VoucherContext';
-import FloatingTimer from './src/components/FloatingTimer';
-import { NavigationContainer } from '@react-navigation/native';
+import BookingSummaryBar from './src/components/BookingSummaryBar';
+import { NavigationContainer, useNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createDrawerNavigator, DrawerContentScrollView, DrawerItemList } from '@react-navigation/drawer';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
+// Deep Linking Configuration
+import linking from './config/linking';
+
+
+// Notification Handler
+import {
+  checkInitialNotification,
+  subscribeToNotificationOpened,
+  handleNotificationNavigation,
+  extractNavigationFromNotification,
+} from './services/notificationHandler';
 
 // Create QueryClient instance
 const queryClient = new QueryClient();
@@ -425,6 +437,8 @@ import RoomBookingScreen from './src/rooms/RoomBookingScreen.js';
 function AppContent() {
   const { isAuthenticated, loading } = useAuth();
   const [showSplash, setShowSplash] = React.useState(true);
+  const navigationRef = useNavigationContainerRef();
+  const pendingNotification = React.useRef(null);
   // Ignore noisy logs
   useEffect(() => {
     LogBox.ignoreLogs(['Animated node with tag', 'ViewPropTypes']);
@@ -463,6 +477,27 @@ function AppContent() {
     return unsubscribe;
   }, []);
 
+  // ===== Deep Link Notification Handlers =====
+  useEffect(() => {
+    // Check if app was opened from quit state by a notification
+    checkInitialNotification(navigationRef);
+
+    // Subscribe to notifications opened from background state
+    const unsubscribeNotification = subscribeToNotificationOpened(navigationRef);
+
+    return () => unsubscribeNotification();
+  }, [navigationRef]);
+
+  // Handle navigation ready callback
+  const onNavigationReady = () => {
+    console.log('🧭 [Navigation] Container is ready');
+    // Handle any pending navigation from notification
+    if (pendingNotification.current) {
+      handleNotificationNavigation(pendingNotification.current, navigationRef);
+      pendingNotification.current = null;
+    }
+  };
+
   // Handle splash screen finish
   const handleSplashFinish = () => {
     setShowSplash(false);
@@ -479,7 +514,11 @@ function AppContent() {
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer
+      ref={navigationRef}
+      linking={linking}
+      onReady={onNavigationReady}
+    >
       <StatusBar backgroundColor="#fffaf2" barStyle="dark-content" />
       <Stack.Navigator
         screenOptions={({ navigation, route }) => ({
@@ -583,7 +622,7 @@ function AppContent() {
         <Stack.Screen name="Feedback" component={feedbacks} options={{ headerShown: false }} />
         <Stack.Screen name="RoomBookingScreen" component={RoomBookingScreen} options={{ headerShown: false }} />
       </Stack.Navigator>
-      <FloatingTimer />
+      <BookingSummaryBar />
     </NavigationContainer>
   );
 }

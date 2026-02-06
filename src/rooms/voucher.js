@@ -1137,8 +1137,29 @@ export default function voucher({ navigation, route }) {
         membershipNo: voucherData.membership?.no,
         memberName: voucherData.membership?.name,
         // Room information
-        roomType: roomType?.name,
-        roomNumber: selectedRoom?.roomNumber,
+        roomType: roomType?.name || voucherData.Room?.roomType,
+        // Priority: Multi-rooms > Voucher Object > Nested Room Object > Regex Extraction > Navigation param
+        roomNumber: (() => {
+          // Check 1: Multi-rooms
+          if (voucherData.rooms?.length > 0) {
+            return voucherData.rooms.map(r => r.room?.roomNumber || r.roomNumber).join(', ');
+          }
+
+          // Check 2: Direct properties
+          const direct = voucherData.voucher?.room_number || voucherData.Room?.roomNumber;
+          if (direct) return direct;
+
+          // Check 3: Regex Extraction from remarks
+          const remarks = voucherData.voucher?.remarks || '';
+          const extracted = remarks.match(/Room(?: booking)?:\s*(\w+)/i)?.[1];
+          if (extracted) {
+            console.log('📍 [DeepExtract] Found via Regex in voucherData remarks:', extracted);
+            return extracted;
+          }
+
+          // Check 4: Fallback
+          return selectedRoom?.roomNumber;
+        })(),
         // Booking dates
         checkIn: bookingData?.checkIn,
         checkOut: bookingData?.checkOut,
@@ -1172,10 +1193,24 @@ export default function voucher({ navigation, route }) {
   }, [bookingId, voucherData]);
 
   // Countdown Timer Logic
+  // Countdown Timer Logic
   useEffect(() => {
-    if (!invoiceData?.dueDate || invoiceData?.status === 'PAID') return;
+    // Try to find a valid target date: paymentDue, dueDate, or maybe inferred from issued_at
+    const targetDateStr = invoiceData?.paymentDue || invoiceData?.dueDate;
 
-    const targetDate = new Date(invoiceData.dueDate).getTime();
+    if (!targetDateStr || invoiceData?.status === 'PAID') {
+      if (timeLeft !== '') setTimeLeft(''); // Clear if not applicable
+      return;
+    }
+
+    const targetDate = new Date(targetDateStr).getTime();
+
+    // Critical Fix: Ensure date is valid to prevent "NaNm NaNs"
+    if (isNaN(targetDate)) {
+      console.log('⚠️ Invalid Timer Date:', targetDateStr);
+      setTimeLeft('');
+      return;
+    }
 
     const interval = setInterval(() => {
       const now = new Date().getTime();
@@ -1199,7 +1234,7 @@ export default function voucher({ navigation, route }) {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [invoiceData?.dueDate, invoiceData?.status]);
+  }, [invoiceData?.dueDate, invoiceData?.paymentDue, invoiceData?.status]);
 
   const transformBookingResponseToInvoice = (bookingResponse) => {
     // Extract from Data object (invoice response)
@@ -1215,6 +1250,10 @@ export default function voucher({ navigation, route }) {
         instructions: bookingResponse.Data.Instructions,
         bookingSummary: bookingResponse.Data.BookingSummary,
         paymentChannels: bookingResponse.Data.PaymentChannels,
+        // Map room number from response if available (Multi-room support)
+        roomNumber: bookingResponse.Data.Rooms?.length > 0
+          ? bookingResponse.Data.Rooms.map(r => r.room?.roomNumber || r.roomNumber).join(', ')
+          : (bookingResponse.Data.Room?.roomNumber || bookingResponse.Data.room_number || bookingResponse.Data.roomNumber),
         isInvoice: true
       };
     }
@@ -1235,6 +1274,10 @@ export default function voucher({ navigation, route }) {
         amount: booking.totalPrice,
         payment_mode: 'PENDING',
         issued_at: new Date().toISOString(),
+        issued_at: new Date().toISOString(),
+        roomNumber: booking.rooms?.length > 0
+          ? booking.rooms.map(r => r.room?.roomNumber || r.roomNumber).join(', ')
+          : (booking.Room?.roomNumber || booking.room_number || booking.roomNumber),
         isInvoice: true
       };
     }
@@ -1262,8 +1305,56 @@ export default function voucher({ navigation, route }) {
       bookingSummary: invoice.bookingSummary,
 
       // Room information
-      roomType: roomType?.name,
-      roomNumber: selectedRoom?.roomNumber,
+      roomType: roomType?.name || invoice.Room?.roomType || invoice.roomType,
+      // Room information
+      roomType: roomType?.name || invoice.Room?.roomType || invoice.roomType,
+      roomNumber: (() => {
+        // Deep Extraction Logic
+
+        // Check 1: Multi-room array
+        if (invoice.rooms && Array.isArray(invoice.rooms) && invoice.rooms.length > 0) {
+          const multi = invoice.rooms
+            .map(r => r.room?.roomNumber || r.roomNumber)
+            .filter(Boolean)
+            .join(', ');
+          console.log('📍 [DeepExtract] Found in invoice.rooms:', multi);
+          return multi;
+        }
+
+        // Check 2: Direct or Nested properties
+        const direct = invoice.roomNumber ||
+          invoice.room_number ||
+          invoice.Room?.roomNumber ||
+          invoice.voucher?.room_number;
+
+        if (direct) {
+          console.log('📍 [DeepExtract] Found in direct/nested props:', direct);
+          return direct;
+        }
+
+        // Check 3: Regex Extraction from Remarks
+        // Pattern: "Room: 123" or "Room booking: 123" (case-insensitive)
+        const extractedRoom = invoice.remarks?.match(/Room(?: booking)?:\s*(\w+)/i)?.[1];
+        if (extractedRoom) {
+          console.log('📍 [DeepExtract] Found via Regex in remarks:', extractedRoom);
+          return extractedRoom;
+        }
+
+        // Check 4: Booking Summary (literal fallback)
+        if (invoice.bookingSummary) {
+          console.log('📍 [DeepExtract] Found in bookingSummary:', invoice.bookingSummary);
+          return invoice.bookingSummary;
+        }
+
+        // Check 5: Context / Navigation Fallback
+        if (selectedRoom?.roomNumber) {
+          console.log('📍 [DeepExtract] Found in selectedRoom fallback:', selectedRoom.roomNumber);
+          return selectedRoom.roomNumber;
+        }
+
+        console.log('⚠️ [DeepExtract] No room number found in any source');
+        return '';
+      })(),
 
       // Booking dates
       checkIn: bookingData?.checkIn,
@@ -1282,6 +1373,37 @@ export default function voucher({ navigation, route }) {
       remarks: invoice.remarks,
       note: invoice.note || 'Complete payment to confirm your booking'
     };
+  };
+
+  /* New fetchInvoice Implementation with Deep Extraction Logging */
+  const fetchInvoice = async () => {
+    try {
+      console.log('🔄 START: Fetching Invoice for ID:', bookingId);
+      // Don't set loading true if refreshing to avoid full screen spinner
+      if (!refreshing) setLoading(true);
+
+      if (!bookingId) {
+        throw new Error('No booking ID available');
+      }
+
+      // Use the service which handles multiple endpoints
+      const response = await bookingService.getInvoice(bookingId, numericBookingId);
+
+      console.log('🧾 Invoice Raw Response:', JSON.stringify(response, null, 2));
+
+      // Explicitly transform data
+      const transformed = transformInvoiceData(response);
+      console.log('✨ Transformed Invoice Data:', JSON.stringify(transformed, null, 2));
+
+      setInvoiceData(transformed);
+    } catch (error) {
+      console.error('❌ Error fetching invoice:', error);
+      // Fallback
+      createTemporaryInvoice();
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   };
 
   const createTemporaryInvoice = () => {
@@ -1610,14 +1732,19 @@ Thank you for your booking!
                 </Text>
               </View>
 
-              {invoiceData.roomNumber && (
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Room Number:</Text>
-                  <Text style={styles.detailValue}>
+              <View style={[styles.detailRow, { marginBottom: 10, alignItems: 'flex-start' }]}>
+                <Text style={[styles.detailLabel, { marginTop: 0 }]}>Room Number:</Text>
+                {/* Updated Check: Render if roomNumber exists and is not empty */}
+                {(invoiceData.roomNumber && invoiceData.roomNumber !== "") ? (
+                  <Text style={[styles.detailValue, { flex: 1, textAlign: 'right', flexWrap: 'wrap' }]}>
                     {invoiceData.roomNumber}
                   </Text>
-                </View>
-              )}
+                ) : (
+                  <Text style={[styles.detailValue, { color: '#888888' }]}>
+                    Pending Assignment
+                  </Text>
+                )}
+              </View>
 
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Check-in:</Text>

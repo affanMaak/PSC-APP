@@ -600,6 +600,22 @@ export const getAffiliatedClubs = async () => {
     throw new Error(message);
   }
 };
+
+export const getAffiliatedClubRequests = async (from, to, clubId) => {
+  try {
+    const params = {};
+    if (from) params.from = from;
+    if (to) params.to = to;
+    if (clubId) params.clubId = clubId;
+
+    // Note: This endpoint might return all requests if no filters are provided
+    const response = await api.get(`${base_url}/affiliation/requests`, { params });
+    return response.data;
+  } catch (error) {
+    console.error("❌ Error fetching club requests:", error.message);
+    throw error;
+  }
+};
 export const createAffiliatedClubRequest = async (requestData) => {
   try {
     // The web portal backend expects: affiliatedClubId, membershipNo, requestedDate
