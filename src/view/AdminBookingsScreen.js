@@ -426,7 +426,7 @@ export default function AdminBookingsScreen({ navigation }) {
                     {/* Payment */}
                     <View style={styles.gridSection}>
                         <View style={styles.sectionHeader}>
-                            <Icon name="attach-money" size={16} color="#666" />
+
                             <Text style={styles.sectionTitle}>Payment</Text>
                         </View>
                         <View style={styles.paymentInfo}>
@@ -1003,7 +1003,7 @@ const styles = StyleSheet.create({
         borderBottomEndRadius: 30,
         borderBottomStartRadius: 30,
         overflow: 'hidden',
-        minHeight: 140,
+        minHeight: 120,
     },
     notchImage: {
         resizeMode: 'cover',

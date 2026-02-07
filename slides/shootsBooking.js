@@ -1913,6 +1913,28 @@ const shootsBooking = ({ route, navigation }) => {
   const onTimeChange = (event, selectedTime) => {
     setShowPicker(false);
     if (selectedTime && currentDateForTime) {
+      if (event.type === 'dismissed') {
+        setCurrentDateForTime(null);
+        return;
+      }
+
+      const hours = selectedTime.getHours();
+      const minutes = selectedTime.getMinutes();
+
+      // Validate time: 9:00 AM to 6:00 PM (18:00) strict
+      // Valid if: hours >= 9 AND (hours < 18 OR (hours === 18 && minutes === 0))
+      const isValidTime = hours >= 9 && (hours < 18 || (hours === 18 && minutes === 0));
+
+      if (!isValidTime) {
+        Alert.alert(
+          'Invalid Time',
+          'Bookings are only allowed between 9:00 AM and 6:00 PM.',
+          [{ text: 'OK' }]
+        );
+        setCurrentDateForTime(null);
+        return;
+      }
+
       const newConfigs = { ...dateConfigurations };
       newConfigs[currentDateForTime] = {
         ...newConfigs[currentDateForTime],

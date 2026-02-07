@@ -26,6 +26,7 @@ export default function BookingDetailsScreen({ navigation, route }) {
     const [showCancelModal, setShowCancelModal] = useState(false);
     const [showInvoiceModal, setShowInvoiceModal] = useState(false);
     const [invoiceData, setInvoiceData] = useState(null);
+    const [voucherInfo, setVoucherInfo] = useState({ voucherNumber: null, consumerNumber: null });
 
     // Safety check: go back if no booking data is passed
     if (!booking) {
@@ -38,6 +39,69 @@ export default function BookingDetailsScreen({ navigation, route }) {
             </View>
         );
     }
+
+    // Fetch voucher and consumer number from invoice data
+    React.useEffect(() => {
+        const fetchVoucherInfo = async () => {
+            // First, try to get voucher/consumer numbers directly from booking object
+            const directVoucherNumber = booking.voucherNumber || booking.voucher_no ||
+                booking.invoiceNumber || booking.invoice_no ||
+                booking.voucher?.voucher_no || booking.voucher?.voucherNumber ||
+                booking.voucherData?.voucher?.voucher_no;
+
+            const directConsumerNumber = booking.consumerNumber || booking.consumer_number ||
+                booking.consumer_no || booking.consumerNo ||
+                booking.voucher?.consumer_number || booking.voucher?.consumerNumber ||
+                booking.voucherData?.voucher?.consumer_number;
+
+            // If we already have both values from the booking object, use them
+            if (directVoucherNumber || directConsumerNumber) {
+                setVoucherInfo({
+                    voucherNumber: directVoucherNumber,
+                    consumerNumber: directConsumerNumber
+                });
+
+                // If we already have both, no need to fetch
+                if (directVoucherNumber && directConsumerNumber) {
+                    return;
+                }
+            }
+
+            // Otherwise, try to fetch from API
+            try {
+                // Determine booking type for API call (inline to avoid hoisting issue)
+                let bookingType = 'Room';
+                if (booking.bookingType) {
+                    bookingType = booking.bookingType;
+                } else if (booking.hallId) {
+                    bookingType = 'Hall';
+                } else if (booking.lawnId) {
+                    bookingType = 'Lawn';
+                } else if (booking.photoshootId) {
+                    bookingType = 'Photoshoot';
+                }
+
+                const invoice = await bookingService.getInvoice(
+                    booking.bookingId || booking.id,
+                    null,
+                    bookingType
+                );
+                if (invoice) {
+                    setVoucherInfo(prev => ({
+                        voucherNumber: prev.voucherNumber || invoice.invoiceNumber || invoice.invoice_no || invoice.invoiceNo || invoice.voucherNumber || invoice.voucher_no,
+                        consumerNumber: prev.consumerNumber || invoice.consumerNumber || invoice.consumer_number || invoice.consumer_no || invoice.consumerNo
+                    }));
+                }
+            } catch (error) {
+                console.log('Voucher info not available from API:', error.message);
+                // Silent fail - voucher info is optional display
+            }
+        };
+
+        if (booking.bookingId || booking.id) {
+            fetchVoucherInfo();
+        }
+    }, [booking.bookingId, booking.id]);
 
     const formatDate = (dateString) => {
         if (!dateString) return 'N/A';
@@ -226,6 +290,21 @@ Check-out: ${formatDate(booking.checkOut)}
         </View>
     );
 
+    // Render a highlighted detail item (for voucher and consumer numbers)
+    const renderHighlightDetailItem = (label, value, icon = null) => (
+        <View style={styles.detailItem}>
+            <View style={styles.detailLabelContainer}>
+                {icon && <Icon name={icon} size={18} color="#666" style={styles.detailIcon} />}
+                <Text style={styles.detailLabel}>{label}</Text>
+            </View>
+            <View style={styles.copyableValueContainer}>
+                <Text style={[styles.detailValue, styles.copyableValue]}>
+                    {value}
+                </Text>
+            </View>
+        </View>
+    );
+
     // Enhanced Booking Processing (Similar to MemberBookingsScreen)
     const processedBooking = {
         ...booking,
@@ -321,58 +400,146 @@ Check-out: ${formatDate(booking.checkOut)}
         </View>
     );
 
-    const renderBookingTimeline = () => (
-        <View style={styles.timelineCard}>
-            <Text style={styles.cardTitle}>Booking Timeline</Text>
+    const renderBookingTimeline = () => {
+        const type = getBookingType();
+        const isVenue = ['Hall', 'Lawn', 'Photoshoot'].includes(type);
 
-            <View style={styles.timelineItem}>
-                <View style={styles.timelineDot}>
-                    <Icon name="check-circle" size={20} color="#28a745" />
-                </View>
-                <View style={styles.timelineContent}>
-                    <Text style={styles.timelineTitle}>Booking Created</Text>
-                    <Text style={styles.timelineDate}>
-                        {formatDate(booking.createdAt)} • {formatTime(booking.createdAt)}
-                    </Text>
-                </View>
-            </View>
+        return (
+            <View style={styles.timelineCard}>
+                <Text style={styles.cardTitle}>Booking Timeline</Text>
 
-            <View style={styles.timelineItem}>
-                <View style={styles.timelineDot}>
-                    <Icon name="event" size={20} color="#b48a64" />
+                <View style={styles.timelineItem}>
+                    <View style={styles.timelineDot}>
+                        <Icon name="check-circle" size={20} color="#28a745" />
+                    </View>
+                    <View style={styles.timelineContent}>
+                        <Text style={styles.timelineTitle}>Booking Created</Text>
+                        <Text style={styles.timelineDate}>
+                            {formatDate(booking.createdAt)} • {formatTime(booking.createdAt)}
+                        </Text>
+                    </View>
                 </View>
-                <View style={styles.timelineContent}>
-                    <Text style={styles.timelineTitle}>Check-in / Start Time</Text>
-                    <Text style={styles.timelineDate}>
-                        {formatDate(booking.checkIn || booking.from || booking.startTime || booking.start_time || booking.start || booking.booking_from || booking.bookingDate || booking.booking_date || booking.date)}
-                    </Text>
-                </View>
-            </View>
 
-            <View style={styles.timelineItem}>
-                <View style={styles.timelineDot}>
-                    <Icon name="event-busy" size={20} color="#b48a64" />
-                </View>
-                <View style={styles.timelineContent}>
-                    <Text style={styles.timelineTitle}>Check-out / End Time</Text>
-                    <Text style={styles.timelineDate}>
-                        {formatDate(booking.checkOut || booking.to || booking.endTime || booking.end_time || booking.end || booking.booking_to || booking.endDate || booking.bookingDate || booking.booking_date || booking.date)}
-                    </Text>
-                </View>
+                {isVenue ? (
+                    <View style={styles.timelineItem}>
+                        <View style={styles.timelineDot}>
+                            <Icon name="event" size={20} color="#b48a64" />
+                        </View>
+                        <View style={styles.timelineContent}>
+                            <Text style={styles.timelineTitle}>Event Date</Text>
+                            <Text style={styles.timelineDate}>
+                                {formatDate(booking.checkIn || booking.date || booking.eventDate)}
+                            </Text>
+                        </View>
+                    </View>
+                ) : (
+                    <>
+                        <View style={styles.timelineItem}>
+                            <View style={styles.timelineDot}>
+                                <Icon name="event" size={20} color="#b48a64" />
+                            </View>
+                            <View style={styles.timelineContent}>
+                                <Text style={styles.timelineTitle}>Check-in / Start Time</Text>
+                                <Text style={styles.timelineDate}>
+                                    {formatDate(booking.checkIn || booking.from || booking.startTime || booking.start_time || booking.start || booking.booking_from || booking.bookingDate || booking.booking_date || booking.date)}
+                                </Text>
+                            </View>
+                        </View>
+
+                        <View style={styles.timelineItem}>
+                            <View style={styles.timelineDot}>
+                                <Icon name="event-busy" size={20} color="#b48a64" />
+                            </View>
+                            <View style={styles.timelineContent}>
+                                <Text style={styles.timelineTitle}>Check-out / End Time</Text>
+                                <Text style={styles.timelineDate}>
+                                    {formatDate(booking.checkOut || booking.to || booking.endTime || booking.end_time || booking.end || booking.booking_to || booking.endDate || booking.bookingDate || booking.booking_date || booking.date)}
+                                </Text>
+                            </View>
+                        </View>
+                    </>
+                )}
             </View>
-        </View>
-    );
+        );
+    };
 
     const renderGuestInfo = () => {
-        if (!booking.guestName && !booking.guestContact) return null;
+        // Determine if it's a Guest booking
+        const isGuest = (booking.pricingType || '').toLowerCase() === 'guest';
 
         return (
             <View style={styles.guestCard}>
-                <Text style={styles.cardTitle}>Guest Information</Text>
+                <Text style={styles.cardTitle}>Details</Text>
 
-                {booking.guestName && renderDetailItem('Guest Name', booking.guestName, 'person')}
-                {booking.guestContact && renderDetailItem('Contact', booking.guestContact, 'phone')}
-                {booking.guestEmail && renderDetailItem('Email', booking.guestEmail, 'email')}
+                {renderDetailItem('Booking For', isGuest ? 'Guest' : 'Member', 'badge')}
+
+                {isGuest && (
+                    <>
+                        {booking.guestName && renderDetailItem('Name', booking.guestName, 'person')}
+                        {booking.guestContact && renderDetailItem('Contact', booking.guestContact, 'phone')}
+                        {booking.guestEmail && renderDetailItem('Email', booking.guestEmail, 'email')}
+                    </>
+                )}
+            </View>
+        );
+    };
+
+    const renderVenueInfo = () => {
+        // Use venueName from passed booking or fallback
+        const type = getBookingType();
+        const venueName = booking.venueName || booking.hallName || booking.lawnName || booking.name || type;
+        const details = booking.bookingDetails || []; // Multi-date details
+
+        return (
+            <View style={styles.roomCard}>
+                <Text style={styles.cardTitle}>{type === 'Photoshoot' ? 'Photoshoot Details' : `${type} Information`}</Text>
+
+                <View style={styles.roomHeader}>
+                    {/* <Icon name="location-city" size={24} color="#b48a64" /> */}
+                    <Text style={styles.roomNumber}>{venueName}</Text>
+                </View>
+
+                <View style={styles.roomDetails}>
+                    <View style={styles.detailBadge}>
+                        <Icon name="people" size={14} color="#666" />
+                        <Text style={styles.detailBadgeText}>
+                            {booking.numberOfGuests || booking.guests || booking.guest_count || booking.numberOfAdults || 0} Guests
+                        </Text>
+                    </View>
+
+                    {/* {(booking.eventType || booking.event_type) && (
+                        <View style={styles.detailBadge}>
+                            <Icon name="event" size={14} color="#666" />
+                            <Text style={styles.detailBadgeText}>{booking.eventType || booking.event_type}</Text>
+                        </View>
+                    )} */}
+
+                    {(booking.eventTime || booking.timeSlot) && (
+                        <View style={styles.detailBadge}>
+                            <Icon name="access-time" size={14} color="#666" />
+                            <Text style={styles.detailBadgeText}>{booking.eventTime || booking.timeSlot}</Text>
+                        </View>
+                    )}
+                </View>
+
+                {/* Multi-date list */}
+                {details.length > 0 && (
+                    <View style={{ marginTop: 15, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f0e6d8' }}>
+                        <Text style={[styles.detailLabel, { marginBottom: 8 }]}>Selected Dates:</Text>
+                        {details.map((d, index) => (
+                            <View key={index} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                                <Icon name="event" size={12} color="#b48a64" style={{ marginRight: 6 }} />
+                                <Text style={{ fontSize: 13, color: '#333', fontWeight: '500' }}>
+                                    {formatDate(d.date)}
+                                </Text>
+                                <Text style={{ fontSize: 12, color: '#666', marginLeft: 8 }}>
+                                    ({d.timeSlot || booking.eventTime || booking.timeSlot})
+                                    {d.eventType ? ` - ${d.eventType}` : (booking.eventType ? ` - ${booking.eventType}` : '')}
+                                </Text>
+                            </View>
+                        ))}
+                    </View>
+                )}
             </View>
         );
     };
@@ -468,8 +635,8 @@ Check-out: ${formatDate(booking.checkOut)}
                     <Text style={styles.bookingType}>{getBookingType()} Booking</Text>
                 </View>
 
-                {/* Room Information */}
-                {renderRoomInfo()}
+                {/* Venue or Room Information */}
+                {['Hall', 'Lawn', 'Photoshoot'].includes(getBookingType()) ? renderVenueInfo() : renderRoomInfo()}
 
                 {/* Guest Information */}
                 {renderGuestInfo()}
@@ -478,10 +645,23 @@ Check-out: ${formatDate(booking.checkOut)}
                 <View style={styles.detailsCard}>
                     <Text style={styles.cardTitle}>Booking Details</Text>
 
-                    {renderDetailItem('Check-in / Start', formatDate(booking.checkIn || booking.from || booking.startTime || booking.start_time || booking.start || booking.booking_from || booking.bookingDate || booking.booking_date || booking.date), 'event')}
-                    {renderDetailItem('Check-out / End', formatDate(booking.checkOut || booking.to || booking.endTime || booking.end_time || booking.end || booking.booking_to || booking.endDate || booking.bookingDate || booking.booking_date || booking.date), 'event-busy')}
+                    {voucherInfo.voucherNumber && renderHighlightDetailItem('Voucher Number', voucherInfo.voucherNumber, 'receipt')}
+                    {voucherInfo.consumerNumber && renderHighlightDetailItem('Consumer Number', voucherInfo.consumerNumber, 'confirmation-number')}
+
+                    {['Hall', 'Lawn', 'Photoshoot'].includes(getBookingType()) ? (
+                        <>
+                            {renderDetailItem('Event Date', formatDate(booking.checkIn || booking.date || booking.eventDate), 'event')}
+                            {(booking.eventTime || booking.timeSlot) && renderDetailItem('Time Slot', booking.eventTime || booking.timeSlot, 'access-time')}
+                            {(booking.eventType || booking.event_type) && renderDetailItem('Event Type', booking.eventType || booking.event_type, 'category')}
+                        </>
+                    ) : (
+                        <>
+                            {renderDetailItem('Check-in / Start', formatDate(booking.checkIn || booking.from || booking.startTime || booking.start_time || booking.start || booking.booking_from || booking.bookingDate || booking.booking_date || booking.date), 'event')}
+                            {renderDetailItem('Check-out / End', formatDate(booking.checkOut || booking.to || booking.endTime || booking.end_time || booking.end || booking.booking_to || booking.endDate || booking.bookingDate || booking.booking_date || booking.date), 'event-busy')}
+                            {calculateNights() > 0 && renderDetailItem('Nights Stay', `${calculateNights()} night(s)`, 'nights-stay')}
+                        </>
+                    )}
                     {renderDetailItem('Booking Date', formatDate(booking.createdAt || booking.bookingDate || booking.booking_date || booking.date), 'schedule')}
-                    {calculateNights() > 0 && renderDetailItem('Nights Stay', `${calculateNights()} night(s)`, 'nights-stay')}
 
                     {booking.specialRequest && (
                         <View style={styles.specialRequestContainer}>
@@ -869,6 +1049,20 @@ const styles = StyleSheet.create({
     detailValueHighlight: {
         color: '#b48a64',
         fontWeight: 'bold',
+    },
+    copyableValueContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'flex-end',
+        flex: 1,
+    },
+    copyableValue: {
+        color: '#b48a64',
+        fontWeight: '600',
+        marginRight: 8,
+    },
+    copyIcon: {
+        marginLeft: 4,
     },
     specialRequestContainer: {
         marginTop: 15,

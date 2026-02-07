@@ -5670,7 +5670,7 @@ const LawnBooking = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F7FAFC',
+    backgroundColor: '#FEF9F3',
   },
   keyboardAvoid: {
     flex: 1,

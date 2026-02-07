@@ -1580,6 +1580,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+    backgroundColor: "#FEF9F3",
   },
   loadingText: {
     marginTop: 10,
@@ -1635,8 +1636,15 @@ const styles = StyleSheet.create({
     padding: 20,
     alignItems: "center",
     backgroundColor: "white",
-    margin: 15,
-    borderRadius: 15,
+    marginHorizontal: 15,
+    marginTop: 15,
+    marginBottom: 15,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
   },
   welcomeTitle: {
     fontSize: 18,
@@ -1816,6 +1824,7 @@ const styles = StyleSheet.create({
   loadingContainer: {
     alignItems: 'center',
     padding: 40,
+    backgroundColor: "",
   },
   errorContainer: {
     alignItems: 'center',
@@ -2008,6 +2017,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#888',
     fontStyle: 'italic',
+  },
+  contactText: {
+    fontSize: 14,
+    color: '#b48a64',
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginTop: 15,
   },
 });
 

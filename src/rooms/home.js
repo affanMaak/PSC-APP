@@ -296,7 +296,7 @@
 //                 <Icon name="account-outline" size={14} color="#666" />
 //                 <Text style={styles.guestPrice}>
 //                   {category.priceGuest}
-                  
+
 //                 </Text>
 //                 <Text style={styles.priceLabel}>Guest Price</Text>
 //               </View>
@@ -1539,8 +1539,15 @@ const styles = StyleSheet.create({
     padding: 20,
     alignItems: "center",
     backgroundColor: "white",
-    margin: 15,
-    borderRadius: 15,
+    marginHorizontal: 15,
+    marginTop: 15,
+    marginBottom: 15,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
   },
   welcomeTitle: {
     fontSize: 18,

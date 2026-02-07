@@ -5262,7 +5262,6 @@ import { useVoucher } from '../auth/contexts/VoucherContext';
 const eventTypeOptions = [
   { label: 'Wedding Reception', value: 'wedding' },
   { label: 'Birthday Party', value: 'birthday' },
-  { label: 'Corporate Event', value: 'corporate' },
   { label: 'Anniversary', value: 'anniversary' },
   { label: 'Family Gathering', value: 'family' },
   { label: 'Other Event', value: 'other' },
@@ -6079,8 +6078,8 @@ const BHBooking = ({ route, navigation }) => {
 
           {Object.keys(dateConfigurations).length > 0 ? (
             Object.keys(dateConfigurations).sort().map((date, index) => (
-              <View key={date} style={styles.dateConfigCard}>
-                <Text style={styles.dateConfigTitle}>Configuration for {formatDateForDisplay(date)}</Text>
+              <View key={date} style={[styles.dateConfigCard, { zIndex: (Object.keys(dateConfigurations).length - index) * 100 }]}>
+                <Text style={styles.dateConfigTitle}>Booking details for {formatDateForDisplay(date)}</Text>
 
                 <View style={styles.dropdownSection}>
                   <Text style={styles.sectionLabel}>Event Type</Text>
@@ -6111,6 +6110,7 @@ const BHBooking = ({ route, navigation }) => {
                     listMode="SCROLLVIEW"
                     nestedScrollEnabled={true}
                     zIndex={5000 - index * 10}
+                    dropDownDirection="BOTTOM"
                   />
                 </View>
 
@@ -6143,6 +6143,7 @@ const BHBooking = ({ route, navigation }) => {
                     listMode="SCROLLVIEW"
                     nestedScrollEnabled={true}
                     zIndex={4995 - index * 10}
+                    dropDownDirection="BOTTOM"
                   />
                 </View>
               </View>
@@ -6186,6 +6187,15 @@ const BHBooking = ({ route, navigation }) => {
               {Object.keys(dateConfigurations).length} date(s) × Rs. {(isGuest ? (venue?.chargesGuests || 0) : (venue?.chargesMembers || 0)).toLocaleString()}
             </Text>
           </View>
+        </View>
+
+        {/* Contact Info */}
+        <View style={styles.contactContainer}>
+          <Text style={styles.contactText}>
+            <Text style={{ fontWeight: 'bold' }}>Note: </Text>
+            For more details contact booking office{' '}
+            <Text style={{ fontWeight: 'bold' }}>03419777711</Text>.
+          </Text>
         </View>
 
         {/* Book Now Button */}
@@ -7118,6 +7128,18 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     marginRight: 8,
+  },
+
+  contactContainer: {
+    marginBottom: 10,
+    alignItems: 'center',
+    paddingHorizontal: 10,
+  },
+  contactText: {
+    fontSize: 13,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 18,
   },
 
   // Footer Spacer

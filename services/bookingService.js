@@ -30,7 +30,8 @@ export const bookingService = {
   },
 
   // Get invoice for booking - available immediately after booking
-  getInvoice: async (bookingId, numericBookingId = null) => {
+  // bookingType can be: 'Room', 'Hall', 'Lawn', 'Photoshoot'
+  getInvoice: async (bookingId, numericBookingId = null, bookingType = null) => {
     try {
       const token = await getAuthToken();
 
@@ -38,18 +39,50 @@ export const bookingService = {
         throw new Error('Booking ID is required');
       }
 
-      console.log('🧾 Fetching invoice for booking:', { bookingId, numericBookingId });
+      console.log('🧾 Fetching invoice for booking:', { bookingId, numericBookingId, bookingType });
 
-      // Invoice endpoints (available immediately after booking)
+      // Build endpoints based on booking type
+      const baseId = numericBookingId || bookingId;
+      const typeUpper = (bookingType || 'Room').toUpperCase();
+
+      // Type-specific endpoints
       const endpoints = [
-        `/booking/invoice?bookingId=${numericBookingId || bookingId}`,
-        `/payment/invoice/${numericBookingId || bookingId}`,
-        `/invoice/booking/${numericBookingId || bookingId}`,
-        `/booking/get/invoice?bookingId=${numericBookingId || bookingId}`,
-        // Fallback to voucher endpoints if invoice not available
-        `/booking/voucher?bookingType=ROOM&bookingId=${numericBookingId || bookingId}`,
-        `/voucher/booking/${numericBookingId || bookingId}`,
-      ].filter(Boolean);
+        // Generic invoice endpoints (try first)
+        `/booking/invoice?bookingId=${baseId}`,
+        `/payment/invoice/${baseId}`,
+        `/invoice/booking/${baseId}`,
+        `/booking/get/invoice?bookingId=${baseId}`,
+
+        // Type-specific voucher endpoints
+        `/booking/voucher?bookingType=${typeUpper}&bookingId=${baseId}`,
+        `/voucher/booking/${baseId}`,
+      ];
+
+      // Add type-specific endpoints based on booking type
+      if (typeUpper === 'HALL') {
+        endpoints.push(
+          `/hall/invoice?bookingId=${baseId}`,
+          `/booking/voucher?bookingType=HALL&bookingId=${baseId}`,
+          `/halls/voucher/${baseId}`
+        );
+      } else if (typeUpper === 'LAWN') {
+        endpoints.push(
+          `/lawn/invoice?bookingId=${baseId}`,
+          `/booking/voucher?bookingType=LAWN&bookingId=${baseId}`,
+          `/lawns/voucher/${baseId}`
+        );
+      } else if (typeUpper === 'PHOTOSHOOT') {
+        endpoints.push(
+          `/photoshoot/invoice?bookingId=${baseId}`,
+          `/booking/voucher?bookingType=PHOTOSHOOT&bookingId=${baseId}`,
+          `/shoots/voucher/${baseId}`
+        );
+      } else {
+        // Room booking (default)
+        endpoints.push(
+          `/booking/voucher?bookingType=ROOM&bookingId=${baseId}`,
+        );
+      }
 
       let lastError = null;
 
@@ -73,6 +106,15 @@ export const bookingService = {
             // Handle wrapped response
             if (response.data.data) {
               return Array.isArray(response.data.data) ? response.data.data[0] : response.data.data;
+            }
+            // Handle voucher wrapper
+            if (response.data.voucher) {
+              return {
+                ...response.data,
+                ...response.data.voucher,
+                invoiceNumber: response.data.voucher.voucher_no || response.data.voucher.voucherNumber,
+                consumerNumber: response.data.voucher.consumer_number || response.data.voucher.consumerNumber
+              };
             }
             // Direct object
             return response.data;

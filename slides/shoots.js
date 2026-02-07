@@ -1405,12 +1405,12 @@ moreAboutContainer: {
   pricingValue: { fontSize: 14, fontWeight: 'bold' },
 
   bookButton: {
-    backgroundColor: '#D2B48C',
+    backgroundColor: '#b48a64',
     paddingVertical: 12,
     borderRadius: 8,
     alignItems: 'center',
   },
-  bookButtonText: { fontSize: 16, fontWeight: 'bold' },
+  bookButtonText: { fontSize: 16, fontWeight: 'bold' , color: "#fff" },
 
   rulesContent: { paddingHorizontal: 20, marginTop: 25 },
   rulesHeader: { fontSize: 12, fontWeight: 'bold', marginBottom: 20 },

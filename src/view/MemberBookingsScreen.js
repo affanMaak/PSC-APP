@@ -1509,7 +1509,13 @@ export default function MemberBookingsScreen({ navigation }) {
             return {
                 id: booking.id || booking.bookingId || Math.random().toString(),
                 bookingId: booking.bookingId || booking.id,
+
                 roomNumber: booking.roomNumber || booking.roomId || booking.room_no,
+                // Venue Details for Hall/Lawn
+                venueName: booking.hallName || booking.lawnName || booking.venueName || booking.name || booking.title || booking.location || booking.area,
+                eventTime: booking.eventTime || booking.timeSlot || booking.time,
+                eventType: booking.eventType || booking.event_type,
+                bookingDetails: booking.bookingDetails, // For multi-date bookings
 
                 // Enhanced Date Mapping
                 checkIn: booking.checkIn || booking.from || booking.bookingDate ||
@@ -1573,6 +1579,7 @@ export default function MemberBookingsScreen({ navigation }) {
 
                 guestName: booking.guestName || booking.name || booking.member_name,
                 guestContact: booking.guestContact || booking.contact || booking.phone,
+                numberOfGuests: booking.numberOfGuests || booking.guests || booking.guest_count || booking.no_of_guests || booking.pax,
                 numberOfAdults: booking.numberOfAdults || booking.adults,
                 numberOfChildren: booking.numberOfChildren || booking.children,
                 pricingType: booking.pricingType,
@@ -1754,26 +1761,48 @@ export default function MemberBookingsScreen({ navigation }) {
                 </View>
 
                 <View style={styles.bookingInfo}>
-                    {item.roomNumber && (
+                    {/* Display Room Number or Venue Name based on type */}
+                    {['Hall', 'Lawn', 'Photoshoot'].includes(item.bookingType) ? (
+                        <View style={styles.roomInfo}>
+                            {/* <Icon name="location-city" size={16} color="#666" /> */}
+                            <Text style={styles.roomText}>{item.venueName || item.bookingType}</Text>
+                        </View>
+                    ) : item.roomNumber ? (
                         <View style={styles.roomInfo}>
                             {/* <Icon name="meeting-room" size={16} color="#666" /> */}
                             <Text style={styles.roomText}>Room {item.roomNumber}</Text>
                         </View>
+                    ) : null}
+
+                    {/* Conditional Date Display */}
+                    {['Hall', 'Lawn', 'Photoshoot'].includes(item.bookingType) ? (
+                        <View style={styles.datesContainer}>
+                            <View style={styles.dateItem}>
+                                <Icon name="event" size={14} color="#666" />
+                                <Text style={styles.dateLabel}>Event Date:</Text>
+                                <Text style={styles.dateValue}>
+                                    {item.bookingDetails && item.bookingDetails.length > 1
+                                        ? `${formatDate(item.checkIn)} (+${item.bookingDetails.length - 1} more)`
+                                        : formatDate(item.checkIn)}
+                                </Text>
+                            </View>
+                            {/* Optional: Show Time/Type if needed in summary */}
+                        </View>
+                    ) : (
+                        <View style={styles.datesContainer}>
+                            <View style={styles.dateItem}>
+                                <Icon name="event" size={14} color="#666" />
+                                <Text style={styles.dateLabel}>Check-in:</Text>
+                                <Text style={styles.dateValue}>{formatDate(item.checkIn)}</Text>
+                            </View>
+
+                            <View style={styles.dateItem}>
+                                <Icon name="event-busy" size={14} color="#666" />
+                                <Text style={styles.dateLabel}>Check-out:</Text>
+                                <Text style={styles.dateValue}>{formatDate(item.checkOut)}</Text>
+                            </View>
+                        </View>
                     )}
-
-                    <View style={styles.datesContainer}>
-                        <View style={styles.dateItem}>
-                            <Icon name="event" size={14} color="#666" />
-                            <Text style={styles.dateLabel}>Check-in:</Text>
-                            <Text style={styles.dateValue}>{formatDate(item.checkIn)}</Text>
-                        </View>
-
-                        <View style={styles.dateItem}>
-                            <Icon name="event-busy" size={14} color="#666" />
-                            <Text style={styles.dateLabel}>Check-out:</Text>
-                            <Text style={styles.dateValue}>{formatDate(item.checkOut)}</Text>
-                        </View>
-                    </View>
 
                     {(item.numberOfAdults || item.numberOfChildren) && (
                         <View style={styles.guestsInfo}>
