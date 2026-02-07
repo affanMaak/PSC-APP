@@ -23,6 +23,17 @@ import { useVoucher } from '../auth/contexts/VoucherContext';
 import { useAuth } from '../auth/contexts/AuthContext';
 
 const { width: screenWidth } = Dimensions.get('window');
+const MAX_ROOMS = 8;
+const CALENDAR_LIMIT_DAYS = 30;
+
+const ROOM_BOOKING_CONFIG = {
+    advancePayment: { "1-2": 0.25, "3-5": 0.50, "6-8": 0.75 },
+    cancellationRefund: {
+        moreThan72Hours: { "1-2": 0.05, "3-5": 0.15, "6-8": 0.25 },
+        "24To72Hours": { "1-2": 0.10, "3-5": 0.25, "6-8": 0.50 },
+        lessThan24Hours: { "1-2": 1.00, "3-5": 1.00, "6-8": 1.00 }
+    }
+};
 
 export default function RoomBookingScreen({ navigation, route }) {
     const { setVoucher } = useVoucher();
@@ -54,14 +65,64 @@ export default function RoomBookingScreen({ navigation, route }) {
         const nights = Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24));
         const price = isGuestBooking ? roomType?.priceGuest : roomType?.priceMember;
         const roomsCount = parseInt(numberOfRooms) || 1;
-        return nights * (price || 0) * roomsCount;
+        const totalAmount = nights * (price || 0) * roomsCount;
+
+        // Calculate advance payment required based on number of rooms
+        let advanceMultiplier = 0.25; // Default for 1-2 rooms
+        if (roomsCount >= 3 && roomsCount <= 5) advanceMultiplier = 0.50;
+        else if (roomsCount >= 6 && roomsCount <= 8) advanceMultiplier = 0.75;
+
+        return {
+            total: totalAmount,
+            advance: totalAmount * advanceMultiplier
+        };
+    };
+
+    const calculateRefund = (checkInDate, roomsCount) => {
+        const now = new Date();
+        const diffHours = (checkInDate - now) / (1000 * 60 * 60);
+        let tier = "";
+
+        if (diffHours > 72) tier = "moreThan72Hours";
+        else if (diffHours >= 24) tier = "24To72Hours";
+        else tier = "lessThan24Hours";
+
+        let roomsTier = "1-2";
+        if (roomsCount >= 3 && roomsCount <= 5) roomsTier = "3-5";
+        else if (roomsCount >= 6 && roomsCount <= 8) roomsTier = "6-8";
+
+        const refundPercentage = ROOM_BOOKING_CONFIG.cancellationRefund[tier][roomsTier];
+        return refundPercentage; // This returns the deduction percentage
     };
 
     const formatDateForDisplay = (dateString) => {
         if (!dateString) return '';
         const date = new Date(dateString);
-        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        return `${date.getDate()} ${months[date.getMonth()]}, ${date.getFullYear()}`;
+        return date.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+        });
+    };
+
+    const handleRoomInput = (value) => {
+        if (value === '') {
+            setNumberOfRooms('');
+            return;
+        }
+
+        const rooms = parseInt(value);
+        if (isNaN(rooms)) return;
+
+        if (rooms > MAX_ROOMS) {
+            Alert.alert(
+                "Limit Exceeded",
+                `Maximum limit of ${MAX_ROOMS} rooms exceeded. Please contact Admin for large group bookings.`
+            );
+            setNumberOfRooms(MAX_ROOMS.toString());
+        } else {
+            setNumberOfRooms(value);
+        }
     };
 
     const handleConfirmBooking = async () => {
@@ -87,6 +148,11 @@ export default function RoomBookingScreen({ navigation, route }) {
 
         if (roomsCount < 1) {
             Alert.alert('Error', 'At least one room is required');
+            return;
+        }
+
+        if (roomsCount > MAX_ROOMS) {
+            Alert.alert('Error', `Maximum ${MAX_ROOMS} rooms can be booked at once.`);
             return;
         }
 
@@ -149,7 +215,8 @@ export default function RoomBookingScreen({ navigation, route }) {
                 numberOfChildren: children,
                 numberOfRooms: roomsCount,
                 specialRequest: specialRequest,
-                totalPrice: calculateTotalPrice(),
+                totalPrice: calculateTotalPrice().total,
+                advanceAmount: calculateTotalPrice().advance,
                 isGuestBooking: isGuestBooking,
                 guestName: guestName,
                 guestContact: guestContact,
@@ -411,9 +478,17 @@ export default function RoomBookingScreen({ navigation, route }) {
                                     display="default"
                                     onChange={(event, date) => {
                                         setShowCheckInPicker(false);
-                                        if (date) setCheckIn(date);
+                                        if (date) {
+                                            setCheckIn(date);
+                                            // Ensure Checkout is reactive: Check-in + 1 day
+                                            const nextDay = new Date(date.getTime() + 86400000);
+                                            if (checkOut <= date) {
+                                                setCheckOut(nextDay);
+                                            }
+                                        }
                                     }}
                                     minimumDate={new Date()}
+                                    maximumDate={new Date(Date.now() + CALENDAR_LIMIT_DAYS * 24 * 60 * 60 * 1000)}
                                 />
                             )}
                         </View>
@@ -439,6 +514,7 @@ export default function RoomBookingScreen({ navigation, route }) {
                                         if (date) setCheckOut(date);
                                     }}
                                     minimumDate={new Date(checkIn.getTime() + 86400000)}
+                                    maximumDate={new Date(checkIn.getTime() + CALENDAR_LIMIT_DAYS * 24 * 60 * 60 * 1000)}
                                 />
                             )}
                         </View>
@@ -477,7 +553,7 @@ export default function RoomBookingScreen({ navigation, route }) {
                                 <TextInput
                                     style={styles.modalInput}
                                     value={numberOfRooms}
-                                    onChangeText={setNumberOfRooms}
+                                    onChangeText={handleRoomInput}
                                     keyboardType="numeric"
                                     placeholder="1"
                                     placeholderTextColor="#999"
@@ -513,7 +589,10 @@ export default function RoomBookingScreen({ navigation, route }) {
                         </View>
                         <View style={styles.priceSummaryValueContainer}>
                             <Text style={styles.priceSummaryValue}>
-                                Rs. {calculateTotalPrice().toLocaleString()}/-
+                                Rs. {calculateTotalPrice().total.toLocaleString()}/-
+                            </Text>
+                            <Text style={styles.advanceNote}>
+                                Advance Required: Rs. {calculateTotalPrice().advance.toLocaleString()}/-
                             </Text>
                             <Text style={styles.priceSummaryBreakdown}>
                                 {parseInt(numberOfRooms) || 1} room(s) × {Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24))} night(s)
@@ -937,6 +1016,12 @@ const styles = StyleSheet.create({
         color: '#666',
         marginTop: 4,
         textAlign: 'right',
+    },
+    advanceNote: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: '#b48a64',
+        marginTop: 2,
     },
 
     // Info Box - Same as BHBooking

@@ -1500,6 +1500,49 @@ Thank you for your booking!
     }
   };
 
+  const calculateAdvancePercentage = () => {
+    const roomsCount = parseInt(invoiceData?.numberOfRooms) || 1;
+    if (roomsCount >= 6) return 75;
+    if (roomsCount >= 3) return 50;
+    return 25;
+  };
+
+  const advancePercentage = calculateAdvancePercentage();
+  const advanceAmount = parseFloat(invoiceData?.totalPrice || 0) * (advancePercentage / 100);
+
+  const handleCancelVoucher = async () => {
+    if (!invoiceData?.bookingId) return;
+
+    Alert.alert(
+      'Cancel Voucher',
+      'Are you sure you want to cancel this voucher and the associated booking?',
+      [
+        { text: 'No', style: 'cancel' },
+        {
+          text: 'Yes, Cancel',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setRefreshing(true);
+              await bookingService.deleteBooking(invoiceData.bookingId);
+              await clearVoucher();
+              Alert.alert('Success', 'Voucher and booking cancelled successfully');
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'start' }],
+              });
+            } catch (error) {
+              console.error('Error cancelling voucher:', error);
+              Alert.alert('Error', 'Failed to cancel voucher. Please try again.');
+            } finally {
+              setRefreshing(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     try {
@@ -1625,9 +1668,18 @@ Thank you for your booking!
                 Complete payment to confirm your reservation
               </Text>
               {timeLeft && timeLeft !== 'EXPIRED' && invoiceData?.status !== 'PAID' && (
-                <View style={styles.timerContainer}>
-                  <Icon name="schedule" size={16} color="#dc3545" />
-                  <Text style={styles.timerText}> Expires in: {timeLeft}</Text>
+                <View style={styles.timerWrapper}>
+                  <View style={styles.timerContainer}>
+                    <Icon name="schedule" size={16} color="#dc3545" />
+                    <Text style={styles.timerText}> Expires in: {timeLeft}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.cancelVoucherGhostButton}
+                    onPress={handleCancelVoucher}
+                  >
+                    <Icon name="close" size={14} color="#666" />
+                    <Text style={styles.cancelVoucherGhostText}>Cancel Voucher</Text>
+                  </TouchableOpacity>
                 </View>
               )}
               {timeLeft === 'EXPIRED' && (
@@ -1767,6 +1819,16 @@ Thank you for your booking!
                   {invoiceData.numberOfRooms > 1 && `, ${invoiceData.numberOfRooms} Rooms`}
                 </Text>
               </View>
+
+              {invoiceData?.status !== 'PAID' && (
+                <TouchableOpacity
+                  style={styles.cardFooterAction}
+                  onPress={handleCancelVoucher}
+                >
+                  <Text style={styles.cardFooterActionText}>Cancel This Booking</Text>
+                  <Icon name="chevron-right" size={18} color="#dc3545" />
+                </TouchableOpacity>
+              )}
             </View>
 
             {/* Payment Information */}
@@ -1774,9 +1836,16 @@ Thank you for your booking!
               <Text style={styles.sectionTitle}>Payment Details</Text>
 
               <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Total Amount:</Text>
-                <Text style={[styles.detailValue, styles.amount]}>
+                <Text style={styles.detailLabel}>Total Price:</Text>
+                <Text style={styles.detailValue}>
                   Rs. {invoiceData.totalPrice ? parseFloat(invoiceData.totalPrice).toFixed(2) : '0.00'}
+                </Text>
+              </View>
+
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Advance Deposit to Pay ({advancePercentage}%):</Text>
+                <Text style={[styles.detailValue, styles.amountHighlight]}>
+                  Rs. {advanceAmount.toFixed(2)}
                 </Text>
               </View>
 
@@ -2087,16 +2156,56 @@ const styles = StyleSheet.create({
     color: '#b48a64',
     fontWeight: 'bold',
   },
+  timerWrapper: {
+    alignItems: 'center',
+    marginTop: 10,
+  },
   timerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 10,
     backgroundColor: '#fff1f0',
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 15,
     borderWidth: 1,
     borderColor: '#ffa39e',
+  },
+  cancelVoucherGhostButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#d9d9d9',
+    backgroundColor: 'transparent',
+  },
+  cancelVoucherGhostText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#666',
+    marginLeft: 4,
+  },
+  amountHighlight: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#b48a64',
+  },
+  cardFooterAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 15,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+  },
+  cardFooterActionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#dc3545',
+    marginRight: 4,
   },
   timerText: {
     fontSize: 14,
