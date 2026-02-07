@@ -1150,10 +1150,9 @@ Thank you for choosing our photoshoot services!
           </TouchableOpacity>
 
           <Text style={styles.notchTitle}>Shoot Invoice</Text>
+          <View style={styles.iconWrapper} />
 
-          <TouchableOpacity onPress={handleRefresh} disabled={refreshing} style={styles.iconWrapper}>
-            <MaterialIcons name="refresh" size={24} color="#000" />
-          </TouchableOpacity>
+
         </View>
       </ImageBackground>
 
@@ -1197,7 +1196,7 @@ Thank you for choosing our photoshoot services!
           </View>
 
           {/* Payment Required Alert */}
-          {invoiceData?.status !== 'PAID' && (
+          {/* {invoiceData?.status !== 'PAID' && (
             <View style={styles.paymentAlert}>
               <MaterialIcons name="payment" size={20} color="#856404" />
               <View style={styles.paymentAlertContent}>
@@ -1214,7 +1213,7 @@ Thank you for choosing our photoshoot services!
                 </TouchableOpacity>
               </View>
             </View>
-          )}
+          )} */}
 
           {/* Invoice Details */}
           <View style={styles.invoiceSection}>

@@ -18,7 +18,7 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import IconAD from 'react-native-vector-icons/AntDesign';
 import { feedbackAPI } from '../config/apis';
 
-const THEME_COLOR = 'rgba(216, 184, 54, 0.9)'; // Gold
+const THEME_COLOR = '#b48a64'; // Gold
 const SECONDARY_COLOR = '#1A1A1A'; // Deep Black
 const BG_COLOR = '#F8F9FA';
 
@@ -272,7 +272,7 @@ const FeedbackScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: BG_COLOR,
+        backgroundColor: '#FEF9F3',
     },
     headerBg: {
         paddingTop: Platform.OS === 'ios' ? 10 : 40,
@@ -292,7 +292,6 @@ const styles = StyleSheet.create({
     },
     backButton: {
         padding: 8,
-        backgroundColor: 'rgba(255,255,255,0.7)',
         borderRadius: 12,
     },
     titleContainer: {

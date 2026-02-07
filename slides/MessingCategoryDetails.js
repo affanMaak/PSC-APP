@@ -519,7 +519,7 @@ const MessingCategoryDetails = ({ route, navigation }) => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F5E6D3',
+        backgroundColor: '#F9EFE6',
     },
     loadingContainer: {
         flex: 1,
@@ -613,7 +613,7 @@ const styles = StyleSheet.create({
         letterSpacing: 0.5,
     },
     menuButtonTextActive: {
-        color: '#FFFFFF',
+        color: '#F9EFE6',
     },
     categoryTitle: {
         fontSize: 24,
@@ -634,7 +634,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        backgroundColor: '#FFF9F0',
+        backgroundColor: '#FFFFFF',
         paddingVertical: 14,
         paddingHorizontal: 16,
         marginBottom: 12,
@@ -647,7 +647,7 @@ const styles = StyleSheet.create({
     menuItemName: {
         fontSize: 16,
         color: '#000',
-        fontWeight: '400',
+        fontWeight: '500',
     },
     menuItemSize: {
         fontSize: 14,

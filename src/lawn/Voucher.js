@@ -843,6 +843,10 @@ const Voucher = ({ route, navigation }) => {
         eventTime: bookingDetails?.eventTime,
         numberOfGuests: bookingDetails?.numberOfGuests,
         isGuest: isGuest,
+        selectedDates: bookingDetails?.selectedDates || [],
+        dateConfigurations: bookingDetails?.dateConfigurations || {},
+        guestName: guestDetails?.guestName || bookingDetails?.guestName,
+        guestContact: guestDetails?.guestContact || bookingDetails?.guestContact,
       };
       setInvoiceData(mappedDetails);
       setLoading(false);
@@ -933,6 +937,13 @@ const Voucher = ({ route, navigation }) => {
       setShareLoading(true);
       if (!invoiceData) return;
 
+      const bookingDetailsText = (invoiceData.selectedDates && invoiceData.selectedDates.length > 0)
+        ? invoiceData.selectedDates.map(date =>
+          `• ${formatDate(date)}: ${formatTimeSlot(invoiceData.dateConfigurations[date]?.timeSlot || invoiceData.eventTime).split(' ')[0]} (${invoiceData.dateConfigurations[date]?.eventType || 'Event'})`
+        ).join('\n')
+        : `• Date: ${formatDate(invoiceData.bookingDate)}
+• Time Slot: ${formatTimeSlot(invoiceData.eventTime)}`;
+
       const message = `
 🏞️ LAWN BOOKING INVOICE
 
@@ -943,13 +954,12 @@ Status: ${invoiceData.status}
 
 📋 Booking Details:
 • Lawn: ${invoiceData.lawnName}
-• Date: ${formatDate(invoiceData.bookingDate)}
-• Time Slot: ${formatTimeSlot(invoiceData.eventTime)}
+${bookingDetailsText}
 • Guests: ${invoiceData.numberOfGuests}
 
-👤 Member Information:
-• Name: ${invoiceData.memberName}
-• Membership No: ${invoiceData.membershipNo}
+👤 ${invoiceData.isGuest ? 'Guest' : 'Member'} Information:
+• Name: ${invoiceData.isGuest ? invoiceData.guestName : invoiceData.memberName}
+• ${invoiceData.isGuest ? 'Contact No' : 'Membership No'}: ${invoiceData.isGuest ? invoiceData.guestContact : invoiceData.membershipNo}
 
 ${invoiceData.dueDate ? `📅 Payment Due: ${formatDateTime(invoiceData.dueDate)}\n` : ''}
 
@@ -1063,9 +1073,7 @@ Thank you for choosing our lawn services!
 
           <Text style={styles.notchTitle}>Lawn Invoice</Text>
 
-          <TouchableOpacity onPress={handleRefresh} disabled={refreshing} style={styles.iconWrapper}>
-            <MaterialIcons name="refresh" size={24} color="#000" />
-          </TouchableOpacity>
+          <View style={styles.iconWrapper} />
         </View>
       </ImageBackground>
 
@@ -1109,7 +1117,7 @@ Thank you for choosing our lawn services!
           </View>
 
           {/* Payment Required Alert */}
-          {invoiceData?.status !== 'PAID' && (
+          {/* {invoiceData?.status !== 'PAID' && (
             <View style={styles.paymentAlert}>
               <MaterialIcons name="payment" size={20} color="#856404" />
               <View style={styles.paymentAlertContent}>
@@ -1126,7 +1134,7 @@ Thank you for choosing our lawn services!
                 </TouchableOpacity>
               </View>
             </View>
-          )}
+          )} */}
 
           {/* Invoice Details */}
           <View style={styles.invoiceSection}>
@@ -1174,13 +1182,17 @@ Thank you for choosing our lawn services!
             )}
 
             <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Member Name:</Text>
-              <Text style={styles.detailValue}>{invoiceData.memberName}</Text>
+              <Text style={styles.detailLabel}>{invoiceData.isGuest ? 'Guest Name:' : 'Member Name:'}</Text>
+              <Text style={styles.detailValue}>
+                {invoiceData.isGuest ? invoiceData.guestName : invoiceData.memberName}
+              </Text>
             </View>
 
             <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Membership No:</Text>
-              <Text style={styles.detailValue}>{invoiceData.membershipNo}</Text>
+              <Text style={styles.detailLabel}>{invoiceData.isGuest ? 'Contact No:' : 'Membership No:'}</Text>
+              <Text style={styles.detailValue}>
+                {invoiceData.isGuest ? invoiceData.guestContact : invoiceData.membershipNo}
+              </Text>
             </View>
           </View>
 
@@ -1193,15 +1205,45 @@ Thank you for choosing our lawn services!
               <Text style={styles.detailValue}>{invoiceData.lawnName}</Text>
             </View>
 
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Booking Date:</Text>
-              <Text style={styles.detailValue}>{formatDate(invoiceData.bookingDate)}</Text>
-            </View>
+            {invoiceData.selectedDates && invoiceData.selectedDates.length > 0 ? (
+              <View style={styles.multiDateContainer}>
+                <Text style={styles.multiDateHeader}>Dates & Configurations:</Text>
+                {invoiceData.selectedDates.map((date, index) => (
+                  <View key={index} style={styles.dateConfigItem}>
+                    <View style={styles.itemRow}>
+                      <View style={styles.dateCol}>
+                        <MaterialIcons name="event" size={16} color="#b48a64" />
+                        <Text style={styles.dateText}>{formatDate(date)}</Text>
+                      </View>
+                      <View style={styles.configCol}>
+                        <View style={styles.configChip}>
+                          <Text style={styles.configText}>
+                            {formatTimeSlot(invoiceData.dateConfigurations[date]?.timeSlot || invoiceData.eventTime).split(' ')[0]}
+                          </Text>
+                        </View>
+                        <View style={styles.configChip}>
+                          <Text style={styles.configText}>
+                            {invoiceData.dateConfigurations[date]?.eventType || 'Event'}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Booking Date:</Text>
+                  <Text style={styles.detailValue}>{formatDate(invoiceData.bookingDate)}</Text>
+                </View>
 
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Time Slot:</Text>
-              <Text style={styles.detailValue}>{formatTimeSlot(invoiceData.eventTime)}</Text>
-            </View>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Time Slot:</Text>
+                  <Text style={styles.detailValue}>{formatTimeSlot(invoiceData.eventTime)}</Text>
+                </View>
+              </>
+            )}
 
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Guests:</Text>
@@ -1243,7 +1285,7 @@ Thank you for choosing our lawn services!
 
           {/* Action Buttons */}
           <View style={styles.actionButtons}>
-            <TouchableOpacity
+            {/* <TouchableOpacity
               style={styles.secondaryButton}
               onPress={handleRefresh}
               disabled={refreshing}
@@ -1252,9 +1294,9 @@ Thank you for choosing our lawn services!
               <Text style={styles.secondaryButtonText}>
                 {refreshing ? 'Refreshing...' : 'Refresh'}
               </Text>
-            </TouchableOpacity>
+            </TouchableOpacity> */}
 
-            <TouchableOpacity
+            {/* <TouchableOpacity
               style={styles.shareButton}
               onPress={handleShareInvoice}
               disabled={shareLoading}
@@ -1263,11 +1305,11 @@ Thank you for choosing our lawn services!
               <Text style={styles.shareButtonText}>
                 {shareLoading ? 'Sharing...' : 'Share Invoice'}
               </Text>
-            </TouchableOpacity>
+            </TouchableOpacity> */}
           </View>
 
           {/* Complete Payment Button */}
-          {invoiceData?.status !== 'PAID' && (
+          {/* {invoiceData?.status !== 'PAID' && (
             <TouchableOpacity
               style={[styles.paymentActionButton, timeLeft === 'EXPIRED' && { backgroundColor: '#ccc' }]}
               onPress={handleMakePayment}
@@ -1276,15 +1318,15 @@ Thank you for choosing our lawn services!
               <MaterialIcons name="payment" size={20} color="#fff" />
               <Text style={styles.paymentActionButtonText}>Complete Payment Now</Text>
             </TouchableOpacity>
-          )}
+          )} */}
 
-          <TouchableOpacity
+          {/* <TouchableOpacity
             style={styles.primaryButton}
             onPress={() => navigation.navigate('Home')}
           >
             <MaterialIcons name="home" size={20} color="#fff" />
             <Text style={styles.primaryButtonText}>Back to Home</Text>
-          </TouchableOpacity>
+          </TouchableOpacity> */}
         </View>
       </ScrollView>
     </View>
@@ -1295,12 +1337,12 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f9f3eb' },
   notch: {
     paddingTop: 50,
-    paddingBottom: 25,
+    paddingBottom: 20,
     paddingHorizontal: 20,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
+    borderBottomStartRadius: 30,
+    borderBottomEndRadius: 30,
     overflow: "hidden",
-    backgroundColor: "#D2B48C",
+    minHeight: 120,
   },
   notchImage: {
     resizeMode: "cover",
@@ -1584,6 +1626,60 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '600',
     fontSize: 14,
+  },
+  multiDateContainer: {
+    marginTop: 5,
+    marginBottom: 15,
+  },
+  multiDateHeader: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 10,
+  },
+  dateConfigItem: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#eee',
+  },
+  itemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dateCol: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1.2,
+  },
+  configCol: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    flex: 2,
+    gap: 4,
+  },
+  dateText: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#2D3748',
+    marginLeft: 6,
+  },
+  configChip: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  configText: {
+    fontSize: 11,
+    color: '#4A5568',
+    textTransform: 'capitalize',
   },
 });
 

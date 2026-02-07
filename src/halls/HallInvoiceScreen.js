@@ -848,6 +848,7 @@ const HallInvoiceScreen = ({ route, navigation }) => {
         eventDate: bookingData?.bookingDate,
         eventTime: bookingData?.eventTime,
         eventType: bookingData?.eventType,
+        bookingDetails: bookingData?.bookingDetails || [],
         numberOfGuests: bookingData?.numberOfGuests,
         isGuest: isGuest,
       };
@@ -940,6 +941,14 @@ const HallInvoiceScreen = ({ route, navigation }) => {
       setShareLoading(true);
       if (!invoiceData) return;
 
+      const bookingDetailsText = (invoiceData.bookingDetails && invoiceData.bookingDetails.length > 0)
+        ? invoiceData.bookingDetails.map(item =>
+          `• ${formatDate(item.date)}: ${formatTimeSlot(item.timeSlot).split(' ')[0]} (${item.eventType})`
+        ).join('\n')
+        : `• Date: ${formatDate(invoiceData.eventDate)}
+• Time Slot: ${formatTimeSlot(invoiceData.eventTime)}
+• Event Type: ${invoiceData.eventType}`;
+
       const message = `
 🏢 BANQUET HALL INVOICE
 
@@ -949,9 +958,7 @@ Status: ${invoiceData.status}
 
 📋 Booking Details:
 • Hall: ${invoiceData.hallName}
-• Date: ${formatDate(invoiceData.eventDate)}
-• Time Slot: ${formatTimeSlot(invoiceData.eventTime)}
-• Event Type: ${invoiceData.eventType}
+${bookingDetailsText}
 • Guests: ${invoiceData.numberOfGuests}
 
 👤 Member Information:
@@ -1195,20 +1202,48 @@ Thank you for choosing our banquet hall services!
               <Text style={styles.detailValue}>{invoiceData.hallName}</Text>
             </View>
 
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Event Date:</Text>
-              <Text style={styles.detailValue}>{formatDate(invoiceData.eventDate)}</Text>
-            </View>
+            {invoiceData.bookingDetails && invoiceData.bookingDetails.length > 0 ? (
+              <View style={styles.multiDateContainer}>
+                <Text style={styles.multiDateHeader}>Dates & Configurations:</Text>
+                {invoiceData.bookingDetails.map((item, index) => (
+                  <View key={index} style={styles.dateConfigItem}>
+                    <View style={styles.itemRow}>
+                      <View style={styles.dateCol}>
+                        <MaterialIcons name="event" size={16} color="#b48a64" />
+                        <Text style={styles.dateText}>{formatDate(item.date)}</Text>
+                      </View>
+                      <View style={styles.configCol}>
+                        <View style={styles.configChip}>
+                          <Text style={styles.configText}>
+                            {formatTimeSlot(item.timeSlot).split(' ')[0]}
+                          </Text>
+                        </View>
+                        <View style={styles.configChip}>
+                          <Text style={styles.configText}>{item.eventType}</Text>
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Event Date:</Text>
+                  <Text style={styles.detailValue}>{formatDate(invoiceData.eventDate)}</Text>
+                </View>
 
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Time Slot:</Text>
-              <Text style={styles.detailValue}>{formatTimeSlot(invoiceData.eventTime)}</Text>
-            </View>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Time Slot:</Text>
+                  <Text style={styles.detailValue}>{formatTimeSlot(invoiceData.eventTime)}</Text>
+                </View>
 
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Event Type:</Text>
-              <Text style={styles.detailValue}>{invoiceData.eventType}</Text>
-            </View>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Event Type:</Text>
+                  <Text style={styles.detailValue}>{invoiceData.eventType}</Text>
+                </View>
+              </>
+            )}
 
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Guests:</Text>
@@ -1594,6 +1629,60 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '600',
     fontSize: 14,
+  },
+  multiDateContainer: {
+    marginTop: 5,
+    marginBottom: 15,
+  },
+  multiDateHeader: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 10,
+  },
+  dateConfigItem: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#eee',
+  },
+  itemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dateCol: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1.2,
+  },
+  configCol: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    flex: 2,
+    gap: 4,
+  },
+  dateText: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#2D3748',
+    marginLeft: 6,
+  },
+  configChip: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  configText: {
+    fontSize: 11,
+    color: '#4A5568',
+    textTransform: 'capitalize',
   },
 });
 

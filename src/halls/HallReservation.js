@@ -958,6 +958,14 @@ const HallReservation = ({ route, navigation }) => {
             </ScrollView>
 
             <View style={styles.bottomButtonContainer}>
+                <View style={styles.contactContainer}>
+                    <Text style={styles.contactText}>
+                        <Text style={{ fontWeight: 'bold' }}>Note: </Text>
+                        For more details contact booking office{' '}
+                        <Text style={{ fontWeight: 'bold' }}>03419777711</Text>.
+                    </Text>
+                </View>
+
                 <TouchableOpacity
                     style={[styles.submitButton, loading && styles.disabledButton]}
                     onPress={handleReserve}
@@ -1117,6 +1125,17 @@ const styles = StyleSheet.create({
         borderTopWidth: 1,
         borderTopColor: '#EEE',
         paddingTop: 10,
+    },
+    contactContainer: {
+        marginBottom: 10,
+        alignItems: 'center',
+        paddingHorizontal: 10,
+    },
+    contactText: {
+        fontSize: 13,
+        color: '#666',
+        textAlign: 'center',
+        lineHeight: 18,
     },
 });
 
