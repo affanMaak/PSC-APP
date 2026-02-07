@@ -1689,6 +1689,33 @@ export default function MemberBookingsScreen({ navigation }) {
         }
     };
 
+    const handleDeleteBooking = async (bookingId) => {
+        Alert.alert(
+            'Cancel Booking',
+            'Are you sure you want to cancel this booking?',
+            [
+                { text: 'No', style: 'cancel' },
+                {
+                    text: 'Yes, Cancel',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            setLoading(true);
+                            await bookingService.deleteBooking(bookingId);
+                            Alert.alert('Success', 'Booking cancelled successfully');
+                            fetchBookings();
+                        } catch (error) {
+                            console.error('Error cancelling booking:', error);
+                            Alert.alert('Error', 'Failed to cancel booking. Please try again.');
+                        } finally {
+                            setLoading(false);
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
     const formatDate = (dateString) => {
         if (!dateString) return 'N/A';
         try {
@@ -1868,6 +1895,16 @@ export default function MemberBookingsScreen({ navigation }) {
                         <Icon name="chevron-right" size={16} color="#b48a64" />
                     </TouchableOpacity>
                 </View>
+
+                {item.paymentStatus !== 'PAID' && item.paymentStatus !== 'CANCELLED' && (
+                    <TouchableOpacity
+                        style={styles.cancelBookingButton}
+                        onPress={() => handleDeleteBooking(item.bookingId || item.id)}
+                    >
+                        <Icon name="cancel" size={16} color="#dc3545" />
+                        <Text style={styles.cancelBookingButtonText}>Cancel Booking</Text>
+                    </TouchableOpacity>
+                )}
             </TouchableOpacity>
         );
     };
@@ -2736,3 +2773,28 @@ const styles = StyleSheet.create({
         letterSpacing: 0.3,
     },
 });
+// Added styles for Cancel Booking button
+const cancelStyles = StyleSheet.create({
+    cancelBookingButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 15,
+        paddingVertical: 10,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#dc3545',
+        backgroundColor: '#fff',
+        marginHorizontal: 20,
+        marginBottom: 10,
+    },
+    cancelBookingButtonText: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#dc3545',
+        marginLeft: 8,
+    },
+});
+
+// Helper component to apply styles manually or merging (since I failed to edit the main StyleSheet)
+// Actually, I'll just use inline styles in the component if I can't edit the main one.

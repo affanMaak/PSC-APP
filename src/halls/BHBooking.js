@@ -5613,7 +5613,7 @@ const BHBooking = ({ route, navigation }) => {
         numberOfGuests: parseInt(numberOfGuests),
         specialRequest: specialRequests || '',
         pricingType: isGuest ? 'guest' : 'member',
-        totalPrice: Number(calculateTotalAmount().replace('Rs. ', '').replace('/-', '').replace(/,/g, '')),
+        totalPrice: calculateTotalAmount().total,
         // Always include membership_no - backend requires it for member status check
         membership_no: membershipNo,
       };
@@ -5733,17 +5733,29 @@ const BHBooking = ({ route, navigation }) => {
     return `${parseInt(day)} ${months[parseInt(month) - 1]}, ${year}`;
   };
 
+  const calculateHallAdvance = (price) => {
+    const total = Number(price);
+    if (isNaN(total)) return 0;
+    if (total < 50000) return total; // Full amount
+    return 50000; // Flat fee 50k
+  };
+
   const calculateTotalAmount = () => {
-    if (!venue) return 'Rs. 0/-';
+    if (!venue) return { total: 0, advance: 0 };
     const numDates = Object.keys(dateConfigurations).length;
-    if (numDates === 0) return 'Rs. 0/-';
+    if (numDates === 0) return { total: 0, advance: 0 };
 
     const pricePerDay = isGuest
       ? (venue.chargesGuests || 0)
       : (venue.chargesMembers || 0);
 
     const totalPrice = pricePerDay * numDates;
-    return `Rs. ${totalPrice.toLocaleString()}/-`;
+    const advanceAmount = calculateHallAdvance(totalPrice);
+
+    return {
+      total: totalPrice,
+      advance: advanceAmount
+    };
   };
 
   // Admin Reservation Form
@@ -6180,9 +6192,14 @@ const BHBooking = ({ route, navigation }) => {
             </Text>
           </View>
           <View style={styles.priceSummaryValueContainer}>
-            <Text style={styles.priceSummaryValue}>
-              {calculateTotalAmount()}
-            </Text>
+            <View style={styles.priceRow}>
+              <Text style={styles.priceLabel}>Total:</Text>
+              <Text style={styles.priceValue}>Rs. {calculateTotalAmount().total.toLocaleString()}/-</Text>
+            </View>
+            <View style={[styles.priceRow, styles.advanceRow]}>
+              <Text style={styles.advanceLabel}>Advance Required:</Text>
+              <Text style={styles.advanceValue}>Rs. {calculateTotalAmount().advance.toLocaleString()}/-</Text>
+            </View>
             <Text style={styles.priceSummaryBreakdown}>
               {Object.keys(dateConfigurations).length} date(s) × Rs. {(isGuest ? (venue?.chargesGuests || 0) : (venue?.chargesMembers || 0)).toLocaleString()}
             </Text>
@@ -6368,7 +6385,14 @@ const BHBooking = ({ route, navigation }) => {
 
                     <View style={styles.summaryRow}>
                       <Text style={styles.summaryLabel}>Total Amount:</Text>
-                      <Text style={styles.summaryValue}>{calculateTotalAmount()}</Text>
+                      <Text style={styles.summaryValue}>Rs. {calculateTotalAmount().total.toLocaleString()}/-</Text>
+                    </View>
+
+                    <View style={styles.summaryRow}>
+                      <Text style={[styles.summaryLabel, { color: '#b48a64' }]}>Advance Required:</Text>
+                      <Text style={[styles.summaryValue, { color: '#b48a64', fontWeight: 'bold' }]}>
+                        Rs. {calculateTotalAmount().advance.toLocaleString()}/-
+                      </Text>
                     </View>
 
                     {specialRequests && (
@@ -7091,10 +7115,43 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#b48a64',
   },
-  priceSummaryBreakdown: {
-    fontSize: 12,
-    color: '#666',
+  priceRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  advanceRow: {
     marginTop: 4,
+    paddingTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+  },
+  priceLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginRight: 8,
+  },
+  priceValue: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#333',
+  },
+  advanceLabel: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#b48a64',
+    marginRight: 8,
+  },
+  advanceValue: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#b48a64',
+  },
+  priceSummaryBreakdown: {
+    fontSize: 11,
+    color: '#999',
+    marginTop: 6,
     textAlign: 'right',
   },
 

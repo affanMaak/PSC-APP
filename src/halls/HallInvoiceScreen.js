@@ -811,6 +811,7 @@ import {
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { useVoucher } from '../auth/contexts/VoucherContext';
 import socketService from '../../services/socket.service';
+import { bookingService } from '../../services/bookingService';
 
 const HallInvoiceScreen = ({ route, navigation }) => {
   const { clearVoucher } = useVoucher();
@@ -851,6 +852,7 @@ const HallInvoiceScreen = ({ route, navigation }) => {
         bookingDetails: bookingData?.bookingDetails || [],
         numberOfGuests: bookingData?.numberOfGuests,
         isGuest: isGuest,
+        advanceAmount: calculateHallAdvance(rawInvoiceData.voucher?.amount || 0),
       };
       setInvoiceData(mappedDetails);
       setLoading(false);
@@ -918,7 +920,7 @@ const HallInvoiceScreen = ({ route, navigation }) => {
   const handleMakePayment = () => {
     Alert.alert(
       'Complete Payment',
-      'Redirect to payment gateway to complete your booking?',
+      `You are about to pay the advance deposit of Rs. ${invoiceData?.advanceAmount?.toLocaleString()}. Proceed to payment gateway?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -930,6 +932,50 @@ const HallInvoiceScreen = ({ route, navigation }) => {
               'Payment integration would happen here. For now, please check your bookings list after payment completion.',
               [{ text: 'OK' }]
             );
+          }
+        }
+      ]
+    );
+  };
+
+  const calculateHallAdvance = (price) => {
+    const total = Number(price);
+    if (isNaN(total)) return 0;
+    if (total < 50000) return total; // Full amount
+    return 50000; // Flat fee 50k
+  };
+
+  const handleCancelVoucher = async () => {
+    const bookingId = rawInvoiceData.voucher?.booking_id || bookingData?.bookingId;
+    if (!bookingId) {
+      Alert.alert('Error', 'Booking ID not found for cancellation');
+      return;
+    }
+
+    Alert.alert(
+      'Cancel Voucher',
+      'Are you sure you want to cancel this voucher and the associated booking?',
+      [
+        { text: 'No', style: 'cancel' },
+        {
+          text: 'Yes, Cancel',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setRefreshing(true);
+              await bookingService.deleteBooking(bookingId);
+              await clearVoucher();
+              Alert.alert('Success', 'Voucher and booking cancelled successfully');
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'start' }],
+              });
+            } catch (error) {
+              console.error('Error cancelling voucher:', error);
+              Alert.alert('Error', 'Failed to cancel voucher. Please try again.');
+            } finally {
+              setRefreshing(false);
+            }
           }
         }
       ]
@@ -1112,30 +1158,41 @@ Thank you for choosing our banquet hall services!
                 <Text style={styles.timerText}> Expires in: {timeLeft}</Text>
               </View>
             )}
+            {invoiceData?.status !== 'PAID' && (
+              <TouchableOpacity
+                style={styles.cancelVoucherGhostButton}
+                onPress={handleCancelVoucher}
+                disabled={refreshing}
+              >
+                <MaterialIcons name="close" size={14} color="#dc3545" />
+                <Text style={styles.cancelVoucherGhostText}> Cancel Voucher</Text>
+              </TouchableOpacity>
+            )}
             {timeLeft === 'EXPIRED' && (
               <Text style={styles.expiredText}>EXPIRED</Text>
             )}
           </View>
 
           {/* Payment Required Alert */}
-          {/* {invoiceData?.status !== 'PAID' && (
+          {invoiceData?.status !== 'PAID' && (
             <View style={styles.paymentAlert}>
               <MaterialIcons name="payment" size={20} color="#856404" />
               <View style={styles.paymentAlertContent}>
-                <Text style={styles.paymentAlertTitle}>Payment Required</Text>
+                <Text style={styles.paymentAlertTitle}>Advance Deposit Required</Text>
                 <Text style={styles.paymentAlertText}>
-                  Complete payment within 1 hour to secure your booking.
+                  Pay Rs. {invoiceData.advanceAmount.toLocaleString()} now to secure your booking.
+                  {invoiceData.advanceAmount < invoiceData.totalPrice && " Rest of the amount can be paid later."}
                 </Text>
                 <TouchableOpacity
                   style={styles.paymentButton}
                   onPress={handleMakePayment}
                   disabled={timeLeft === 'EXPIRED'}
                 >
-                  <Text style={styles.paymentButtonText}>Make Payment Now</Text>
+                  <Text style={styles.paymentButtonText}>Pay Advance Now</Text>
                 </TouchableOpacity>
               </View>
             </View>
-          )} */}
+          )}
 
           {/* Invoice Details */}
           <View style={styles.invoiceSection}>
@@ -1257,8 +1314,15 @@ Thank you for choosing our banquet hall services!
 
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Total Amount:</Text>
-              <Text style={[styles.detailValue, styles.amount]}>
-                Rs. {invoiceData.amount ? parseFloat(invoiceData.amount).toLocaleString() : '0.00'}/-
+              <Text style={[styles.detailValue, styles.totalAmountText]}>
+                Rs. {invoiceData.totalPrice ? parseFloat(invoiceData.totalPrice).toLocaleString() : '0.00'}/-
+              </Text>
+            </View>
+
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Advance Deposit Required:</Text>
+              <Text style={[styles.detailValue, styles.advanceAmountText]}>
+                Rs. {invoiceData.advanceAmount ? invoiceData.advanceAmount.toLocaleString() : '0.00'}/-
               </Text>
             </View>
 
@@ -1490,6 +1554,16 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#2e7d32',
   },
+  totalAmountText: {
+    fontSize: 15,
+    color: '#333',
+    fontWeight: '600',
+  },
+  advanceAmountText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#b48a64',
+  },
   dueDate: {
     color: '#dc3545',
     fontWeight: 'bold',
@@ -1539,6 +1613,22 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: 'bold',
     color: '#2e7d32',
+  },
+  cancelVoucherGhostButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#ffa39e',
+    backgroundColor: '#fff1f0',
+  },
+  cancelVoucherGhostText: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#dc3545',
   },
   instructions: {
     backgroundColor: '#f0f7ff',
