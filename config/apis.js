@@ -21,6 +21,7 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+
 });
 
 api.interceptors.request.use(
@@ -586,7 +587,41 @@ export const voucherAPI = {
       throw error;
     }
   },
+  getTimerVouchers: async () => {
+    try {
+      const response = await api.get(
+        `/booking/vouchers/unpaid/countdown`,
+        {withCredentials: true}
+      );
+      return response.data;
+    } catch (error) {
+      console.error("❌ Voucher API Error:", error.response?.data || error.message);
+      throw error;
+    }
+  },
 };
+
+export const cancelReqBooking = async (
+  bookingFor,
+  bookID,
+  reason
+) => {
+  try {
+    const response = await api.post(
+      `/booking/cancelReqBooking?bookingFor=${bookingFor}&bookID=${bookID}${reason ? `&reason=${encodeURIComponent(reason)}` : ""}`,
+    );
+    console.log(response)
+    return response;
+  } catch (error) {
+    const message =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      "Something went wrong";
+
+    throw { message, status: error.response?.status || 500 };
+  }
+}
 
 export const getAffiliatedClubs = async () => {
   try {

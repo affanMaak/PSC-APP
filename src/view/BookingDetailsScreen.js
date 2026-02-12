@@ -13,7 +13,8 @@ import {
     Share,
     ActivityIndicator,
     ImageBackground,
-    Platform
+    Platform,
+    TextInput
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { bookingService } from '../../services/bookingService';
@@ -21,12 +22,14 @@ import { useAuth } from '../auth/contexts/AuthContext';
 
 export default function BookingDetailsScreen({ navigation, route }) {
     const booking = route.params?.booking;
+    console.log(booking)
     const { user } = useAuth();
     const [loading, setLoading] = useState(false);
     const [showCancelModal, setShowCancelModal] = useState(false);
     const [showInvoiceModal, setShowInvoiceModal] = useState(false);
     const [invoiceData, setInvoiceData] = useState(null);
     const [voucherInfo, setVoucherInfo] = useState({ voucherNumber: null, consumerNumber: null });
+    const [cancellationReason, setCancellationReason] = useState('');
 
     // Safety check: go back if no booking data is passed
     if (!booking) {
@@ -186,38 +189,39 @@ export default function BookingDetailsScreen({ navigation, route }) {
     };
 
     const handleCancelBooking = async () => {
+        if (!cancellationReason.trim()) {
+            Alert.alert('Error', 'Please provide a reason for cancellation.');
+            return;
+        }
+
         setShowCancelModal(false);
 
-        Alert.alert(
-            'Cancel Booking',
-            'Are you sure you want to cancel this booking? This action cannot be undone.',
-            [
-                { text: 'No', style: 'cancel' },
-                {
-                    text: 'Yes, Cancel',
-                    style: 'destructive',
-                    onPress: async () => {
-                        try {
-                            setLoading(true);
-                            await bookingService.deleteBooking(booking.id || booking.bookingId);
-                            Alert.alert(
-                                'Success',
-                                'Booking cancelled successfully',
-                                [{ text: 'OK', onPress: () => navigation.goBack() }]
-                            );
-                        } catch (error) {
-                            console.error('Cancel error:', error);
-                            Alert.alert(
-                                'Error',
-                                error.response?.data?.message || 'Failed to cancel booking'
-                            );
-                        } finally {
-                            setLoading(false);
-                        }
-                    }
-                }
-            ]
-        );
+        try {
+            setLoading(true);
+            const bookingType = getBookingType() === "Room" ? "rooms" : getBookingType() === "Hall" ? "halls" : getBookingType() === "Lawn" ? "lawns" : getBookingType() === "Photoshoot" ? "photoshoots" : "";
+            const bookingId = booking.bookingId || booking.id;
+
+            await bookingService.cancelReqBooking(
+                bookingType,
+                bookingId,
+                cancellationReason
+            );
+
+            Alert.alert(
+                'Success',
+                'Cancellation request submitted successfully.',
+                [{ text: 'OK', onPress: () => navigation.goBack() }]
+            );
+        } catch (error) {
+            console.error('Cancel error:', error);
+            Alert.alert(
+                'Error',
+                error.message || 'Failed to submit cancellation request.'
+            );
+        } finally {
+            setLoading(false);
+            setCancellationReason('');
+        }
     };
 
     const handleGetInvoice = async () => {
@@ -353,7 +357,9 @@ Check-out: ${formatDate(booking.checkOut)}
                 return 'UNPAID';
             }
             return originalStatus || 'UNPAID';
-        })()
+        })(),
+        isCancelled: booking.isCancelled === true || booking.is_cancelled === true ||
+            booking.status === 'CANCELLED' || booking.paymentStatus === 'CANCELLED'
     };
 
     const renderPaymentSummary = () => (
@@ -581,6 +587,63 @@ Check-out: ${formatDate(booking.checkOut)}
         );
     };
 
+    const renderCancellationHistory = () => {
+        const requests = booking.cancellationRequests || [];
+        if (requests.length === 0 && !processedBooking.isCancelled) return null;
+
+        return (
+            <View style={styles.cancellationCard}>
+                <View style={[styles.cardHeader, { borderBottomColor: '#f8d7da' }]}>
+                    <Icon name="history" size={20} color="#721c24" />
+                    <Text style={[styles.cardTitle, { color: '#721c24', marginBottom: 0, borderBottomWidth: 0, paddingBottom: 0, marginLeft: 10 }]}>
+                        Cancellation Details
+                    </Text>
+                </View>
+
+                {requests.map((req, index) => (
+                    <View key={index} style={[styles.requestItem, index > 0 && styles.requestDivider]}>
+                        <View style={styles.requestHeader}>
+                            <View style={styles.requestDateContainer}>
+                                <Icon name="event" size={14} color="#666" />
+                                <Text style={styles.requestDate}>
+                                    Requested: {formatDate(req.createdAt || req.date)}
+                                </Text>
+                            </View>
+                            <View style={[styles.miniStatusBadge, { backgroundColor: req.status === 'APPROVED' ? '#d4edda' : req.status === 'REJECTED' ? '#f8d7da' : '#fff3cd' }]}>
+                                <Text style={[styles.miniStatusText, { color: req.status === 'APPROVED' ? '#155724' : req.status === 'REJECTED' ? '#721c24' : '#856404' }]}>
+                                    {req.status || 'PENDING'}
+                                </Text>
+                            </View>
+                        </View>
+                        <Text style={styles.requestReasonLabel}>Reason:</Text>
+                        <Text style={styles.requestReasonText}>{req.reason || 'No reason provided'}</Text>
+                        {req.adminRemarks && (
+                            <View style={styles.adminRemarksContainer}>
+                                <Text style={styles.adminRemarksLabel}>Admin Remarks:</Text>
+                                <Text style={styles.adminRemarksText}>{req.adminRemarks}</Text>
+                            </View>
+                        )}
+                    </View>
+                ))}
+
+                {requests.length === 0 && processedBooking.isCancelled && (
+                    <View style={styles.requestItem}>
+                        <Text style={styles.requestReasonText}>This booking has been cancelled.</Text>
+                    </View>
+                )}
+
+                {requests.some(req => req.status === 'APPROVED') && (
+                    <View style={styles.adminRemarksContainer}>
+                        <Icon name="info" size={14} color="#721c24" style={{ marginBottom: 5 }} />
+                        <Text style={[styles.adminRemarksText, { color: '#721c24', fontWeight: 'bold' }]}>
+                            Please contact the PSC administration for your refund amount.
+                        </Text>
+                    </View>
+                )}
+            </View>
+        );
+    };
+
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="dark-content" />
@@ -597,11 +660,12 @@ Check-out: ${formatDate(booking.checkOut)}
                         <Icon name="arrow-back" size={28} color="#000000" />
                     </TouchableOpacity>
                     <Text style={styles.ctext}>Booking Details</Text>
-                    <TouchableOpacity
+                    <Text style={styles.shareButton}></Text>
+                    {/* <TouchableOpacity
                         style={styles.shareButton}
                         onPress={handleShareBooking}>
                         <Icon name="share" size={24} color="#000000" />
-                    </TouchableOpacity>
+                    </TouchableOpacity> */}
                 </View>
             </ImageBackground>
 
@@ -694,53 +758,60 @@ Check-out: ${formatDate(booking.checkOut)}
                 {/* Timeline */}
                 {renderBookingTimeline()}
 
+                {/* Cancellation History */}
+                {renderCancellationHistory()}
+
                 {/* Actions Section */}
                 <View style={styles.actionsCard}>
-                    <Text style={styles.cardTitle}>Actions</Text>
+                    {/* <Text style={styles.cardTitle}>Actions</Text> */}
 
                     <View style={styles.actionsGrid}>
-                        {/* {booking.pendingAmount > 0 && (
-                            <TouchableOpacity
-                                style={[styles.actionButton, styles.payButton]}
-                                onPress={() => navigation.navigate('BillPaymentScreen', { booking })}
-                            >
-                                <Icon name="payment" size={22} color="#fff" />
-                                <Text style={styles.actionButtonText}>Pay Now</Text>
-                            </TouchableOpacity>
-                        )} */}
 
-                        <TouchableOpacity
-                            style={[styles.actionButton, styles.invoiceButton]}
-                            onPress={handleGetInvoice}
-                            disabled={loading}
-                        >
-                            {loading ? (
-                                <Text style={styles.actionButtonText}>Loading...</Text>
-                            ) : (
-                                <>
-                                    <Icon name="receipt" size={22} color="#b48a64" />
-                                    <Text style={styles.actionButtonText}>View Invoice</Text>
-                                </>
-                            )}
-                        </TouchableOpacity>
 
-                        {/* {booking.paymentStatus !== 'CANCELLED' && booking.paymentStatus !== 'REJECTED' && (
-                            <TouchableOpacity
-                                style={[styles.actionButton, styles.cancelButton]}
-                                onPress={() => setShowCancelModal(true)}
-                            >
-                                <Icon name="cancel" size={22} color="#dc3545" />
-                                <Text style={styles.cancelButtonText}>Cancel Booking</Text>
-                            </TouchableOpacity>
-                        )} */}
 
-                        <TouchableOpacity
+                        {!processedBooking.isCancelled && (() => {
+                            const latestReq = booking.cancellationRequests && booking.cancellationRequests.length > 0
+                                ? booking.cancellationRequests[booking.cancellationRequests.length - 1]
+                                : null;
+                            const hasPendingRequest = latestReq && latestReq.status === 'PENDING';
+                            const isPastBooking = booking.checkIn && new Date(booking.checkIn) < new Date().setHours(0, 0, 0, 0);
+
+                            if (hasPendingRequest) {
+                                return (
+                                    <View style={[styles.actionButton, { backgroundColor: '#fff3cd', borderColor: '#ffeeba', flex: 1 }]}>
+                                        <Icon name="hourglass-empty" size={24} color="#856404" />
+                                        <Text style={[styles.actionButtonText, { color: '#856404', marginLeft: 8 }]}>Req Pending</Text>
+                                    </View>
+                                );
+                            }
+
+                            if (isPastBooking) {
+                                return (
+                                    <View style={[styles.actionButton, { backgroundColor: '#e2e3e5', borderColor: '#d6d8db', flex: 1 }]}>
+                                        <Icon name="info" size={24} color="#383d41" />
+                                        <Text style={[styles.actionButtonText, { color: '#383d41', marginLeft: 8 }]}>N/A (Past Date)</Text>
+                                    </View>
+                                );
+                            }
+
+                            return (
+                                <TouchableOpacity
+                                    style={[styles.actionButton, styles.cancelButton, { flex: 1 }]}
+                                    onPress={() => setShowCancelModal(true)}
+                                >
+                                    <Icon name="cancel" size={24} color="#dc3545" />
+                                    <Text style={[styles.cancelButtonText, { marginLeft: 8 }]}>Request Cancellation</Text>
+                                </TouchableOpacity>
+                            );
+                        })()}
+
+                        {/* <TouchableOpacity
                             style={[styles.actionButton, styles.supportButton]}
                             onPress={handleContactSupport}
                         >
                             <Icon name="support-agent" size={22} color="#007bff" />
-                            <Text style={styles.supportButtonText}>Contact Support</Text>
-                        </TouchableOpacity>
+                            <Text style={styles.supportButtonText}>Support</Text>
+                        </TouchableOpacity> */}
                     </View>
                 </View>
 
@@ -772,10 +843,20 @@ Check-out: ${formatDate(booking.checkOut)}
 
                         <View style={styles.modalContent}>
                             <Text style={styles.modalText}>
-                                Are you sure you want to cancel booking #{booking.bookingId}?
+                                Please provide a reason for cancelling booking #{booking.bookingId || booking.id}:
                             </Text>
+
+                            <TextInput
+                                style={styles.reasonInput}
+                                placeholder="Enter reason for cancellation..."
+                                multiline
+                                numberOfLines={4}
+                                value={cancellationReason}
+                                onChangeText={setCancellationReason}
+                            />
+
                             <Text style={styles.modalSubtext}>
-                                This action cannot be undone. Any payments made may be subject to cancellation charges as per our policy.
+                                This request will be submitted to club administration for approval.
                             </Text>
 
                             <View style={styles.modalActions}>
@@ -1170,6 +1251,85 @@ const styles = StyleSheet.create({
         fontSize: 13,
         color: '#666',
     },
+    cancellationCard: {
+        backgroundColor: '#fff',
+        borderRadius: 15,
+        padding: 20,
+        marginBottom: 20,
+        borderWidth: 1,
+        borderColor: '#f8d7da',
+    },
+    cardHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 15,
+        paddingBottom: 10,
+        borderBottomWidth: 1,
+    },
+    requestItem: {
+        paddingVertical: 10,
+    },
+    requestDivider: {
+        borderTopWidth: 1,
+        borderTopColor: '#f8d7da',
+        marginTop: 10,
+        paddingTop: 15,
+    },
+    requestHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    requestDateContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    requestDate: {
+        fontSize: 12,
+        color: '#666',
+        marginLeft: 6,
+        fontWeight: '500',
+    },
+    miniStatusBadge: {
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 10,
+    },
+    miniStatusText: {
+        fontSize: 10,
+        fontWeight: 'bold',
+    },
+    requestReasonLabel: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: '#333',
+        marginBottom: 4,
+    },
+    requestReasonText: {
+        fontSize: 13,
+        color: '#555',
+        lineHeight: 18,
+    },
+    adminRemarksContainer: {
+        marginTop: 8,
+        padding: 10,
+        backgroundColor: '#f8f9fa',
+        borderRadius: 8,
+        borderLeftWidth: 3,
+        borderLeftColor: '#6c757d',
+    },
+    adminRemarksLabel: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#444',
+        marginBottom: 2,
+    },
+    adminRemarksText: {
+        fontSize: 12,
+        color: '#666',
+        fontStyle: 'italic',
+    },
     actionsCard: {
         backgroundColor: '#fff',
         borderRadius: 15,
@@ -1275,6 +1435,18 @@ const styles = StyleSheet.create({
     },
     modalContent: {
         padding: 20,
+    },
+    reasonInput: {
+        borderWidth: 1,
+        borderColor: '#e9ecef',
+        borderRadius: 10,
+        padding: 12,
+        fontSize: 14,
+        color: '#333',
+        backgroundColor: '#f8f9fa',
+        textAlignVertical: 'top',
+        height: 100,
+        marginBottom: 15,
     },
     modalText: {
         fontSize: 16,

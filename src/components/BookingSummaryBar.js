@@ -8,78 +8,198 @@ import {
     Platform,
     AppState,
     Alert,
+    Clipboard,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import AntIcon from 'react-native-vector-icons/AntDesign';
 import { useVoucher } from '../auth/contexts/VoucherContext';
-import { useNavigation, useNavigationState } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import notifee from '@notifee/react-native';
+import { voucherAPI } from '../../config/apis';
+import socketService from '../../services/socket.service';
 
 const BookingSummaryBar = () => {
-    const { activeVoucher } = useVoucher();
+    const { activeVoucher, clearVoucher } = useVoucher();
     const navigation = useNavigation();
-    const [timeLeft, setTimeLeft] = useState('');
-    const [minutesLeft, setMinutesLeft] = useState(null);
+    const [vouchers, setVouchers] = useState([]);
+    const [currentTime, setCurrentTime] = useState(new Date().getTime());
     const [fadeAnim] = useState(new Animated.Value(0));
     const [expanded, setExpanded] = useState(false);
     const expandAnim = useRef(new Animated.Value(0)).current;
-    const appState = useRef(AppState.currentState);
-    const notificationSent = useRef(false);
+    const notificationSent = useRef(new Set()); // Track notifications per voucher
+    const fetchInterval = useRef(null);
+    const timerInterval = useRef(null);
+    const [copiedId, setCopiedId] = useState(null);
+
+    const fetchVouchers = async () => {
+        try {
+            const data = await voucherAPI.getTimerVouchers();
+            console.log(data)
+            if (data && Array.isArray(data)) {
+                // Normalize data: Some responses wrap voucher details in voucherData.voucher
+                const normalizedData = data.map(item => {
+                    const v = item.voucherData?.voucher || item;
+                    return {
+                        ...item,
+                        id: v.id || item.id,
+                        booking_id: v.booking_id || item.booking_id || item.bookingId,
+                        voucher_no: v.voucher_no || item.voucher_no || item.invoiceNumber,
+                        issued_at: v.issued_at || v.issue_date || item.issued_at || item.issue_date,
+                        expiresAt: v.expiresAt || v.expires_at || item.expiresAt || item.expires_at || item.dueDate || item.due_date,
+                        consumer_number: v.consumer_number || item.consumer_number,
+                        booking_type: v.booking_type || item.booking_type || item.bookingType || 'ROOM'
+                    };
+                });
+
+                setVouchers(normalizedData);
+                if (normalizedData.length > 0) {
+                    Animated.timing(fadeAnim, {
+                        toValue: 1,
+                        duration: 500,
+                        useNativeDriver: true,
+                    }).start();
+                } else {
+                    Animated.timing(fadeAnim, {
+                        toValue: 0,
+                        duration: 500,
+                        useNativeDriver: true,
+                    }).start();
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching timer vouchers:', error);
+        }
+    };
 
     useEffect(() => {
-        if (activeVoucher) {
-            Animated.timing(fadeAnim, {
-                toValue: 1,
-                duration: 500,
-                useNativeDriver: true,
-            }).start();
+        fetchVouchers();
+        fetchInterval.current = setInterval(fetchVouchers, 30000); // Fetch every 30s
 
-            // Reset notification flag when a new voucher is set
-            // The voucher object has a timestamp, so we can detect if it's new
-            notificationSent.current = false;
+        timerInterval.current = setInterval(() => {
+            setCurrentTime(new Date().getTime());
+        }, 1000);
 
-            const interval = setInterval(() => {
-                const distance = new Date(activeVoucher.dueDate).getTime() - new Date().getTime();
+        return () => {
+            if (fetchInterval.current) clearInterval(fetchInterval.current);
+            if (timerInterval.current) clearInterval(timerInterval.current);
+        };
+    }, []);
 
-                if (distance < 0) {
-                    setTimeLeft('EXPIRED');
-                    clearInterval(interval);
-                    return;
-                }
+    // Socket subscriptions for real-time payment updates
+    useEffect(() => {
+        const unsubscribes = [];
 
-                const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
-                const seconds = Math.floor((distance % (1000 * 60)) / 1000);
-                setTimeLeft(`${minutes}m ${seconds}s`);
-                setMinutesLeft(minutes);
+        vouchers.forEach(voucher => {
+            const voucherId = voucher.id || voucher.booking_id;
+            if (voucherId) {
+                const unsub = socketService.subscribeToPayment(voucherId, (data) => {
+                    if (data.status === 'PAID' || data.status === 'CANCELLED') {
+                        // console.log(`📡 Status update for voucher ${voucherId}: ${data.status}`);
 
-                // Urgency Notification logic (15 minutes or less)
-                if (minutes <= 15 && !notificationSent.current) {
-                    triggerUrgencyNotification();
-                    notificationSent.current = true;
-                }
-            }, 1000);
+                        if (data.status === 'PAID') {
+                            Alert.alert(
+                                'Payment Successful',
+                                `Voucher ${voucher.voucher_no || voucherId} has been paid! Your booking is now confirmed.`,
+                                [{ text: 'Great!' }]
+                            );
+                        }
 
-            return () => clearInterval(interval);
+                        // Remove the voucher from our local list for both PAID and CANCELLED
+                        setVouchers(prev => prev.filter(v => (v.id || v.booking_id) !== voucherId));
+
+                        // Remove from notification tracking
+                        notificationSent.current.delete(voucherId);
+
+                        // If this was the active voucher in context, clear it too
+                        if (activeVoucher && (activeVoucher.id === voucherId || activeVoucher.bookingId === voucherId)) {
+                            clearVoucher();
+                        }
+                    }
+                });
+                unsubscribes.push(unsub);
+            }
+        });
+
+        return () => {
+            unsubscribes.forEach(unsub => unsub());
+        };
+    }, [vouchers]);
+
+    const getVoucherTimer = (voucher) => {
+        const rawIssueDate = voucher?.issued_at;
+        const rawExpire = voucher?.expiresAt || voucher?.expires_at || 15;
+
+        const issueTime = rawIssueDate ? new Date(rawIssueDate).getTime() : null;
+        let expiryTime = null;
+
+        // Try to parse rawExpire as a number of minutes first
+        const expireMinutes = Number(rawExpire);
+
+        if (!isNaN(expireMinutes) && typeof rawExpire !== 'string') {
+            // It's a number (or number-like string that is just a digit), treat as minutes
+            if (issueTime && !isNaN(issueTime)) {
+                expiryTime = issueTime + (expireMinutes * 60 * 1000);
+            }
         } else {
-            Animated.timing(fadeAnim, {
-                toValue: 0,
-                duration: 500,
-                useNativeDriver: true,
-            }).start();
+            // Try to parse as absolute date string
+            const absoluteExp = new Date(rawExpire).getTime();
+            if (!isNaN(absoluteExp)) {
+                expiryTime = absoluteExp;
+            } else if (issueTime && !isNaN(issueTime) && !isNaN(expireMinutes)) {
+                // Fallback to minutes if it's a numeric string
+                expiryTime = issueTime + (expireMinutes * 60 * 1000);
+            }
         }
-    }, [activeVoucher]);
 
-    const triggerUrgencyNotification = async () => {
-        const message = "Your room hold expires in 15 minutes. Complete your payment now to secure your stay!";
+        if (!expiryTime || isNaN(expiryTime)) {
+            return 'EXPIRED';
+        }
+
+        const distance = expiryTime - currentTime;
+
+        if (distance <= 0) return 'EXPIRED';
+
+        const minutes = Math.floor(distance / (1000 * 60));
+        const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+        return {
+            text: `${minutes}m ${seconds < 10 ? '0' : ''}${seconds}s`,
+            minutes,
+            expired: false,
+            distance
+        };
+    };
+
+
+    // Filter valid vouchers and sort by urgency
+    const activeVouchers = vouchers
+        .map(v => ({ ...v, timer: getVoucherTimer(v) }))
+        .filter(v => v.timer !== 'EXPIRED')
+        .sort((a, b) => a.timer.distance - b.timer.distance);
+
+    useEffect(() => {
+        // Notification logic for the most urgent voucher
+        if (activeVouchers.length > 0) {
+            const mostUrgent = activeVouchers[0];
+            const voucherId = mostUrgent.voucher_no || mostUrgent.id;
+
+            if (mostUrgent.timer.minutes <= 15 && !notificationSent.current.has(voucherId)) {
+                triggerUrgencyNotification(mostUrgent);
+                notificationSent.current.add(voucherId);
+            }
+        }
+    }, [activeVouchers]);
+
+    const triggerUrgencyNotification = async (voucher) => {
+        const message = `Your booking hold (${voucher.voucher_no || 'Pending'}) expires in 15 minutes. Complete your payment now!`;
 
         if (AppState.currentState === 'active') {
             Alert.alert(
                 "Booking Expiry Reminder",
                 message,
-                [{ text: "Complete Payment", onPress: handlePress }, { text: "Dismiss" }]
+                [{ text: "Complete Payment", onPress: () => handlePress(voucher) }, { text: "Dismiss" }]
             );
         } else {
-            // Background push notification
             try {
                 const channelId = await notifee.createChannel({
                     id: 'urgency-reminder',
@@ -91,9 +211,7 @@ const BookingSummaryBar = () => {
                     body: message,
                     android: {
                         channelId,
-                        pressAction: {
-                            id: 'default',
-                        },
+                        pressAction: { id: 'default' },
                     },
                 });
             } catch (error) {
@@ -102,21 +220,40 @@ const BookingSummaryBar = () => {
         }
     };
 
-    if (!activeVoucher || timeLeft === 'EXPIRED') return null;
+    if (activeVouchers.length === 0) return null;
 
-    const handlePress = () => {
-        const { navigationParams } = activeVoucher;
-        let screen = 'Voucher'; // Default for Lawn
+    const handlePress = (voucher) => {
+        const bookingType = voucher.booking_type || voucher.bookingType || 'ROOM';
+        let screen = 'Voucher';
 
-        if (navigationParams?.bookingType === 'ROOM') {
+        const params = {
+            bookingId: voucher.booking_id || voucher.id || voucher.bookingId,
+            numericBookingId: voucher.booking_id || voucher.id || voucher.bookingId,
+            voucherData: voucher.voucherData || { voucher: voucher },
+            bookingData: voucher.bookingData,
+            roomType: voucher.roomType,
+            memberDetails: voucher.memberDetails,
+            isGuest: voucher.isGuest,
+            dueDate: voucher.dueDate || voucher.expiresAt,
+            bookingType: bookingType,
+            navigationParams: { bookingType: bookingType }
+        };
+
+        if (bookingType === 'ROOM') {
             screen = 'voucher';
-        } else if (navigationParams?.module === 'HALL') {
+        } else if (bookingType === 'HALL') {
             screen = 'HallInvoiceScreen';
-        } else if (navigationParams?.module === 'SHOOT') {
+        } else if (bookingType === 'SHOOT') {
             screen = 'InvoiceScreen';
         }
 
-        navigation.navigate(screen, navigationParams);
+        navigation.navigate(screen, params);
+    };
+
+    const copyToClipboard = (text, id) => {
+        Clipboard.setString(text);
+        setCopiedId(id);
+        setTimeout(() => setCopiedId(null), 2000);
     };
 
     const toggleExpand = () => {
@@ -128,92 +265,171 @@ const BookingSummaryBar = () => {
         }).start();
     };
 
-    const voucherId = activeVoucher.voucher?.voucher_no || activeVoucher.voucherData?.voucher?.voucher_no || activeVoucher.invoiceNumber;
-    const consumerNo = activeVoucher.voucher?.consumer_number || activeVoucher.voucherData?.voucher?.consumer_number;
+    const mostUrgent = activeVouchers[0];
+    const totalVouchers = activeVouchers.length;
 
     return (
         <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
-            <View style={styles.content}>
+
+            {!expanded && (
                 <TouchableOpacity
-                    style={styles.mainBar}
+                    style={styles.floatingCircle}
                     onPress={toggleExpand}
                     activeOpacity={0.9}
                 >
-                    <View style={styles.timerSection}>
-                        <AntIcon name="clockcircleo" size={16} color="#fff" />
-                        <Text style={styles.timerText}>{timeLeft}</Text>
-                        {expanded ? (
-                            <Icon name="keyboard-arrow-up" size={24} color="#fff" />
-                        ) : (
-                            <Icon name="keyboard-arrow-down" size={24} color="#fff" />
-                        )}
-                    </View>
-
-                    {!expanded && (
-                        <TouchableOpacity style={styles.payNowButton} onPress={handlePress}>
-                            <Text style={styles.payNowText}>Pay Now</Text>
-                        </TouchableOpacity>
+                    <AntIcon name="clockcircleo" size={20} color="#fff" />
+                    {totalVouchers > 1 && (
+                        <View style={styles.badge}>
+                            <Text style={styles.badgeText}>{totalVouchers}</Text>
+                        </View>
                     )}
                 </TouchableOpacity>
+            )}
 
+            {expanded && (
                 <Animated.View style={[
-                    styles.expandedContent,
+                    styles.content,
                     {
-                        height: expandAnim.interpolate({
-                            inputRange: [0, 1],
-                            outputRange: [0, 110]
-                        }),
+                        transform: [
+                            { scale: expandAnim.interpolate({ inputRange: [0, 1], outputRange: [0.8, 1] }) },
+                            { translateY: expandAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }
+                        ],
                         opacity: expandAnim
                     }
                 ]}>
-                    <View style={styles.divider} />
-                    <View style={styles.infoRow}>
-                        <View style={styles.infoBlock}>
-                            <Text style={styles.infoLabel}>Voucher #</Text>
-                            <Text style={styles.infoValue}>{voucherId || 'N/A'}</Text>
-                        </View>
-                        {consumerNo && (
-                            <View style={styles.infoBlock}>
-                                <Text style={styles.infoLabel}>Consumer #</Text>
-                                <Text style={styles.infoValue}>{consumerNo}</Text>
-                            </View>
-                        )}
-                    </View>
-                    <TouchableOpacity style={styles.fullPayButton} onPress={handlePress}>
-                        <Text style={styles.fullPayButtonText}>View & Pay Invoice</Text>
-                        <Icon name="arrow-forward" size={18} color="#dc3545" />
+                    <TouchableOpacity
+                        style={styles.mainBar}
+                        onPress={toggleExpand}
+                        activeOpacity={0.7}
+                    >
+                        <Icon name="keyboard-arrow-down" size={24} color="#fff" />
                     </TouchableOpacity>
+
+                    <Animated.View style={[
+                        styles.expandedContent,
+                        {
+                            height: expandAnim.interpolate({
+                                inputRange: [0, 1],
+                                outputRange: [0, Math.min(activeVouchers.length * 80 + 20, 400)]
+                            })
+                        }
+                    ]}>
+                        <View style={styles.divider} />
+
+                        {activeVouchers.map((v, index) => (
+                            <View key={v.id || index} style={styles.voucherItem}>
+                                <View style={styles.infoRow}>
+                                    <View style={styles.infoBlock}>
+                                        <View style={styles.voucherLabelRow}>
+                                            <View style={styles.consumerContainer}>
+                                                <Text style={styles.infoLabel}>
+                                                    Consumer #{' '}
+                                                </Text>
+                                                <Text style={styles.consumerValue} numberOfLines={1}>
+                                                    {v.consumer_number || 'N/A'}
+                                                </Text>
+                                                {v.consumer_number && (
+                                                    <TouchableOpacity
+                                                        onPress={() => copyToClipboard(v.consumer_number, v.id || index)}
+                                                        style={styles.copyButton}
+                                                    >
+                                                        <Icon
+                                                            name={copiedId === (v.id || index) ? "check" : "content-copy"}
+                                                            size={12}
+                                                            color="#fff"
+                                                        />
+                                                    </TouchableOpacity>
+                                                )}
+                                            </View>
+                                            <Text style={styles.infoType}>
+                                                {v.booking_type || 'ROOM'}
+                                            </Text>
+                                        </View>
+
+                                        <Text style={styles.infoValue}>
+                                            {v.timer.text}
+                                        </Text>
+                                    </View>
+
+                                    <TouchableOpacity
+                                        style={styles.viewButton}
+                                        onPress={() => handlePress(v)}
+                                    >
+                                        <Text style={styles.viewButtonText}>Pay Now</Text>
+                                    </TouchableOpacity>
+                                </View>
+
+                                {index < activeVouchers.length - 1 && (
+                                    <View style={styles.itemDivider} />
+                                )}
+                            </View>
+                        ))}
+                    </Animated.View>
                 </Animated.View>
-            </View>
+            )}
         </Animated.View>
     );
+
 };
 
 const styles = StyleSheet.create({
     container: {
         position: 'absolute',
-        top: Platform.OS === 'ios' ? 100 : 70, // Sticky below status bar/header
-        left: 15,
-        right: 15,
-        zIndex: 10000, // Above everything
+        width: '100%',
+        bottom: 80,
+        right: 20,
+        zIndex: 10000,
+        alignItems: 'flex-end',
+        justifyContent: 'flex-end',
     },
     content: {
         backgroundColor: '#dc3545',
-        borderRadius: 12,
+        borderRadius: 16,
+        width: '90%',
         overflow: 'hidden',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
-        shadowRadius: 5,
-        elevation: 8,
+        shadowRadius: 8,
+        elevation: 10,
         borderWidth: 1,
-        borderColor: '#ffa39e',
+        borderColor: 'rgba(255,255,255,0.2)',
     },
+    floatingCircle: {
+        backgroundColor: '#dc3545',
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        alignItems: 'center',
+        justifyContent: 'center',
+        elevation: 8,
+        shadowColor: '#000',
+        shadowOpacity: 0.3,
+        shadowOffset: { width: 0, height: 4 },
+        shadowRadius: 5,
+    },
+
+    badge: {
+        position: 'absolute',
+        bottom: 0,
+        right: 0,
+        backgroundColor: '#fff',
+        borderRadius: 10,
+        paddingHorizontal: 0,
+        paddingVertical: 2,
+    },
+
+    badgeText: {
+        color: '#dc3545',
+        fontSize: 10,
+        fontWeight: 'bold',
+    },
+
     mainBar: {
+        width: '100%',
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: 15,
+        justifyContent: 'center',
         paddingVertical: 10,
     },
     timerSection: {
@@ -254,16 +470,23 @@ const styles = StyleSheet.create({
     },
     infoBlock: {
         flex: 1,
+        marginRight: 10,
     },
     infoLabel: {
-        color: 'rgba(255,255,255,0.7)',
-        fontSize: 11,
-        marginBottom: 2,
+        color: 'rgba(255,255,255,0.8)',
+        fontSize: 12,
+    },
+    consumerValue: {
+        color: '#fff',
+        fontSize: 12,
+        fontWeight: '500',
+        flexShrink: 1,
     },
     infoValue: {
         color: '#fff',
-        fontSize: 14,
+        fontSize: 18,
         fontWeight: 'bold',
+        marginTop: 4,
     },
     fullPayButton: {
         backgroundColor: '#fff',
@@ -279,6 +502,51 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: 'bold',
         marginRight: 5,
+    },
+    voucherItem: {
+        paddingVertical: 8,
+    },
+    itemDivider: {
+        height: 1,
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        marginVertical: 4,
+    },
+    voucherLabelRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 2,
+        paddingEnd: 3
+    },
+    infoType: {
+        color: 'rgba(255,255,255,0.6)',
+        fontSize: 10,
+        fontWeight: 'bold',
+        textTransform: 'uppercase',
+    },
+    viewButton: {
+        backgroundColor: '#fff',
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 7,
+        paddingVertical: 0,
+        borderRadius: 10,
+    },
+    viewButtonText: {
+        color: '#dc3545',
+        fontSize: 10,
+        fontWeight: 'bold',
+        marginRight: 2,
+    },
+    consumerContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    copyButton: {
+        marginLeft: 8,
+        padding: 4,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        borderRadius: 4,
     }
 });
 

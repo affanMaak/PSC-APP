@@ -196,10 +196,11 @@ export const bookingService = {
   },
 
   // Delete booking
-  deleteBooking: async (bookingId) => {
+  deleteBooking: async (consumer_number) => {
+    console.log(consumer_number)
     try {
       const token = await getAuthToken();
-      const response = await api.delete(`/booking/delete/booking?bookingFor=rooms&bookID=${bookingId}`, {
+      const response = await api.delete(`/booking/cancel-unpaid?consumer_number=${consumer_number}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -208,6 +209,26 @@ export const bookingService = {
     } catch (error) {
       console.error('Error deleting booking:', error);
       throw error;
+    }
+  },
+  cancelReqBooking: async (
+    bookingFor,
+    bookID,
+    reason
+  ) => {
+    try {
+      const response = await api.post(
+        `/booking/cancelReqBooking?bookingFor=${bookingFor}&bookID=${bookID}${reason ? `&reason=${encodeURIComponent(reason)}` : ""}`
+      );
+      return response.data;
+    } catch (error) {
+      const message =
+        error.response?.data?.message ||
+        error.response?.data?.error ||
+        error.message ||
+        "Something went wrong";
+
+      throw { message, status: error.response?.status || 500 };
     }
   },
   //view member history

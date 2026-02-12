@@ -265,7 +265,7 @@ export default function RoomBookingScreen({ navigation, route }) {
 
             // Set global voucher for the floating timer
             setVoucher(result, navigationParams);
-
+            console.log("check 2:", navigationParams)
             // Navigate to voucher screen
             navigation.navigate('voucher', navigationParams);
 
