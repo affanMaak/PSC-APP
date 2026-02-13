@@ -16,7 +16,8 @@ import {
 } from 'react-native';
 import Swiper from 'react-native-swiper';
 import { useAuth } from '../src/auth/contexts/AuthContext';
-import { getUserData, removeAuthData, userWho, getAds } from '../config/apis';
+import { getUserData, removeAuthData, userWho, getAds, getUnseenNotificationsCount } from '../config/apis';
+import { useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -29,6 +30,7 @@ export default function start({ navigation }) {
   const [userName, setUserName] = useState('');
   const [promotionalAds, setPromotionalAds] = useState([]);
   const [adsLoading, setAdsLoading] = useState(true);
+  const [unseenCount, setUnseenCount] = useState(0);
   const isDeactivatedRef = useRef(false);
 
   useEffect(() => {
@@ -38,6 +40,26 @@ export default function start({ navigation }) {
     // Fetch promotional ads
     loadPromotionalAds();
   }, [user]);
+
+  const fetchUnseenCount = async () => {
+    try {
+      if (user?.role !== "ADMIN" && user?.role !== "SUPER_ADMIN") {
+        const response = await getUnseenNotificationsCount();
+       
+        if (response && typeof response === 'number') {
+          setUnseenCount(response);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching unseen count:', error);
+    }
+  };
+
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchUnseenCount();
+    }, [user])
+  );
 
   // Check member status on mount - only for MEMBER role
   useEffect(() => {
@@ -308,11 +330,20 @@ export default function start({ navigation }) {
             <Text style={styles.headerTitle}>Peshawar Services Club</Text>
 
             {/* Bell Icon - Right */}
-            {(user?.role !== "ADMIN" || user?.role !== "SUPER_ADMIN") && <TouchableOpacity
+            {(user?.role !== "ADMIN" && user?.role !== "SUPER_ADMIN") && <TouchableOpacity
               style={styles.bellButton}
               onPress={() => navigation.navigate('Announcements')}
             >
-              <Icon name="notifications" size={24} color="#000" />
+              <View style={styles.bellIconContainer}>
+                <Icon name="notifications" size={24} color="#000" />
+                {unseenCount > 0 && (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>
+                      {unseenCount > 99 ? '99+' : unseenCount}
+                    </Text>
+                  </View>
+                )}
+              </View>
             </TouchableOpacity>}
 
             {/* Welcome Text */}
@@ -524,6 +555,28 @@ const styles = StyleSheet.create({
     right: 20,
     zIndex: 10,
     padding: 5,
+  },
+  bellIconContainer: {
+    position: 'relative',
+  },
+  badge: {
+    position: 'absolute',
+    right: -4,
+    top: -4,
+    backgroundColor: '#FF3B30',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 1.5,
+    borderColor: '#FFF',
+  },
+  badgeText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
   headerTitle: {
     // position: 'absolute',

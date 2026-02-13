@@ -1,327 +1,3 @@
-// import React, { useEffect, useState } from "react";
-// import {
-//   View,
-//   Text,
-//   StyleSheet,
-//   TouchableOpacity,
-//   FlatList,
-//   ImageBackground,
-//   Modal,
-//   ScrollView,
-//   TouchableWithoutFeedback,
-//   Dimensions
-// } from "react-native";
-// import Icon from 'react-native-vector-icons/MaterialIcons';
-// import { getUserNotifications } from "../config/apis";
-
-// import AsyncStorage from '@react-native-async-storage/async-storage';
-
-// const { height } = Dimensions.get('window');
-
-// const announcements = [
-//   { id: "1", date: "2025-09-24", title: "Welcome" },
-//   { id: "2", date: "2024-08-12", title: "Welcome to the App" },
-// ];
-
-// export default function Announcements({ navigation }) {
-//   const [announcements, setAnnouncements] = useState([]);
-//   const [modalVisible, setModalVisible] = useState(false);
-//   const [selectedAnnouncement, setSelectedAnnouncement] = useState(null);
-
-//   const fetchAnnouncements = async () => {
-//     try {
-//       const response = await getUserNotifications();
-//       const lastClearedTime = await AsyncStorage.getItem('lastClearedNotificationsTime');
-
-//       let filteredResponse = response;
-//       if (lastClearedTime) {
-//         filteredResponse = response.filter(item => new Date(item.createdAt) > new Date(lastClearedTime));
-//       }
-
-//       setAnnouncements(filteredResponse.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 3));
-//     } catch (error) {
-//       console.error("Error fetching announcements:", error);
-//     }
-//   };
-
-//   const handleClearAll = async () => {
-//     try {
-//       await AsyncStorage.setItem('lastClearedNotificationsTime', new Date().toISOString());
-//       setAnnouncements([]);
-//     } catch (error) {
-//       console.error("Error clearing notifications:", error);
-//     }
-//   };
-
-//   useEffect(() => {
-//     fetchAnnouncements();
-//   }, []);
-
-//   const openModal = (item) => {
-//     setSelectedAnnouncement(item);
-//     setModalVisible(true);
-//   };
-
-//   const closeModal = () => {
-//     setModalVisible(false);
-//     setSelectedAnnouncement(null);
-//   };
-
-//   const formatDateTime = (dateString) => {
-//     if (!dateString) return "";
-//     return new Date(dateString).toLocaleString(undefined, {
-//       year: 'numeric',
-//       month: 'short',
-//       day: 'numeric',
-//       hour: '2-digit',
-//       minute: '2-digit',
-//     });
-//   };
-
-//   return (
-//     <View style={styles.container}>
-//       {/* Header Section */}
-//       <ImageBackground
-//         source={require("../assets/notch.jpg")}
-//         style={styles.header}
-//         imageStyle={styles.headerImage}
-//       >
-//         <View style={styles.headerContent}>
-//           <TouchableOpacity
-//             style={styles.backButton}
-//             onPress={() => navigation.navigate('Home')}
-//           >
-//             <Icon name="arrow-back" size={28} color="#000" />
-//           </TouchableOpacity>
-//           <Text style={styles.headerTitle}>Announcements</Text>
-//           <TouchableOpacity
-//             style={styles.clearButton}
-//             // onPress={handleClearAll}
-//           >
-//             {/* <Icon name="delete" size={26} color="#000" /> */}
-//           </TouchableOpacity>
-//         </View>
-//       </ImageBackground>
-
-//       {/* Announcements List */}
-//       <FlatList
-//         data={announcements}
-//         keyExtractor={(item) => item.id}
-//         contentContainerStyle={styles.listContainer}
-//         renderItem={({ item }) => (
-//           <TouchableOpacity onPress={() => openModal(item)} activeOpacity={0.8}>
-//             <View style={styles.card}>
-//               <Text style={styles.title}>{item.title}</Text>
-//               <Text style={styles.date}>
-//                 {item.createdAt ? formatDateTime(item.createdAt) : item.date}
-//               </Text>
-//             </View>
-//           </TouchableOpacity>
-//         )}
-//       />
-
-//       {/* Floating Refresh Button */}
-//       <TouchableOpacity style={styles.refreshButton} onPress={fetchAnnouncements}>
-//         <Text style={styles.refreshIcon}>↻</Text>
-//       </TouchableOpacity>
-
-//       {/* Detail Modal */}
-//       <Modal
-//         animationType="slide"
-//         transparent={true}
-//         visible={modalVisible}
-//         onRequestClose={closeModal}
-//       >
-//         <TouchableWithoutFeedback onPress={closeModal}>
-//           <View style={styles.modalOverlay}>
-//             <TouchableWithoutFeedback onPress={() => { }}>
-//               <View style={styles.modalContent}>
-//                 <View style={styles.modalHeader}>
-//                   <Text style={styles.modalTitle}>Notification Details</Text>
-//                   <TouchableOpacity onPress={closeModal}>
-//                     <Icon name="close" size={24} color="#555" />
-//                   </TouchableOpacity>
-//                 </View>
-
-//                 <ScrollView style={styles.modalBody}>
-//                   {selectedAnnouncement && (
-//                     <>
-//                       <Text style={styles.modalDate}>
-//                         {selectedAnnouncement.createdAt ? formatDateTime(selectedAnnouncement.createdAt) : selectedAnnouncement.date}
-//                       </Text>
-//                       <Text style={styles.modalItemTitle}>{selectedAnnouncement.title}</Text>
-//                       <View style={styles.divider} />
-//                       <Text style={styles.modalText}>
-//                         {selectedAnnouncement.description ||
-//                           selectedAnnouncement.content ||
-//                           selectedAnnouncement.body ||
-//                           selectedAnnouncement.message ||
-//                           "No detailed description available."}
-//                       </Text>
-//                     </>
-//                   )}
-//                 </ScrollView>
-
-//                 <TouchableOpacity style={styles.closeButton} onPress={closeModal}>
-//                   <Text style={styles.closeButtonText}>Close</Text>
-//                 </TouchableOpacity>
-//               </View>
-//             </TouchableWithoutFeedback>
-//           </View>
-//         </TouchableWithoutFeedback>
-//       </Modal>
-//     </View>
-//   );
-// }
-
-// const styles = StyleSheet.create({
-//   container: {
-//     flex: 1,
-//     backgroundColor: "#FBF5EE",
-//   },
-//   header: {
-//     width: "100%",
-//     height: 120,
-//     borderBottomLeftRadius: 40,
-//     borderBottomRightRadius: 40,
-//     overflow: "hidden",
-//     justifyContent: "center", // vertically centered
-//   },
-//   headerImage: {
-//     resizeMode: "cover",
-//   },
-//   headerContent: {
-//     flexDirection: "row",
-//     alignItems: "center",
-//     justifyContent: "center", // centers the title horizontally
-//     position: "relative",
-//   },
-//   backButton: {
-//     position: "absolute",
-//     left: 20,
-//   },
-//   clearButton: {
-//     position: "absolute",
-//     right: 20,
-//   },
-
-//   headerTitle: {
-//     fontSize: 22,
-//     fontWeight: "600",
-//     color: "#000",
-//     letterSpacing: 1,
-//   },
-//   listContainer: {
-//     padding: 16,
-//   },
-//   card: {
-//     backgroundColor: "#F6EFE9",
-//     borderRadius: 12,
-//     paddingVertical: 14,
-//     paddingHorizontal: 16,
-//     marginBottom: 12,
-//     flexDirection: "row",
-//     alignItems: "center",
-//   },
-//   date: {
-//     color: "#7B7B7B",
-//     fontSize: 10,
-//     marginLeft: 8,
-//   },
-//   title: {
-//     fontSize: 16,
-//     fontWeight: "500",
-//     color: "#222",
-//     flex: 1,
-//   },
-//   refreshButton: {
-//     position: "absolute",
-//     bottom: 25,
-//     right: 25,
-//     backgroundColor: "#F8CF93",
-//     width: 60,
-//     height: 60,
-//     borderRadius: 30,
-//     justifyContent: "center",
-//     alignItems: "center",
-//     shadowColor: "#000",
-//     shadowOffset: { width: 0, height: 2 },
-//     shadowOpacity: 0.3,
-//     shadowRadius: 3,
-//     elevation: 5,
-//   },
-//   refreshIcon: {
-//     fontSize: 26,
-//     color: "#000",
-//   },
-//   // Modal Styles
-//   modalOverlay: {
-//     flex: 1,
-//     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-//     justifyContent: 'center',
-//     alignItems: 'center',
-//     padding: 20,
-//   },
-//   modalContent: {
-//     width: '100%',
-//     maxHeight: height * 0.7,
-//     backgroundColor: '#FFF',
-//     borderRadius: 20,
-//     padding: 20,
-//     shadowColor: "#000",
-//     shadowOffset: { width: 0, height: 2 },
-//     shadowOpacity: 0.25,
-//     shadowRadius: 4,
-//     elevation: 5,
-//   },
-//   modalHeader: {
-//     flexDirection: 'row',
-//     justifyContent: 'space-between',
-//     alignItems: 'center',
-//     marginBottom: 15,
-//   },
-//   modalTitle: {
-//     fontSize: 20,
-//     fontWeight: '600',
-//     color: '#333',
-//   },
-//   modalBody: {
-//     marginBottom: 20,
-//   },
-//   modalDate: {
-//     fontSize: 14,
-//     color: '#888',
-//     marginBottom: 5,
-//   },
-//   modalItemTitle: {
-//     fontSize: 18,
-//     fontWeight: 'bold',
-//     color: '#222',
-//     marginBottom: 10,
-//   },
-//   divider: {
-//     height: 1,
-//     backgroundColor: '#EEE',
-//     marginBottom: 10,
-//   },
-//   modalText: {
-//     fontSize: 16,
-//     color: '#444',
-//     lineHeight: 24,
-//   },
-//   closeButton: {
-//     backgroundColor: '#F8CF93',
-//     borderRadius: 12,
-//     paddingVertical: 12,
-//     alignItems: 'center',
-//   },
-//   closeButtonText: {
-//     fontSize: 16,
-//     fontWeight: '600',
-//     color: '#000',
-//   },
-// });
-
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -337,7 +13,7 @@ import {
   Alert
 } from "react-native";
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { getUserNotifications } from "../config/apis";
+import { getUserNotifications, updateNotiStatus } from "../config/apis";
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -395,9 +71,26 @@ export default function Announcements({ navigation }) {
     fetchAnnouncements();
   }, []);
 
-  const openModal = (item) => {
+  const openModal = async (item) => {
     setSelectedAnnouncement(item);
     setModalVisible(true);
+
+    // Update status to seen if not already seen
+    const isSeen = item?.deliveries?.[0]?.seen;
+    if (isSeen === false) {
+      try {
+        await updateNotiStatus(item?.deliveries?.[0]?.id);
+        // Update local state to reflect seen status
+        setAnnouncements(prev =>
+          prev.map(ann => ann.id === item.id ? {
+            ...ann,
+            deliveries: [{ ...ann.deliveries[0], seen: true }]
+          } : ann)
+        );
+      } catch (error) {
+        console.error("Error updating notification status:", error);
+      }
+    }
   };
 
   const closeModal = () => {
@@ -427,7 +120,7 @@ export default function Announcements({ navigation }) {
         <View style={styles.notchContent}>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => navigation.navigate('start')}
+            onPress={() => navigation.goBack()}
           >
             <Icon name="arrow-back" size={28} color="#000" />
           </TouchableOpacity>
@@ -446,16 +139,25 @@ export default function Announcements({ navigation }) {
         data={announcements}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContainer}
-        renderItem={({ item }) => (
-          <TouchableOpacity onPress={() => openModal(item)} activeOpacity={0.8}>
-            <View style={styles.card}>
-              <Text style={styles.title}>{item.title}</Text>
-              <Text style={styles.date}>
-                {item.createdAt ? formatDateTime(item.createdAt) : item.date}
-              </Text>
-            </View>
-          </TouchableOpacity>
-        )}
+        renderItem={({ item }) => {
+          const isSeen = item?.deliveries?.[0]?.seen;
+          return (
+            <TouchableOpacity onPress={() => openModal(item)} activeOpacity={0.8}>
+              <View style={[styles.card, isSeen ? styles.seenCard : styles.unseenCard]}>
+                <View style={styles.cardContent}>
+                  <View style={styles.titleContainer}>
+                    <Text style={[styles.title, isSeen && styles.seenTitle]}>{item.title}</Text>
+                  </View>
+                  <Text style={styles.date}>
+                    {item.createdAt ? formatDateTime(item.createdAt) : item.date}
+                  </Text>
+                </View>
+                {!isSeen && <View style={styles.unreadDot} />}
+                <Icon name="chevron-right" size={20} color={isSeen ? "#AAA" : "#888"} />
+              </View>
+            </TouchableOpacity>
+          );
+        }}
       />
 
       {/* Floating Refresh Button */}
@@ -465,7 +167,7 @@ export default function Announcements({ navigation }) {
 
       {/* Detail Modal */}
       <Modal
-        animationType="slide"
+        animationType="fade"
         transparent={true}
         visible={modalVisible}
         onRequestClose={closeModal}
@@ -474,34 +176,49 @@ export default function Announcements({ navigation }) {
           <View style={styles.modalOverlay}>
             <TouchableWithoutFeedback onPress={() => { }}>
               <View style={styles.modalContent}>
+                <View style={styles.modalIndicator} />
+
                 <View style={styles.modalHeader}>
-                  <Text style={styles.modalTitle}>Notification Details</Text>
-                  <TouchableOpacity onPress={closeModal}>
-                    <Icon name="close" size={24} color="#555" />
+                  <View style={styles.modalHeaderTitleContent}>
+                    <View style={styles.iconCircle}>
+                      <Icon name="notifications" size={20} color="#A3834C" />
+                    </View>
+                    <Text style={styles.modalTitle}>Notification Details</Text>
+                  </View>
+                  <TouchableOpacity onPress={closeModal} style={styles.modalCloseButton}>
+                    <Icon name="close" size={22} color="#555" />
                   </TouchableOpacity>
                 </View>
 
-                <ScrollView style={styles.modalBody}>
+                <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
                   {selectedAnnouncement && (
-                    <>
-                      <Text style={styles.modalDate}>
-                        {selectedAnnouncement.createdAt ? formatDateTime(selectedAnnouncement.createdAt) : selectedAnnouncement.date}
-                      </Text>
+                    <View style={styles.modalTextContent}>
+                      <View style={styles.modalInfoRow}>
+                        <Icon name="event" size={14} color="#888" style={{ marginRight: 4 }} />
+                        <Text style={styles.modalDate}>
+                          {selectedAnnouncement.createdAt ? formatDateTime(selectedAnnouncement.createdAt) : selectedAnnouncement.date}
+                        </Text>
+                      </View>
+
                       <Text style={styles.modalItemTitle}>{selectedAnnouncement.title}</Text>
-                      <View style={styles.divider} />
-                      <Text style={styles.modalText}>
-                        {selectedAnnouncement.description ||
-                          selectedAnnouncement.content ||
-                          selectedAnnouncement.body ||
-                          selectedAnnouncement.message ||
-                          "No detailed description available."}
-                      </Text>
-                    </>
+
+                      <View style={styles.modalDivider} />
+
+                      <View style={styles.messageBubble}>
+                        <Text style={styles.modalText}>
+                          {selectedAnnouncement.description ||
+                            selectedAnnouncement.content ||
+                            selectedAnnouncement.body ||
+                            selectedAnnouncement.message ||
+                            "No detailed description available."}
+                        </Text>
+                      </View>
+                    </View>
                   )}
                 </ScrollView>
 
-                <TouchableOpacity style={styles.closeButton} onPress={closeModal}>
-                  <Text style={styles.closeButtonText}>Close</Text>
+                <TouchableOpacity style={styles.confirmButton} onPress={closeModal}>
+                  <Text style={styles.confirmButtonText}>Dismiss</Text>
                 </TouchableOpacity>
               </View>
             </TouchableWithoutFeedback>
@@ -551,24 +268,59 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   card: {
-    backgroundColor: "#F6EFE9",
-    borderRadius: 12,
+    borderRadius: 14,
     paddingVertical: 14,
     paddingHorizontal: 16,
     marginBottom: 12,
     flexDirection: "row",
     alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  unseenCard: {
+    backgroundColor: "#FFFFFF",
+    borderLeftWidth: 4,
+    borderLeftColor: "#F8CF93",
+  },
+  seenCard: {
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: "#E8D4B8",
+    opacity: 0.8,
+    shadowOpacity: 0, // Remove shadow for seen cards
+    elevation: 0,
+  },
+  cardContent: {
+    flex: 1,
+  },
+  titleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  unreadDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "#F8CF93",
+    marginRight: 10,
   },
   date: {
-    color: "#7B7B7B",
-    fontSize: 10,
-    marginLeft: 8,
+    color: "#888",
+    fontSize: 11,
   },
   title: {
     fontSize: 16,
-    fontWeight: "500",
+    fontWeight: "600",
     color: "#222",
     flex: 1,
+  },
+  seenTitle: {
+    fontWeight: "400",
+    color: "#888",
   },
   refreshButton: {
     position: "absolute",
@@ -581,10 +333,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 6,
   },
   refreshIcon: {
     fontSize: 26,
@@ -593,68 +345,104 @@ const styles = StyleSheet.create({
   // Modal Styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    justifyContent: 'flex-end', // Style like a bottom sheet
   },
   modalContent: {
     width: '100%',
-    maxHeight: height * 0.7,
     backgroundColor: '#FFF',
-    borderRadius: 20,
-    padding: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingTop: 12,
+  },
+  modalIndicator: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#EEE',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 20,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 15,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#333',
-  },
-  modalBody: {
     marginBottom: 20,
   },
-  modalDate: {
-    fontSize: 14,
-    color: '#888',
-    marginBottom: 5,
-  },
-  modalItemTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#222',
-    marginBottom: 10,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#EEE',
-    marginBottom: 10,
-  },
-  modalText: {
-    fontSize: 16,
-    color: '#444',
-    lineHeight: 24,
-  },
-  closeButton: {
-    backgroundColor: '#F8CF93',
-    borderRadius: 12,
-    paddingVertical: 12,
+  modalHeaderTitleContent: {
+    flexDirection: 'row',
     alignItems: 'center',
   },
-  closeButtonText: {
+  iconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FBF5EE',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#333',
+  },
+  modalCloseButton: {
+    padding: 4,
+  },
+  modalBody: {
+    maxHeight: height * 0.5,
+  },
+  modalInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  modalDate: {
+    fontSize: 13,
+    color: '#999',
+  },
+  modalItemTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#222',
+    lineHeight: 28,
+  },
+  modalDivider: {
+    height: 1,
+    backgroundColor: '#F5F5F5',
+    marginVertical: 16,
+  },
+  messageBubble: {
+    backgroundColor: '#F9FAFB',
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  modalText: {
+    fontSize: 15,
+    color: '#475569',
+    lineHeight: 24,
+  },
+  confirmButton: {
+    backgroundColor: '#F8CF93',
+    borderRadius: 16,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 24,
+    marginBottom: 10,
+    shadowColor: "#F8CF93",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  confirmButtonText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#000',
+    fontWeight: '700',
+    color: '#3E341F',
   },
 });
 
