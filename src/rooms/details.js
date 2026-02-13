@@ -910,55 +910,9 @@ export default function details({ navigation, route }) {
                 {/* Room Features Section */}
                 {renderFeaturesSection()}
 
-
-
-                <View style={styles.roomTypeInfo}>
-                    {/* <Text style={styles.roomTypeName}>{roomType.name}</Text> */}
-
-                    {/* Enhanced Debug Info - Only show in development */}
-                    {/* {__DEV__ && (
-            <View style={styles.debugSection}>
-              <Text style={styles.debugTitle}>Debug Information:</Text>
-              <Text style={styles.debugText}>Role: {userRole}</Text>
-              <Text style={styles.debugText}>Name: {userName}</Text>
-              <Text style={styles.debugText}>Membership No: {membershipNo || 'NOT FOUND'}</Text>
-              <Text style={styles.debugText}>Admin ID: {adminId || 'NOT FOUND'}</Text>
-              <Text style={styles.debugText}>User ID: {user?.id}</Text>
-              <Text style={styles.smallDebugText}>
-                All keys: {user ? Object.keys(user).join(', ') : 'No user'}
-              </Text>
-            </View>
-          )} */}
-
-                    {/* <View style={styles.pricingSection}>
-            <Text style={styles.pricingTitle}>Pricing Information</Text>
-
-            <View style={styles.priceContainer}>
-              <View style={styles.priceRow}>
-                <View style={styles.priceLabelContainer}>
-                  <Icon name="person" size={16} color="#666" />
-                  <Text style={styles.priceLabel}>Member Price:</Text>
-                </View>
-                <Text style={styles.priceValue}>
-                  {formatPrice(roomType.priceMember)}
-                </Text>
-              </View>
-
-              <View style={styles.priceRow}>
-                <View style={styles.priceLabelContainer}>
-                  <Icon name="person-outline" size={16} color="#666" />
-                  <Text style={styles.priceLabel}>Guest Price:</Text>
-                </View>
-                <Text style={styles.priceValue}>
-                  {formatPrice(roomType.priceGuest)}
-                </Text>
-              </View>
-
-              <Text style={styles.perNightText}>per night</Text>
-            </View>
-          </View> */}
-
-                    {isAdminUser() && (
+                {/* Admin-only Room Count & Selection Info */}
+                {isAdminUser() && (
+                    <View style={styles.roomTypeInfo}>
                         <View style={styles.roomCount}>
                             <Icon name="meeting-room" size={16} color="#666" />
                             <Text style={styles.roomCountText}>
@@ -970,8 +924,8 @@ export default function details({ navigation, route }) {
                                 </Text>
                             )}
                         </View>
-                    )}
-                </View>
+                    </View>
+                )}
 
                 {/* Conditionally render member or admin view */}
                 {isMemberUser() ? renderMemberView() : renderAdminView()}

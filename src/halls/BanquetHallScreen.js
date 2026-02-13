@@ -1935,11 +1935,15 @@ const styles = StyleSheet.create({
   },
   // Policy Section
   policySection: {
-    backgroundColor: "white",
+    backgroundColor: "#fff",
     margin: 15,
     borderRadius: 15,
     padding: 20,
     marginBottom: 30,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+    elevation: 3,
   },
   rulesHeader: {
     flexDirection: 'row',
@@ -1950,8 +1954,8 @@ const styles = StyleSheet.create({
   policyTitle: {
     fontSize: 18,
     fontWeight: "bold",
-    marginBottom: 10,
-    marginLeft: 90,
+    marginBottom: 15,
+    textAlign: "center",
     color: '#b48a64',
   },
   policySub: {
@@ -1968,12 +1972,23 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   ruleItem: {
-    marginBottom: 15,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 10,
+    paddingRight: 10,
   },
   ruleText: {
-    color: "#444",
     fontSize: 14,
+    color: "#555",
+    marginLeft: 8,
     lineHeight: 20,
+    flex: 1,
+  },
+  noRulesText: {
+    fontSize: 14,
+    color: "#999",
+    fontStyle: "italic",
+    textAlign: "center",
   },
   viewAllRulesButton: {
     flexDirection: 'row',
