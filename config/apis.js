@@ -5,8 +5,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const getBaseUrl = () => {
   if (Platform.OS === 'android') {
-    return 'https://admin.peshawarservicesclub.com/api';
-    // return 'http://10.0.2.2:3000/api';
+    // return 'https://admin.peshawarservicesclub.com/api';
+    return 'http://10.0.2.2:3000/api'; 
   } else {
     return 'https://admin.peshawarservicesclub.com/api';
   }
@@ -103,6 +103,26 @@ export const getUserNotifications = async () => {
     return response.data;
   } catch (error) {
     console.error('Error getting user data:', error);
+    return null;
+  }
+};
+export const getUnseenNotificationsCount = async () => {
+  try {
+    const response = await api.get(`${base_url}/member/notifications/un-seen-count`);
+    return response.data;
+  } catch (error) {
+    console.error('Error getting unseen count:', error);
+    return null;
+  }
+};
+export const updateNotiStatus = async (notiID) => {
+  try {
+    const response = await api.patch(`${base_url}/notification/update-seen`, {
+      notiID
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error updating notification status:', error);
     return null;
   }
 };
@@ -591,7 +611,7 @@ export const voucherAPI = {
     try {
       const response = await api.get(
         `/booking/vouchers/unpaid/countdown`,
-        {withCredentials: true}
+        { withCredentials: true }
       );
       return response.data;
     } catch (error) {
