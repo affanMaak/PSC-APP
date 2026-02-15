@@ -635,11 +635,11 @@ export default function MemberBookingsScreen({ navigation }) {
         <View style={styles.emptyContainer}>
             <Icon name="receipt-long" size={80} color="#ccc" />
             <Text style={styles.emptyTitle}>No Bookings Found</Text>
-            <Text style={styles.emptyText}>
+            {/* <Text style={styles.emptyText}>
                 <Text style={styles.emptyText}>
-                    {`No ${selectedType.toLowerCase()} bookings found.`}
+                    // {`No ${selectedType.toLowerCase()} bookings found.`}
                 </Text>
-            </Text>
+            </Text> */}
             {bookings.length === 0 && selectedType !== 'All' && (
                 <TouchableOpacity
                     style={styles.changeTypeButton}
@@ -811,11 +811,7 @@ export default function MemberBookingsScreen({ navigation }) {
                                 ))}
                             </ScrollView>
 
-                            {bookings.length > 0 && (
-                                <Text style={styles.resultsCount}>
-                                    {filteredBookings.length} {selectedType.toLowerCase()} booking{filteredBookings.length !== 1 ? 's' : ''} found
-                                </Text>
-                            )}
+
                         </View>
                     }
                 />
@@ -963,7 +959,7 @@ const styles = StyleSheet.create({
     headerTitle: {
         fontSize: 22,
         fontWeight: '600',
-        color: '#000',
+        color: 'black',
         flex: 1,
         textAlign: 'center',
     },
@@ -1082,6 +1078,7 @@ const styles = StyleSheet.create({
     },
     tabsContainer: {
         marginTop: 20,
+        marginBottom: 20,
     },
     tabButton: {
         paddingHorizontal: 22,

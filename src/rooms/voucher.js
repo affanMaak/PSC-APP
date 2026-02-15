@@ -42,6 +42,7 @@ export default function voucher({ navigation, route }) {
   const [shareLoading, setShareLoading] = useState(false);
   const [copied, setCopied] = useState(false);
 
+
   useEffect(() => {
     if (voucherData) {
       console.log('🔄 Using passed voucherData for Room Booking');
@@ -219,6 +220,7 @@ export default function voucher({ navigation, route }) {
       // Invoice identification
       invoiceNo: invoice.invoice_no || invoice.invoiceNumber || invoice.InvoiceNumber || `INV-${bookingId}`,
       bookingId: invoice.bookingId || bookingId,
+      consumerNumber: invoice.consumer_number || invoice.consumerNumber || invoice.ConsumerNumber,
 
       // Status and dates
       status: invoice.status || 'PENDING_PAYMENT',
@@ -384,34 +386,28 @@ export default function voucher({ navigation, route }) {
       }
 
       const shareMessage = `
-🏨 BOOKING INVOICE
+ BOOKING INVOICE
 
-📋 Invoice Number: ${invoiceData.invoiceNo}
-🔢 Booking ID: ${invoiceData.bookingId}
-🔄 Status: ${invoiceData.status}
+ Invoice Details:
+ Invoice Number: ${invoiceData.invoiceNo}
+ ${invoiceData.consumerNumber ? `Consumer Number: ${invoiceData.consumerNumber}` : ''}
+ Booking ID: ${invoiceData.bookingId}
+ Status: ${invoiceData.status}
+ Room Information:
+    • Room Type: ${invoiceData.roomType}
+    ${invoiceData.roomNumber ? `   • Room Number: ${invoiceData.roomNumber}` : ''}
+    • Check-in: ${formatDate(invoiceData.checkIn)}
+    • Check-out: ${formatDate(invoiceData.checkOut)}
+    • Guests: ${invoiceData.numberOfAdults} Adults, ${invoiceData.numberOfChildren} Children
+    ${invoiceData.numberOfRooms ? `   • Rooms: ${invoiceData.numberOfRooms}` : ''}
+ Payment Details:
+    ${invoiceData.fullTotalPrice ? `• Total Amount: Rs. ${parseFloat(invoiceData.fullTotalPrice).toFixed(2)}` : ''}
+    • Advance Deposit: Rs. ${parseFloat(invoiceData.totalPrice || 0).toFixed(2)}
+    • Payment Status: ${invoiceData.paymentStatus}
+    ${invoiceData.dueDate ? `• Payment Due: ${formatDateTime(invoiceData.dueDate)}` : ''}
+ ${invoiceData.instructions ? `Instructions: ${invoiceData.instructions}\n` : ''}
 
-🏠 Room Information:
-   • Room Type: ${invoiceData.roomType}
-   ${invoiceData.roomNumber ? `   • Room Number: ${invoiceData.roomNumber}` : ''}
-   • Check-in: ${formatDate(invoiceData.checkIn)}
-   • Check-out: ${formatDate(invoiceData.checkOut)}
-   • Guests: ${invoiceData.numberOfAdults} Adults, ${invoiceData.numberOfChildren} Children
-   ${invoiceData.numberOfRooms ? `   • Rooms: ${invoiceData.numberOfRooms}` : ''}
-
-💳 Payment Details:
-   • Total Amount: $${parseFloat(invoiceData.totalPrice || 0).toFixed(2)}
-   • Payment Status: ${invoiceData.paymentStatus}
-   • Payment Required: YES
-
-${invoiceData.dueDate ? `📅 Payment Due: ${formatDateTime(invoiceData.dueDate)}\n` : ''}
-${invoiceData.instructions ? `💡 Instructions: ${invoiceData.instructions}\n` : ''}
-📝 Important Information:
-   • Complete payment to confirm your booking
-   • Check-in: 2:00 PM
-   • Check-out: 12:00 PM
-   • Government ID required at check-in
-
-Thank you for your booking!
+ Thank you for your booking!
       `.trim();
 
       await Share.share({
@@ -511,13 +507,13 @@ Thank you for your booking!
         return { text: 'CONFIRMED', style: styles.statusConfirmed, icon: 'check-circle', textColor: '#2e7d32' };
       case 'PENDING_PAYMENT':
       case 'PENDING':
-        return { text: 'PAYMENT PENDING', style: styles.statusPending, icon: 'payment', textColor: '#856404' };
+        return { text: 'PAYMENT PENDING', style: styles.statusPending, icon: 'payment', textColor: '#aa2e25' };
       case 'PROCESSING':
         return { text: 'PROCESSING', style: styles.statusProcessing, icon: 'schedule', textColor: '#6c757d' };
       case 'CANCELLED':
         return { text: 'CANCELLED', style: styles.statusCancelled, icon: 'cancel', textColor: '#dc3545' };
       default:
-        return { text: status || 'PENDING', style: styles.statusPending, icon: 'schedule', textColor: '#856404' };
+        return { text: status || 'PENDING', style: styles.statusPending, icon: 'schedule', textColor: '#aa2e25' };
     }
   };
 
@@ -592,13 +588,20 @@ Thank you for your booking!
               <Icon
                 name={statusInfo.icon}
                 size={40}
-                color="#b48a64"
+                color={invoiceData?.status === 'PAID' || invoiceData?.status === 'CONFIRMED' ? '#2e7d32' : "#b48a64"}
               />
+              {(invoiceData?.status === 'PAID' || invoiceData?.status === 'CONFIRMED') && (
+                <Text style={{ color: '#2e7d32', fontWeight: 'bold', marginTop: 5 }}>
+                  Payment Successful
+                </Text>
+              )}
               <Text style={styles.invoiceTitle}>
                 ROOM BOOKING VOUCHER
               </Text>
               <Text style={styles.invoiceSubtitle}>
-                Complete payment to confirm your booking
+                {(invoiceData?.status === 'PAID' || invoiceData?.status === 'CONFIRMED')
+                  ? "Payment successful! Your booking is being finalized."
+                  : "Complete payment to confirm your booking"}
               </Text>
               {timeLeft && timeLeft !== 'EXPIRED' && invoiceData?.status !== 'PAID' && (
                 <View style={styles.timerWrapper}>
@@ -856,7 +859,7 @@ Thank you for your booking!
                 </Text>
               </TouchableOpacity> */}
 
-              {/* <TouchableOpacity
+              <TouchableOpacity
                 style={styles.shareButton}
                 onPress={handleShareInvoice}
                 disabled={shareLoading}
@@ -865,7 +868,7 @@ Thank you for your booking!
                 <Text style={styles.shareButtonText}>
                   {shareLoading ? 'Sharing...' : 'Share Invoice'}
                 </Text>
-              </TouchableOpacity> */}
+              </TouchableOpacity>
             </View>
 
             {/* Make Payment Button */}
@@ -970,9 +973,16 @@ const styles = StyleSheet.create({
   invoiceHeader: {
     alignItems: 'center',
     padding: 20,
-    backgroundColor: '#f8f9fa',
-    borderRadius: 15,
+    backgroundColor: '#fff',
+    borderRadius: 12,
     marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
   },
   invoiceTitle: {
     fontSize: 22,
@@ -1080,10 +1090,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   statusConfirmed: {
-    backgroundColor: '#e8f5e8',
+    backgroundColor: '#d4efdf',
   },
   statusPending: {
-    backgroundColor: '#fff3cd',
+    backgroundColor: '#fadbd8',
   },
   statusProcessing: {
     backgroundColor: '#e2e3e5',

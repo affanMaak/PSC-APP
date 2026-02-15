@@ -437,7 +437,7 @@ const contact = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#FEF9F3',
   },
   notch: {
     paddingTop: 50,
@@ -481,7 +481,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   card: {
-    backgroundColor: '#f1e3dcff',
+    backgroundColor: 'white',
     borderRadius: 15,
     padding: 20,
     marginBottom: 15,
