@@ -269,7 +269,10 @@ const BookingSummaryBar = () => {
     const totalVouchers = activeVouchers.length;
 
     return (
-        <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
+        <Animated.View
+            style={[styles.container, { opacity: fadeAnim }]}
+            pointerEvents="box-none"
+        >
 
             {!expanded && (
                 <TouchableOpacity

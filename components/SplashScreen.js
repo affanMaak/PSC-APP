@@ -12,12 +12,12 @@ const { width, height } = Dimensions.get('window');
 
 const SplashScreen = ({ onFinish }) => {
     useEffect(() => {
-        // Very short duration since native splash handles initial loading
+        // Show splash screen for 2.5 seconds
         const timer = setTimeout(() => {
             if (onFinish) {
                 onFinish();
             }
-        }, 100);
+        }, 2500);
 
         return () => clearTimeout(timer);
     }, [onFinish]);

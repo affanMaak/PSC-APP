@@ -70,8 +70,6 @@ import HallInvoiceScreen from './src/halls/HallInvoiceScreen';
 import aff_club from './src/affClub/aff_club';
 import calendar from './src/adminOnly/calender';
 import Dashboard from './src/adminOnly/Dashboard'; // Import Dashboard
-import Aerobics_gym from './slides/Aerobics_gym';
-import Badminton from './slides/Badminton';
 import Gym_jogging from './slides/Gym_jogging';
 import Tennis from './slides/Tennis';
 import Squash from './slides/Squash';
@@ -585,8 +583,6 @@ function AppContent() {
         <Stack.Screen name="events" component={events} options={{ headerShown: false }} />
         <Stack.Screen name="shoots" component={shoots} options={{ headerShown: false }} />
         <Stack.Screen name="SportsScreen" component={SportsScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="Aerobics_gym" component={Aerobics_gym} options={{ headerShown: false }} />
-        <Stack.Screen name="Badminton" component={Badminton} options={{ headerShown: false }} />
         <Stack.Screen name="Gym_jogging" component={Gym_jogging} options={{ headerShown: false }} />
         <Stack.Screen name="Tennis" component={Tennis} options={{ headerShown: false }} />
         <Stack.Screen name="Squash" component={Squash} options={{ headerShown: false }} />

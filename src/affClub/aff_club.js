@@ -59,19 +59,12 @@ const aff_club = () => {
     checkAdminStatus();
     fetchUserProfile();
     fetchAffiliatedClubs();
-    // Show instructions modal ONLY on first visit using AsyncStorage
+    // Show instructions modal when the screen opens
     checkFirstVisit();
   }, []);
 
   const checkFirstVisit = async () => {
-    try {
-      const hasSeenInstructions = await AsyncStorage.getItem('aff_club_instructions_seen');
-      if (!hasSeenInstructions) {
-        setInstructionsModalVisible(true);
-      }
-    } catch (error) {
-      console.log('Error checking first visit:', error);
-    }
+    setInstructionsModalVisible(true);
   };
 
   const dismissInstructionsModal = async () => {
@@ -1075,7 +1068,7 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: '#F44336',
+    backgroundColor: '#b48a64',
     justifyContent: 'center',
     alignItems: 'center',
   },

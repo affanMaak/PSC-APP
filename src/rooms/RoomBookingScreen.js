@@ -166,7 +166,6 @@ export default function RoomBookingScreen({ navigation, route }) {
             return;
         }
 
-        // Validate guest booking fields
         if (isGuestBooking) {
             if (!guestName || guestName.trim() === '') {
                 Alert.alert('Error', 'Please enter guest name');
@@ -174,6 +173,13 @@ export default function RoomBookingScreen({ navigation, route }) {
             }
             if (!guestContact || guestContact.trim() === '') {
                 Alert.alert('Error', 'Please enter guest contact number');
+                return;
+            }
+
+            // Validate Pakistani mobile number format (03xxxxxxxxx)
+            const phoneRegex = /^03\d{9}$/;
+            if (!phoneRegex.test(guestContact.trim())) {
+                Alert.alert('Invalid Mobile Number', 'Please enter a valid mobile number   (e.g., 03001234567).');
                 return;
             }
         }

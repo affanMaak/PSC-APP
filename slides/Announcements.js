@@ -10,7 +10,7 @@ import {
   ScrollView,
   TouchableWithoutFeedback,
   Dimensions,
-  Alert
+
 } from "react-native";
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { getUserNotifications, updateNotiStatus } from "../config/apis";
@@ -45,27 +45,7 @@ export default function Announcements({ navigation }) {
     }
   };
 
-  const handleClearAll = async () => {
-    Alert.alert(
-      "Clear All Notifications",
-      "Are you sure you want to clear all notifications?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Clear All",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await AsyncStorage.setItem('lastClearedNotificationsTime', new Date().toISOString());
-              setAnnouncements([]);
-            } catch (error) {
-              console.error("Error clearing notifications:", error);
-            }
-          }
-        }
-      ]
-    );
-  };
+
 
   useEffect(() => {
     fetchAnnouncements();
@@ -125,12 +105,7 @@ export default function Announcements({ navigation }) {
             <Icon name="arrow-back" size={28} color="#000" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Announcements</Text>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={handleClearAll}
-          >
-            <Icon name="delete-sweep" size={28} color="#000" />
-          </TouchableOpacity>
+          <View style={styles.backButton} />
         </View>
       </ImageBackground>
 
