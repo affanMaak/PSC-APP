@@ -49,14 +49,6 @@ export default function MemberBookingsScreen({ navigation }) {
     const bookingTypes = ['Room', 'Hall', 'Lawn', 'Photoshoot'];
     const membershipNo = user?.membershipNo || user?.membership_no || user?.Membership_No || user?.id;
 
-    useEffect(() => {
-        fetchBookings();
-    }, []);
-
-    useEffect(() => {
-        filterBookings();
-    }, [selectedType, selectedStatus, searchQuery, bookings]);
-
     const fetchBookings = async () => {
         try {
             setLoading(true);
@@ -98,6 +90,15 @@ export default function MemberBookingsScreen({ navigation }) {
             setRefreshing(false);
         }
     };
+
+    useEffect(() => {
+        fetchBookings();
+    }, []);
+
+    useEffect(() => {
+        filterBookings();
+    }, [selectedType, selectedStatus, searchQuery, bookings]);
+
 
     // Helper function to process different API response formats
     const processBookingsResponse = (data, type) => {
@@ -207,7 +208,7 @@ export default function MemberBookingsScreen({ navigation }) {
                         booking.state || '').toUpperCase();
 
                     // Trust terminal statuses from API
-                    if (['PAID', 'COMPLETED', 'CANCELLED', 'REJECTED', 'REJECT'].includes(originalStatus)) {
+                    if (['PAID', 'COMPLETED', 'CANCELLED', 'REJECTED', 'REJECT', 'ADVANCE_PAYMENT'].includes(originalStatus)) {
                         return originalStatus;
                     }
 
@@ -228,19 +229,27 @@ export default function MemberBookingsScreen({ navigation }) {
                     return originalStatus || 'UNPAID';
                 })(),
 
-                guestName: booking.guestName || booking.name || booking.member_name,
+                roomNumber: booking.rooms?.length > 0
+                    ? booking.rooms.map(r => r.room?.roomNumber).filter(Boolean).join(', ')
+                    : (booking.roomNumber || booking.roomId || booking.room_no),
+                roomType: booking.rooms?.length > 0
+                    ? [...new Set(booking.rooms.map(r => r.room?.roomType?.type).filter(Boolean))].join(', ')
+                    : booking.roomType,
+                guestName: booking.guestName || booking.member_name || (booking.rooms ? '' : booking.name), // Only use booking.name as guestName if it's not a room booking
                 guestContact: booking.guestContact || booking.contact || booking.phone,
                 numberOfGuests: booking.numberOfGuests || booking.guests || booking.guest_count || booking.no_of_guests || booking.pax,
                 numberOfAdults: booking.numberOfAdults || booking.adults,
                 numberOfChildren: booking.numberOfChildren || booking.children,
                 pricingType: booking.pricingType,
+                pricingLabel: getPricingLabel(booking.pricingType),
                 bookingType: booking.bookingType || getBookingTypeFromData(booking),
                 createdAt: booking.createdAt || booking.created_date || booking.date_created,
                 isCancelled: booking.isCancelled === true || booking.is_cancelled === true ||
                     booking.status === 'CANCELLED' || booking.paymentStatus === 'CANCELLED',
                 specialRequest: booking.specialRequest || booking.description,
                 remarks: booking.remarks,
-                cancellationRequests: booking.cancellationRequests
+                cancellationRequests: booking.cancellationRequests,
+                vouchers: booking.vouchers || []
             };
         });
     };
@@ -411,6 +420,16 @@ export default function MemberBookingsScreen({ navigation }) {
         return `${numAmount.toFixed(0)} Rs.`;
     };
 
+    const getPricingLabel = (type) => {
+        if (!type) return 'Guest Rate';
+        const t = type.toLowerCase();
+        if (t === 'member') return 'Member Rate';
+        if (t === 'forces') return 'Forces Rate';
+        if (t === 'forces-guest') return 'Forces Guest Rate';
+        if (t === 'guest') return 'Guest Rate';
+        return t.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ') + ' Rate';
+    };
+
     const getStatusColor = (status) => {
         if (!status) return '#6c757d';
         const statusUpper = status.toUpperCase();
@@ -422,6 +441,7 @@ export default function MemberBookingsScreen({ navigation }) {
             case 'PENDING':
             case 'HALF_PAID':
             case 'PARTIAL':
+            case 'ADVANCE_PAYMENT':
                 return '#ffc107';
             case 'UNPAID':
             case 'CANCELLED':
@@ -464,15 +484,25 @@ export default function MemberBookingsScreen({ navigation }) {
                     {/* Display Room Number or Venue Name based on type */}
                     {['Hall', 'Lawn', 'Photoshoot'].includes(item.bookingType) ? (
                         <View style={styles.roomInfo}>
-                            {/* <Icon name="location-city" size={16} color="#666" /> */}
+                            <Icon name="location-city" size={16} color="#666" />
                             <Text style={styles.roomText}>{item.venueName || item.bookingType}</Text>
                         </View>
-                    ) : item.roomNumber ? (
-                        <View style={styles.roomInfo}>
-                            {/* <Icon name="meeting-room" size={16} color="#666" /> */}
-                            <Text style={styles.roomText}>Room {item.roomNumber}</Text>
+                    ) : (
+                        <View>
+                            {item.roomNumber && (
+                                <View style={styles.roomInfo}>
+                                    <Icon name="meeting-room" size={16} color="#666" />
+                                    <Text style={styles.roomText}>Room: {item.roomNumber}</Text>
+                                </View>
+                            )}
+                            {item.roomType && (
+                                <View style={styles.roomInfo}>
+                                    <Icon name="category" size={16} color="#666" />
+                                    <Text style={styles.roomText}>Type: {item.roomType}</Text>
+                                </View>
+                            )}
                         </View>
-                    ) : null}
+                    )}
 
                     {/* Conditional Date Display */}
                     {['Hall', 'Lawn', 'Photoshoot'].includes(item.bookingType) ? (

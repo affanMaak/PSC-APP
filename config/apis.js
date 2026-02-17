@@ -5,8 +5,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const getBaseUrl = () => {
   if (Platform.OS === 'android') {
-    return 'https://admin.peshawarservicesclub.com/api';
-    // return 'http://10.0.2.2:3000/api'; 
+    // return 'https://admin.peshawarservicesclub.com/api';
+    return 'http://10.0.2.2:3000/api'; 
   } else {
     return 'https://admin.peshawarservicesclub.com/api';
   }

@@ -14,7 +14,8 @@ import {
     ActivityIndicator,
     ImageBackground,
     Platform,
-    TextInput
+    TextInput,
+    Clipboard
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { bookingService } from '../../services/bookingService';
@@ -152,6 +153,7 @@ export default function BookingDetailsScreen({ navigation, route }) {
             case 'PENDING':
             case 'HALF_PAID':
             case 'PARTIAL':
+            case 'ADVANCE_PAYMENT':
                 return '#ffc107';
             case 'UNPAID':
             case 'CANCELLED':
@@ -162,9 +164,32 @@ export default function BookingDetailsScreen({ navigation, route }) {
         }
     };
 
+    const getPricingLabel = (type) => {
+        if (!type) return 'Guest Rate';
+        const t = type.toLowerCase();
+        if (t === 'member') return 'Member Rate';
+        if (t === 'forces') return 'Forces Rate';
+        if (t === 'forces-guest') return 'Forces Guest Rate';
+        if (t === 'guest') return 'Guest Rate';
+        return t.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ') + ' Rate';
+    };
+
     const getStatusText = (status) => {
         if (!status) return 'Unknown';
         return status.replace('_', ' ').toUpperCase();
+    };
+
+    const getPaymentModeLabel = (mode) => {
+        if (!mode) return 'N/A';
+        const m = mode.toUpperCase();
+        if (m === 'CHECK' || m === 'CHEQUE') return 'Cheque';
+        return mode;
+    };
+
+    const copyToClipboard = (text, label) => {
+        if (!text) return;
+        Clipboard.setString(text);
+        Alert.alert('Copied', `${label} copied to clipboard`);
     };
 
     const getBookingType = () => {
@@ -343,7 +368,11 @@ Check-out: ${formatDate(booking.checkOut)}
             const originalStatus = (booking.paymentStatus || booking.status ||
                 booking.bookingStatus || booking.payment_status ||
                 booking.state || '').toUpperCase();
-            if (['PAID', 'COMPLETED', 'CANCELLED', 'REJECTED', 'REJECT'].includes(originalStatus)) return originalStatus;
+
+            // Trust terminal statuses from API
+            if (['PAID', 'COMPLETED', 'CANCELLED', 'REJECTED', 'REJECT', 'ADVANCE_PAYMENT'].includes(originalStatus)) {
+                return originalStatus;
+            }
 
             const total = parseFloat(booking.totalPrice || booking.total_price || booking.amount ||
                 booking.totalAmount || booking.total_amount || booking.netAmount ||
@@ -358,53 +387,127 @@ Check-out: ${formatDate(booking.checkOut)}
             }
             return originalStatus || 'UNPAID';
         })(),
+
+        roomNumber: booking.rooms?.length > 0
+            ? booking.rooms.map(r => r.room?.roomNumber).filter(Boolean).join(', ')
+            : (booking.roomNumber || booking.roomId || (booking.room?.roomNumber)),
+        roomType: booking.rooms?.length > 0
+            ? [...new Set(booking.rooms.map(r => r.room?.roomType?.type).filter(Boolean))].join(', ')
+            : (booking.roomType || booking.room?.roomType?.type || (booking.name?.includes('(') ? booking.name.split('(')[1].split(')')[0] : '')),
+        vouchers: booking.vouchers || [],
+
+        pricingLabel: getPricingLabel(booking.pricingType),
         isCancelled: booking.isCancelled === true || booking.is_cancelled === true ||
             booking.status === 'CANCELLED' || booking.paymentStatus === 'CANCELLED'
     };
 
-    const renderPaymentSummary = () => (
-        <View style={styles.paymentSummaryCard}>
-            <Text style={styles.cardTitle}>Payment Summary</Text>
+    const renderPaymentSummary = () => {
+        const sortedVouchers = [...(processedBooking.vouchers || [])].sort((a, b) =>
+            new Date(b.issued_at) - new Date(a.issued_at)
+        );
 
-            <View style={styles.paymentRow}>
-                <Text style={styles.paymentLabel}>Total Amount:</Text>
-                <Text style={styles.totalAmount}>{formatCurrency(processedBooking.totalPrice)}</Text>
-            </View>
-
-            <View style={styles.paymentRow}>
-                <Text style={styles.paymentLabel}>Paid Amount:</Text>
-                <Text style={[styles.amountValue, { color: '#28a745' }]}>
-                    {formatCurrency(processedBooking.paidAmount)}
-                </Text>
-            </View>
-
-            <View style={styles.paymentRow}>
-                <Text style={styles.paymentLabel}>Pending Amount:</Text>
-                <Text style={[styles.amountValue, { color: '#dc3545' }]}>
-                    {formatCurrency(processedBooking.pendingAmount)}
-                </Text>
-            </View>
-
-            <View style={[styles.paymentRow, styles.paymentRowTotal]}>
-                <Text style={styles.paymentLabel}>Payment Status:</Text>
-                <View style={[
-                    styles.statusBadge,
-                    { backgroundColor: `${getStatusColor(processedBooking.paymentStatus)}20` }
-                ]}>
-                    <View style={[
-                        styles.statusDot,
-                        { backgroundColor: getStatusColor(processedBooking.paymentStatus) }
-                    ]} />
-                    <Text style={[
-                        styles.statusText,
-                        { color: getStatusColor(processedBooking.paymentStatus) }
-                    ]}>
-                        {getStatusText(processedBooking.paymentStatus)}
+        return (
+            <View style={styles.paymentSummaryCard}>
+                <View style={styles.cardHeader}>
+                    <Icon name="payments" size={20} color="#b48a64" />
+                    <Text style={[styles.cardTitle, { marginBottom: 0, borderBottomWidth: 0, paddingBottom: 0, marginLeft: 10 }]}>
+                        Payment Summary
                     </Text>
                 </View>
+
+                <View style={[styles.paymentRow, styles.paymentRowTotal, { marginTop: 10, borderBottomWidth: 0 }]}>
+                    <Text style={styles.paymentLabel}>Current Status:</Text>
+                    <View style={[
+                        styles.statusBadge,
+                        { backgroundColor: `${getStatusColor(processedBooking.paymentStatus)}20` }
+                    ]}>
+                        <View style={[
+                            styles.statusDot,
+                            { backgroundColor: getStatusColor(processedBooking.paymentStatus) }
+                        ]} />
+                        <Text style={[
+                            styles.statusText,
+                            { color: getStatusColor(processedBooking.paymentStatus) }
+                        ]}>
+                            {getStatusText(processedBooking.paymentStatus)}
+                        </Text>
+                    </View>
+                </View>
+
+                {sortedVouchers.length > 0 ? (
+                    <View style={styles.vouchersContainer}>
+                        <Text style={styles.subCardTitle}>Payment Vouchers</Text>
+                        {sortedVouchers.map((voucher, index) => (
+                            <View key={index} style={styles.voucherItem}>
+                                <View style={styles.voucherHeader}>
+                                    <View style={styles.voucherHeaderLeft}>
+                                        <Icon name="confirmation-number" size={16} color="#b48a64" />
+                                        <Text style={styles.voucherConsumerHeader}>{voucher.consumer_number}</Text>
+                                        <TouchableOpacity
+                                            onPress={() => copyToClipboard(voucher.consumer_number, 'Consumer Number')}
+                                            style={styles.copyIconBtn}
+                                        >
+                                            <Icon name="content-copy" size={14} color="#b48a64" opacity={0.7} />
+                                        </TouchableOpacity>
+                                    </View>
+                                    <View style={[styles.miniStatusBadge, { backgroundColor: voucher.status === 'CONFIRMED' ? '#d4edda' : '#fff3cd' }]}>
+                                        <Text style={[styles.miniStatusText, { color: voucher.status === 'CONFIRMED' ? '#155724' : '#856404' }]}>
+                                            {voucher.status}
+                                        </Text>
+                                    </View>
+                                </View>
+
+                                <View style={styles.voucherBody}>
+                                    <View style={styles.voucherMainRow}>
+                                        <View>
+                                            <Text style={styles.voucherTypeLabel}>{voucher.voucher_type?.replace('_', ' ')}</Text>
+                                            <Text style={styles.voucherDateLabel}>{formatDate(voucher.issued_at)}</Text>
+                                        </View>
+                                        <Text style={styles.voucherAmountLarge}>{formatCurrency(voucher.amount)}</Text>
+                                    </View>
+
+                                    <View style={styles.voucherDivider} />
+
+                                    <View style={styles.voucherDetailsGrid}>
+                                        <View style={styles.voucherDetailItem}>
+                                            <Text style={styles.voucherDetailLabel}>Payment Mode</Text>
+                                            <Text style={styles.voucherDetailValue}>{getPaymentModeLabel(voucher.payment_mode)} {voucher.channel ? `(${voucher.channel})` : ''}</Text>
+                                        </View>
+                                        {(voucher.transaction_id || voucher.transactionId) && (
+                                            <View style={styles.voucherDetailItem}>
+                                                <Text style={styles.voucherDetailLabel}>Transaction ID</Text>
+                                                <Text style={styles.voucherDetailValue}>{voucher.transaction_id || voucher.transactionId}</Text>
+                                            </View>
+                                        )}
+                                        {voucher.check_number && (
+                                            <View style={styles.voucherDetailItem}>
+                                                <Text style={styles.voucherDetailLabel}>Cheque Number</Text>
+                                                <Text style={styles.voucherDetailValue}>{voucher.check_number}</Text>
+                                            </View>
+                                        )}
+                                        {voucher.bank_name && (
+                                            <View style={styles.voucherDetailItem}>
+                                                <Text style={styles.voucherDetailLabel}>Bank Name</Text>
+                                                <Text style={styles.voucherDetailValue}>{voucher.bank_name.toUpperCase()}</Text>
+                                            </View>
+                                        )}
+                                    </View>
+                                    {voucher.remarks && (
+                                        <Text style={styles.voucherRemarks}>"{voucher.remarks}"</Text>
+                                    )}
+                                </View>
+                            </View>
+                        ))}
+                    </View>
+                ) : (
+                    <View style={styles.noVouchersContainer}>
+                        <Icon name="receipt" size={40} color="#ccc" />
+                        <Text style={styles.noVouchersText}>No payment vouchers found</Text>
+                    </View>
+                )}
             </View>
-        </View>
-    );
+        );
+    };
 
     const renderBookingTimeline = () => {
         const type = getBookingType();
@@ -551,15 +654,23 @@ Check-out: ${formatDate(booking.checkOut)}
     };
 
     const renderRoomInfo = () => {
-        if (!booking.roomNumber) return null;
+        if (!processedBooking.roomNumber) return null;
 
         return (
             <View style={styles.roomCard}>
                 <Text style={styles.cardTitle}>Room Information</Text>
 
-                <View style={styles.roomHeader}>
-                    <Icon name="meeting-room" size={24} color="#b48a64" />
-                    <Text style={styles.roomNumber}>Room {booking.roomNumber}</Text>
+                <View style={styles.roomInfoGrid}>
+                    <View style={styles.roomInfoBox}>
+                        <Icon name="meeting-room" size={24} color="#b48a64" />
+                        <Text style={styles.roomInfoLabel}>Room Number</Text>
+                        <Text style={styles.roomInfoValue}>{processedBooking.roomNumber}</Text>
+                    </View>
+                    <View style={styles.roomInfoBox}>
+                        <Icon name="category" size={24} color="#b48a64" />
+                        <Text style={styles.roomInfoLabel}>Room Type</Text>
+                        <Text style={styles.roomInfoValue}>{processedBooking.roomType || 'N/A'}</Text>
+                    </View>
                 </View>
 
                 <View style={styles.roomDetails}>
@@ -571,15 +682,15 @@ Check-out: ${formatDate(booking.checkOut)}
                     <View style={styles.detailBadge}>
                         <Icon name="people" size={14} color="#666" />
                         <Text style={styles.detailBadgeText}>
-                            {booking.numberOfAdults || 1} Adult{booking.numberOfAdults !== 1 ? 's' : ''}
-                            {booking.numberOfChildren ? `, ${booking.numberOfChildren} Child${booking.numberOfChildren !== 1 ? 'ren' : ''}` : ''}
+                            {processedBooking.numberOfAdults || 1} Adult{processedBooking.numberOfAdults !== 1 ? 's' : ''}
+                            {processedBooking.numberOfChildren ? `, ${processedBooking.numberOfChildren} Child${processedBooking.numberOfChildren !== 1 ? 'ren' : ''}` : ''}
                         </Text>
                     </View>
 
                     <View style={styles.detailBadge}>
                         <Icon name="price-change" size={14} color="#666" />
                         <Text style={styles.detailBadgeText}>
-                            {booking.pricingType === 'guest' ? 'Guest Rate' : 'Member Rate'}
+                            {processedBooking.pricingType === 'guest' ? 'Guest Rate' : 'Member Rate'}
                         </Text>
                     </View>
                 </View>
@@ -699,46 +810,49 @@ Check-out: ${formatDate(booking.checkOut)}
                     <Text style={styles.bookingType}>{getBookingType()} Booking</Text>
                 </View>
 
-                {/* Venue or Room Information */}
-                {['Hall', 'Lawn', 'Photoshoot'].includes(getBookingType()) ? renderVenueInfo() : renderRoomInfo()}
-
-                {/* Guest Information */}
-                {renderGuestInfo()}
-
-                {/* Booking Details */}
+                {/* Booking Details Section (Consolidated) */}
                 <View style={styles.detailsCard}>
-                    <Text style={styles.cardTitle}>Booking Details</Text>
+                    <View style={styles.cardHeader}>
+                        <Icon name="info" size={20} color="#b48a64" />
+                        <Text style={[styles.cardTitle, { marginBottom: 0, borderBottomWidth: 0, paddingBottom: 0, marginLeft: 10 }]}>
+                            Booking Information
+                        </Text>
+                    </View>
 
-                    {voucherInfo.voucherNumber && renderHighlightDetailItem('Voucher Number', voucherInfo.voucherNumber, 'receipt')}
-                    {voucherInfo.consumerNumber && renderHighlightDetailItem('Consumer Number', voucherInfo.consumerNumber, 'confirmation-number')}
+                    {/* Room Info */}
+                    {processedBooking.roomNumber && renderDetailItem('Room Number', processedBooking.roomNumber, 'meeting-room')}
+                    {processedBooking.roomType && renderDetailItem('Room Type', processedBooking.roomType, 'category')}
+                    {calculateNights() > 0 && renderDetailItem('Duration', `${calculateNights()} Night(s)`, 'nights-stay')}
+                    {renderDetailItem('Pricing', processedBooking.pricingLabel, 'price-change', true)}
 
-                    {['Hall', 'Lawn', 'Photoshoot'].includes(getBookingType()) ? (
+                    {/* Venue Specific Info */}
+                    {['Hall', 'Lawn', 'Photoshoot'].includes(getBookingType()) && (
                         <>
+                            {renderDetailItem('Venue', booking.venueName || booking.hallName || booking.lawnName || booking.name || getBookingType(), 'location-on')}
                             {renderDetailItem('Event Date', formatDate(booking.checkIn || booking.date || booking.eventDate), 'event')}
                             {(booking.eventTime || booking.timeSlot) && renderDetailItem('Time Slot', booking.eventTime || booking.timeSlot, 'access-time')}
-                            {(booking.eventType || booking.event_type) && renderDetailItem('Event Type', booking.eventType || booking.event_type, 'category')}
-                        </>
-                    ) : (
-                        <>
-                            {renderDetailItem('Check-in', formatDate(booking.checkIn || booking.from || booking.startTime || booking.start_time || booking.start || booking.booking_from || booking.bookingDate || booking.booking_date || booking.date), 'event')}
-                            {renderDetailItem('Check-out', formatDate(booking.checkOut || booking.to || booking.endTime || booking.end_time || booking.end || booking.booking_to || booking.endDate || booking.bookingDate || booking.booking_date || booking.date), 'event-busy')}
-                            {calculateNights() > 0 && renderDetailItem('Nights Stay', `${calculateNights()} night(s)`, 'nights-stay')}
                         </>
                     )}
-                    {renderDetailItem('Booking Date', formatDate(booking.createdAt || booking.bookingDate || booking.booking_date || booking.date), 'schedule')}
 
-                    {/* Room Type for All Bookings */}
-                    {(booking.roomType || booking.room_type) && renderDetailItem('Room Type',
-                        (booking.roomType || booking.room_type).charAt(0).toUpperCase() +
-                        (booking.roomType || booking.room_type).slice(1).toLowerCase(),
-                        'hotel')}
+                    {/* Check-in/out for Rooms */}
+                    {!['Hall', 'Lawn', 'Photoshoot'].includes(getBookingType()) && (
+                        <>
+                            {renderDetailItem('Check-in', formatDate(booking.checkIn || booking.from || booking.bookingDate || booking.date), 'event')}
+                            {renderDetailItem('Check-out', formatDate(booking.checkOut || booking.to || booking.endDate || booking.date), 'event-busy')}
+                        </>
+                    )}
 
-                    {/* Room Number for Guest Bookings */}
-                    {(booking.pricingType || '').toLowerCase() === 'guest' && (booking.roomNumber || booking.room_number) &&
-                        renderDetailItem('Guest Room',
-                            `Guest: Room ${booking.roomNumber || booking.room_number}`,
-                            'meeting-room')}
+                    {/* Guest Section */}
+                    <View style={styles.sectionDivider} />
+                    <Text style={styles.subCardTitle}>Guest Details</Text>
+                    {renderDetailItem('Guests', `${processedBooking.numberOfAdults || 1} Adult(s)${processedBooking.numberOfChildren ? `, ${processedBooking.numberOfChildren} Child(ren)` : ''}`, 'people')}
+                    {booking.guestName && renderDetailItem('Guest Name', booking.guestName, 'person')}
+                    {booking.guestContact && renderDetailItem('Contact', booking.guestContact, 'phone')}
+                    {booking.guestCNIC && renderDetailItem('CNIC', booking.guestCNIC, 'badge')}
 
+                    {/* Extra Info */}
+                    <View style={styles.sectionDivider} />
+                    {renderDetailItem('Booked On', formatDate(booking.createdAt || booking.bookingDate || booking.date), 'schedule')}
 
                     {booking.specialRequest && (
                         <View style={styles.specialRequestContainer}>
@@ -746,9 +860,7 @@ Check-out: ${formatDate(booking.checkOut)}
                                 <Icon name="info" size={18} color="#666" />
                                 <Text style={styles.detailLabel}>Special Request</Text>
                             </View>
-                            <Text style={styles.specialRequestText}>
-                                {booking.specialRequest}
-                            </Text>
+                            <Text style={styles.specialRequestText}>{booking.specialRequest}</Text>
                         </View>
                     )}
 
@@ -758,12 +870,28 @@ Check-out: ${formatDate(booking.checkOut)}
                                 <Icon name="chat" size={18} color="#666" />
                                 <Text style={styles.detailLabel}>Remarks</Text>
                             </View>
-                            <Text style={styles.remarksText}>
-                                {booking.remarks}
-                            </Text>
+                            <Text style={styles.remarksText}>{booking.remarks}</Text>
                         </View>
                     )}
                 </View>
+
+                {/* Multi-date list for Hall/Lawn */}
+                {booking.bookingDetails?.length > 0 && (
+                    <View style={styles.detailsCard}>
+                        <Text style={styles.subCardTitle}>Selected Dates</Text>
+                        {booking.bookingDetails.map((d, index) => (
+                            <View key={index} style={styles.multiDateItem}>
+                                <Icon name="event" size={14} color="#b48a64" />
+                                <View style={styles.multiDateContent}>
+                                    <Text style={styles.multiDateText}>{formatDate(d.date)}</Text>
+                                    <Text style={styles.multiDateSubtext}>
+                                        {d.timeSlot || booking.eventTime || 'N/A'} {d.eventType ? `| ${d.eventType}` : ''}
+                                    </Text>
+                                </View>
+                            </View>
+                        ))}
+                    </View>
+                )}
 
                 {/* Payment Summary */}
                 {renderPaymentSummary()}
@@ -1070,6 +1198,34 @@ const styles = StyleSheet.create({
         color: '#b48a64',
         marginLeft: 12,
     },
+    roomInfoGrid: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: 20,
+        gap: 15,
+    },
+    roomInfoBox: {
+        flex: 1,
+        backgroundColor: '#f9f3eb',
+        padding: 15,
+        borderRadius: 12,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#e9e0d2',
+    },
+    roomInfoLabel: {
+        fontSize: 12,
+        color: '#666',
+        marginTop: 5,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+    roomInfoValue: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#333',
+        marginTop: 2,
+    },
     roomDetails: {
         flexDirection: 'row',
         flexWrap: 'wrap',
@@ -1110,10 +1266,41 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: 'bold',
         color: '#333',
-        marginBottom: 20,
-        paddingBottom: 10,
-        borderBottomWidth: 1,
-        borderBottomColor: '#f0f0f0',
+        marginBottom: 10,
+    },
+    subCardTitle: {
+        fontSize: 15,
+        fontWeight: 'bold',
+        color: '#b48a64',
+        marginBottom: 15,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+    sectionDivider: {
+        height: 1,
+        backgroundColor: '#f0f0f0',
+        marginVertical: 15,
+    },
+    multiDateItem: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        marginBottom: 12,
+        backgroundColor: '#f8f9fa',
+        padding: 10,
+        borderRadius: 8,
+    },
+    multiDateContent: {
+        marginLeft: 10,
+    },
+    multiDateText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#333',
+    },
+    multiDateSubtext: {
+        fontSize: 12,
+        color: '#666',
+        marginTop: 2,
     },
     detailItem: {
         flexDirection: 'row',
@@ -1232,6 +1419,131 @@ const styles = StyleSheet.create({
     },
     statusText: {
         fontSize: 12,
+        fontWeight: '500',
+    },
+    vouchersContainer: {
+        marginTop: 20,
+        paddingTop: 20,
+        borderTopWidth: 1,
+        borderTopColor: '#f0f0f0',
+    },
+    voucherTitle: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#333',
+        marginBottom: 15,
+    },
+    voucherItem: {
+        backgroundColor: '#fff',
+        borderRadius: 12,
+        marginBottom: 15,
+        borderWidth: 1,
+        borderColor: '#e9ecef',
+        overflow: 'hidden',
+        elevation: 1,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
+    },
+    voucherHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        backgroundColor: '#f8f9fa',
+        paddingHorizontal: 15,
+        paddingVertical: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: '#e9ecef',
+    },
+    voucherHeaderLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    voucherConsumerHeader: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: '#b48a64',
+        letterSpacing: 0.5,
+    },
+    copyIconBtn: {
+        padding: 5,
+        marginLeft: 4,
+    },
+    voucherBody: {
+        padding: 15,
+    },
+    voucherMainRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        marginBottom: 12,
+    },
+    voucherTypeLabel: {
+        fontSize: 13,
+        fontWeight: 'bold',
+        color: '#333',
+        textTransform: 'uppercase',
+    },
+    voucherDateLabel: {
+        fontSize: 11,
+        color: '#666',
+        marginTop: 2,
+    },
+    voucherAmountLarge: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#b48a64',
+    },
+    voucherDivider: {
+        height: 1,
+        backgroundColor: '#f0f0f0',
+        marginBottom: 12,
+    },
+    voucherDetailsGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 15,
+    },
+    voucherDetailItem: {
+        width: '47%',
+    },
+    voucherDetailLabel: {
+        fontSize: 10,
+        color: '#888',
+        textTransform: 'uppercase',
+        marginBottom: 2,
+    },
+    voucherDetailValue: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#444',
+    },
+    voucherRemarks: {
+        fontSize: 11,
+        color: '#666',
+        fontStyle: 'italic',
+        marginTop: 12,
+        paddingTop: 8,
+        borderTopWidth: 1,
+        borderTopColor: '#f9f9f9',
+    },
+    noVouchersContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 30,
+        backgroundColor: '#f8f9fa',
+        borderRadius: 12,
+        marginTop: 15,
+        borderWidth: 1,
+        borderColor: '#eee',
+        borderStyle: 'dashed',
+    },
+    noVouchersText: {
+        fontSize: 14,
+        color: '#999',
+        marginTop: 10,
         fontWeight: '500',
     },
     timelineCard: {
