@@ -1069,7 +1069,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#b48a64',
     },
     guestSubmitButton: {
-        backgroundColor: '#b48a64',
+        backgroundColor: 'a',
     },
     submitButtonDisabled: {
         backgroundColor: '#b4896449',

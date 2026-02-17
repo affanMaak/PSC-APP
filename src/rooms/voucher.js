@@ -13,6 +13,10 @@ import {
   Clipboard,
   Platform,
   PermissionsAndroid,
+  Modal,
+  Animated,
+  Dimensions,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import Share from 'react-native-share';
 import Icon from 'react-native-vector-icons/MaterialIcons';
@@ -45,6 +49,7 @@ export default function voucher({ navigation, route }) {
   const [refreshing, setRefreshing] = useState(false);
   const [shareLoading, setShareLoading] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
   const [copied, setCopied] = useState(false);
   const invoiceRef = useRef(null);
 
@@ -623,7 +628,13 @@ export default function voucher({ navigation, route }) {
 
           <Text style={styles.notchTitle}>Booking Invoice</Text>
 
-          <View style={styles.iconWrapper} />
+          {(['PAID', 'CONFIRMED'].includes(invoiceData?.status?.toUpperCase())) ? (
+            <TouchableOpacity onPress={() => setShowShareModal(true)} style={styles.iconWrapper}>
+              <Icon name="share" size={24} color="#000" />
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.iconWrapper} />
+          )}
         </View>
       </ImageBackground>
 
@@ -905,38 +916,7 @@ export default function voucher({ navigation, route }) {
               </View>
             </View>
 
-            {/* Action Buttons */}
-            <View style={styles.actionButtons}>
-              {(['PAID', 'CONFIRMED'].includes(invoiceData?.status?.toUpperCase())) ? (
-                <>
-                  <TouchableOpacity
-                    style={styles.shareButton}
-                    onPress={handleShareInvoice}
-                    disabled={shareLoading}
-                  >
-                    <Icon name="share" size={20} color="#fff" />
-                    <Text style={styles.shareButtonText}>
-                      {shareLoading ? 'Sharing...' : 'Share'}
-                    </Text>
-                  </TouchableOpacity>
 
-                  <TouchableOpacity
-                    style={styles.saveButton}
-                    onPress={handleSaveToGallery}
-                    disabled={saveLoading}
-                  >
-                    <Icon name="download" size={20} color="#fff" />
-                    <Text style={styles.saveButtonText}>
-                      {saveLoading ? 'Saving...' : 'Save to Device'}
-                    </Text>
-                  </TouchableOpacity>
-                </>
-              ) : (
-                <Text style={{ textAlign: 'center', color: '#999', width: '100%', marginBottom: 10 }}>
-                  Status: {invoiceData?.status} (Payment not confirmed)
-                </Text>
-              )}
-            </View>
 
             {/* Make Payment Button */}
             {/* <TouchableOpacity
@@ -1087,6 +1067,69 @@ export default function voucher({ navigation, route }) {
           </View>
         </View>
       )}
+
+      {/* Bottom Sheet Modal */}
+      <Modal
+        visible={showShareModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowShareModal(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setShowShareModal(false)}>
+          <View style={styles.modalOverlay}>
+            <TouchableWithoutFeedback onPress={() => { }}>
+              <View style={styles.modalContent}>
+                {/* Handle bar */}
+                <View style={styles.modalHandle} />
+
+                {/* Share Invoice Option */}
+                <TouchableOpacity
+                  style={styles.modalOption}
+                  onPress={() => {
+                    setShowShareModal(false);
+                    handleShareInvoice();
+                  }}
+                  disabled={shareLoading}
+                >
+                  <View style={styles.modalIconContainer}>
+                    <Icon name="share" size={22} color="#333" />
+                  </View>
+                  <Text style={styles.modalOptionText}>
+                    {shareLoading ? 'Sharing...' : 'Share as Screenshot'}
+                  </Text>
+                </TouchableOpacity>
+
+                <View style={styles.modalDivider} />
+
+                {/* Save as Picture Option */}
+                <TouchableOpacity
+                  style={styles.modalOption}
+                  onPress={() => {
+                    setShowShareModal(false);
+                    handleSaveToGallery();
+                  }}
+                  disabled={saveLoading}
+                >
+                  <View style={styles.modalIconContainer}>
+                    <Icon name="save-alt" size={22} color="#333" />
+                  </View>
+                  <Text style={styles.modalOptionText}>
+                    {saveLoading ? 'Saving...' : 'Save as Picture'}
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Cancel */}
+                <TouchableOpacity
+                  style={styles.modalCancelButton}
+                  onPress={() => setShowShareModal(false)}
+                >
+                  <Text style={styles.modalCancelText}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
     </View>
   );
 }
@@ -1542,6 +1585,64 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 16,
+  },
+  // Bottom Sheet Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#ddd',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 20,
+  },
+  modalOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+  },
+  modalIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#f5f0ea',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 14,
+  },
+  modalOptionText: {
+    fontSize: 16,
+    color: '#222',
+    fontWeight: '500',
+  },
+  modalDivider: {
+    height: 1,
+    backgroundColor: '#f0ebe5',
+    marginLeft: 54,
+  },
+  modalCancelButton: {
+    marginTop: 10,
+    paddingVertical: 14,
+    alignItems: 'center',
+    backgroundColor: '#f5f0ea',
+    borderRadius: 12,
+  },
+  modalCancelText: {
+    fontSize: 16,
+    color: '#666',
+    fontWeight: '600',
   },
 });
 
