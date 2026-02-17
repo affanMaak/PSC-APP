@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,12 +8,16 @@ import {
   ActivityIndicator,
   Alert,
   StatusBar,
-  Share,
   RefreshControl,
   ImageBackground,
-  Clipboard
+  Clipboard,
+  Platform,
+  PermissionsAndroid,
 } from 'react-native';
+import Share from 'react-native-share';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import { captureRef } from 'react-native-view-shot';
+import { CameraRoll } from '@react-native-camera-roll/camera-roll';
 import { bookingService } from '../../services/bookingService';
 import { useAuth } from '../auth/contexts/AuthContext';
 import { useVoucher } from '../auth/contexts/VoucherContext';
@@ -40,7 +44,9 @@ export default function voucher({ navigation, route }) {
   const [timeLeft, setTimeLeft] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [shareLoading, setShareLoading] = useState(false);
+  const [saveLoading, setSaveLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const invoiceRef = useRef(null);
 
 
   useEffect(() => {
@@ -376,6 +382,67 @@ export default function voucher({ navigation, route }) {
     );
   };
 
+  const requestStoragePermission = async () => {
+    if (Platform.OS === 'android') {
+      try {
+        if (Platform.Version >= 33) {
+          return true;
+        } else {
+          const granted = await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+            {
+              title: 'Storage Permission',
+              message: 'This app needs storage permission to save invoice images to your gallery.',
+              buttonNeutral: 'Ask Me Later',
+              buttonNegative: 'Cancel',
+              buttonPositive: 'OK',
+            }
+          );
+          return granted === PermissionsAndroid.RESULTS.GRANTED;
+        }
+      } catch (error) {
+        console.error('Permission request error:', error);
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const handleSaveToGallery = async () => {
+    try {
+      setSaveLoading(true);
+
+      if (!invoiceData) {
+        Alert.alert('Error', 'No invoice data to save');
+        return;
+      }
+
+      const hasPermission = await requestStoragePermission();
+      if (!hasPermission) {
+        Alert.alert('Permission Required', 'Please grant storage permission to save the invoice.');
+        return;
+      }
+
+      // Wait a tick for the hidden view to render
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      const uri = await captureRef(invoiceRef, {
+        format: 'png',
+        quality: 1,
+        result: 'tmpfile',
+      });
+
+      await CameraRoll.save(uri, { type: 'photo' });
+      Alert.alert('Success', 'Invoice saved to gallery successfully!');
+
+    } catch (error) {
+      console.error('Error saving invoice:', error);
+      Alert.alert('Error', 'Failed to save invoice. Please try again.');
+    } finally {
+      setSaveLoading(false);
+    }
+  };
+
   const handleShareInvoice = async () => {
     try {
       setShareLoading(true);
@@ -385,38 +452,28 @@ export default function voucher({ navigation, route }) {
         return;
       }
 
-      const shareMessage = `
- BOOKING INVOICE
+      // Wait a tick for the hidden view to render
+      await new Promise(resolve => setTimeout(resolve, 300));
 
- Invoice Details:
- Invoice Number: ${invoiceData.invoiceNo}
- ${invoiceData.consumerNumber ? `Consumer Number: ${invoiceData.consumerNumber}` : ''}
- Booking ID: ${invoiceData.bookingId}
- Status: ${invoiceData.status}
- Room Information:
-    • Room Type: ${invoiceData.roomType}
-    ${invoiceData.roomNumber ? `   • Room Number: ${invoiceData.roomNumber}` : ''}
-    • Check-in: ${formatDate(invoiceData.checkIn)}
-    • Check-out: ${formatDate(invoiceData.checkOut)}
-    • Guests: ${invoiceData.numberOfAdults} Adults, ${invoiceData.numberOfChildren} Children
-    ${invoiceData.numberOfRooms ? `   • Rooms: ${invoiceData.numberOfRooms}` : ''}
- Payment Details:
-    ${invoiceData.fullTotalPrice ? `• Total Amount: Rs. ${parseFloat(invoiceData.fullTotalPrice).toFixed(2)}` : ''}
-    • Advance Deposit: Rs. ${parseFloat(invoiceData.totalPrice || 0).toFixed(2)}
-    • Payment Status: ${invoiceData.paymentStatus}
-    ${invoiceData.dueDate ? `• Payment Due: ${formatDateTime(invoiceData.dueDate)}` : ''}
- ${invoiceData.instructions ? `Instructions: ${invoiceData.instructions}\n` : ''}
-
- Thank you for your booking!
-      `.trim();
-
-      await Share.share({
-        message: shareMessage,
-        title: `Invoice - ${invoiceData.invoiceNo}`
+      const uri = await captureRef(invoiceRef, {
+        format: 'png',
+        quality: 1,
+        result: 'tmpfile',
       });
+
+      await Share.open({
+        title: `Invoice - ${invoiceData.invoiceNo}`,
+        url: uri, // react-native-share handles file:// URIs better
+        type: 'image/png',
+        subject: `Invoice - ${invoiceData.invoiceNo}`, // for email
+        message: `Here is the invoice for your booking: ${invoiceData.invoiceNo}`,
+      });
+
     } catch (error) {
-      console.error('Error sharing invoice:', error);
-      Alert.alert('Error', 'Failed to share invoice');
+      if (error?.message !== 'User did not share') {
+        // react-native-share throws specific error on cancel which we can ignore or log
+        console.log('Share dismissed or failed:', error);
+      }
     } finally {
       setShareLoading(false);
     }
@@ -640,6 +697,8 @@ export default function voucher({ navigation, route }) {
               </View>
             </View> */}
 
+
+
             {/* Invoice Details */}
             <View style={styles.invoiceSection}>
               <Text style={styles.sectionTitle}>Invoice Details</Text>
@@ -848,27 +907,35 @@ export default function voucher({ navigation, route }) {
 
             {/* Action Buttons */}
             <View style={styles.actionButtons}>
-              {/* <TouchableOpacity
-                style={styles.secondaryButton}
-                onPress={handleRefresh}
-                disabled={refreshing}
-              >
-                <Icon name="refresh" size={20} color="#b48a64" />
-                <Text style={styles.secondaryButtonText}>
-                  {refreshing ? 'Refreshing...' : 'Refresh Invoice'}
-                </Text>
-              </TouchableOpacity> */}
+              {(['PAID', 'CONFIRMED'].includes(invoiceData?.status?.toUpperCase())) ? (
+                <>
+                  <TouchableOpacity
+                    style={styles.shareButton}
+                    onPress={handleShareInvoice}
+                    disabled={shareLoading}
+                  >
+                    <Icon name="share" size={20} color="#fff" />
+                    <Text style={styles.shareButtonText}>
+                      {shareLoading ? 'Sharing...' : 'Share'}
+                    </Text>
+                  </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.shareButton}
-                onPress={handleShareInvoice}
-                disabled={shareLoading}
-              >
-                <Icon name="share" size={20} color="#fff" />
-                <Text style={styles.shareButtonText}>
-                  {shareLoading ? 'Sharing...' : 'Share Invoice'}
+                  <TouchableOpacity
+                    style={styles.saveButton}
+                    onPress={handleSaveToGallery}
+                    disabled={saveLoading}
+                  >
+                    <Icon name="download" size={20} color="#fff" />
+                    <Text style={styles.saveButtonText}>
+                      {saveLoading ? 'Saving...' : 'Save to Device'}
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <Text style={{ textAlign: 'center', color: '#999', width: '100%', marginBottom: 10 }}>
+                  Status: {invoiceData?.status} (Payment not confirmed)
                 </Text>
-              </TouchableOpacity>
+              )}
             </View>
 
             {/* Make Payment Button */}
@@ -906,6 +973,120 @@ export default function voucher({ navigation, route }) {
           </View>
         )}
       </ScrollView>
+
+      {/* Hidden Unified Invoice Layout for Screenshot Capture */}
+      {(['PAID', 'CONFIRMED'].includes(invoiceData?.status?.toUpperCase())) && invoiceData && (
+        <View style={shareStyles.offScreenContainer}>
+          <View ref={invoiceRef} collapsable={false} style={shareStyles.invoiceSheet}>
+            {/* Professional Header */}
+            <View style={shareStyles.header}>
+              <Text style={shareStyles.headerTitle}>BOOKING INVOICE</Text>
+              <View style={shareStyles.headerDivider} />
+              <Text style={shareStyles.headerSubtitle}>Room Booking Confirmation</Text>
+            </View>
+
+            {/* Status Badge */}
+            <View style={shareStyles.confirmedBadge}>
+              <Text style={shareStyles.confirmedBadgeText}>✓ PAYMENT CONFIRMED</Text>
+            </View>
+
+            {/* Invoice Details Section */}
+            <View style={shareStyles.section}>
+              <Text style={shareStyles.sectionTitle}>Invoice Details</Text>
+              <View style={shareStyles.sectionDivider} />
+              <View style={shareStyles.row}>
+                <Text style={shareStyles.label}>Invoice No:</Text>
+                <Text style={shareStyles.value}>{invoiceData.invoiceNo}</Text>
+              </View>
+              {invoiceData.consumerNumber && (
+                <View style={shareStyles.row}>
+                  <Text style={shareStyles.label}>Consumer No:</Text>
+                  <Text style={shareStyles.value}>{invoiceData.consumerNumber}</Text>
+                </View>
+              )}
+              <View style={shareStyles.row}>
+                <Text style={shareStyles.label}>Booking ID:</Text>
+                <Text style={shareStyles.value}>{invoiceData.bookingId}</Text>
+              </View>
+              <View style={shareStyles.row}>
+                <Text style={shareStyles.label}>Issued At:</Text>
+                <Text style={shareStyles.value}>{formatDateTime(invoiceData.issued_at)}</Text>
+              </View>
+              {invoiceData.dueDate && (
+                <View style={shareStyles.row}>
+                  <Text style={shareStyles.label}>Payment Due:</Text>
+                  <Text style={shareStyles.value}>{formatDateTime(invoiceData.dueDate)}</Text>
+                </View>
+              )}
+            </View>
+
+            {/* Room Information Section */}
+            <View style={shareStyles.section}>
+              <Text style={shareStyles.sectionTitle}>Room Information</Text>
+              <View style={shareStyles.sectionDivider} />
+              <View style={shareStyles.row}>
+                <Text style={shareStyles.label}>Room Type:</Text>
+                <Text style={shareStyles.value}>{invoiceData.roomType || 'N/A'}</Text>
+              </View>
+              <View style={shareStyles.row}>
+                <Text style={shareStyles.label}>Room Number:</Text>
+                <Text style={shareStyles.value}>
+                  {invoiceData.roomNumber && invoiceData.roomNumber !== '' ? invoiceData.roomNumber : 'Pending Assignment'}
+                </Text>
+              </View>
+              <View style={shareStyles.row}>
+                <Text style={shareStyles.label}>Check-in:</Text>
+                <Text style={shareStyles.value}>{formatDate(invoiceData.checkIn)}</Text>
+              </View>
+              <View style={shareStyles.row}>
+                <Text style={shareStyles.label}>Check-out:</Text>
+                <Text style={shareStyles.value}>{formatDate(invoiceData.checkOut)}</Text>
+              </View>
+              <View style={shareStyles.row}>
+                <Text style={shareStyles.label}>Guests:</Text>
+                <Text style={shareStyles.value}>
+                  {invoiceData.numberOfAdults} Adults, {invoiceData.numberOfChildren} Children
+                  {invoiceData.numberOfRooms > 1 ? `, ${invoiceData.numberOfRooms} Rooms` : ''}
+                </Text>
+              </View>
+            </View>
+
+            {/* Payment Section */}
+            <View style={shareStyles.section}>
+              <Text style={shareStyles.sectionTitle}>Payment Details</Text>
+              <View style={shareStyles.sectionDivider} />
+              {invoiceData.fullTotalPrice && (
+                <View style={shareStyles.row}>
+                  <Text style={shareStyles.label}>Total Amount:</Text>
+                  <Text style={shareStyles.value}>Rs. {parseFloat(invoiceData.fullTotalPrice).toFixed(2)}</Text>
+                </View>
+              )}
+              <View style={shareStyles.row}>
+                <Text style={shareStyles.label}>Advance Deposit:</Text>
+                <Text style={[shareStyles.value, { color: '#b48a64', fontWeight: 'bold' }]}>
+                  Rs. {invoiceData.totalPrice ? parseFloat(invoiceData.totalPrice).toFixed(2) : '0.00'}
+                </Text>
+              </View>
+              <View style={shareStyles.row}>
+                <Text style={shareStyles.label}>Payment Status:</Text>
+                <Text style={[shareStyles.value, { color: '#2e7d32', fontWeight: 'bold' }]}>CONFIRMED</Text>
+              </View>
+              <View style={shareStyles.row}>
+                <Text style={shareStyles.label}>Payment Mode:</Text>
+                <Text style={shareStyles.value}>{invoiceData.paymentMode}</Text>
+              </View>
+            </View>
+
+            {/* Footer */}
+            <View style={shareStyles.footer}>
+              <View style={shareStyles.footerDivider} />
+              <Text style={shareStyles.footerText}>Thank you for your booking!</Text>
+              <Text style={shareStyles.footerSubText}>Check-in: 2:00 PM | Check-out: 12:00 PM</Text>
+              <Text style={shareStyles.footerSubText}>Government ID required at check-in</Text>
+            </View>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -1252,8 +1433,8 @@ const styles = StyleSheet.create({
   },
   actionButtons: {
     flexDirection: 'row',
-    gap: 10,
     marginBottom: 15,
+    // gap: 10, // Removed gap for compatibility
   },
   secondaryButton: {
     flex: 1,
@@ -1283,6 +1464,21 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   shareButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  saveButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: '#388e3c',
+    marginLeft: 10, // Added margin instead of gap
+  },
+  saveButtonText: {
     color: '#fff',
     fontWeight: '600',
     fontSize: 14,
@@ -1346,5 +1542,112 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 16,
+  },
+});
+
+// Styles for the hidden shareable invoice layout
+const shareStyles = StyleSheet.create({
+  offScreenContainer: {
+    position: 'absolute',
+    left: -9999,
+    top: 0,
+    opacity: 1, // Must be 1 for capture to work
+  },
+  invoiceSheet: {
+    width: 380,
+    backgroundColor: '#ffffff',
+    padding: 24,
+    borderRadius: 0,
+  },
+  header: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#1a1a1a',
+    letterSpacing: 1.5,
+  },
+  headerDivider: {
+    width: 60,
+    height: 3,
+    backgroundColor: '#b48a64',
+    marginVertical: 10,
+    borderRadius: 2,
+  },
+  headerSubtitle: {
+    fontSize: 13,
+    color: '#777',
+  },
+  confirmedBadge: {
+    backgroundColor: '#e8f5e9',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    alignItems: 'center',
+    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: '#c8e6c9',
+  },
+  confirmedBadgeText: {
+    color: '#2e7d32',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  section: {
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#444',
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  sectionDivider: {
+    height: 1,
+    backgroundColor: '#e0e0e0',
+    marginBottom: 10,
+  },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 5,
+  },
+  label: {
+    fontSize: 13,
+    color: '#666',
+    flex: 1,
+  },
+  value: {
+    fontSize: 13,
+    color: '#222',
+    fontWeight: '600',
+    flex: 1,
+    textAlign: 'right',
+  },
+  footer: {
+    alignItems: 'center',
+    marginTop: 8,
+    paddingTop: 12,
+  },
+  footerDivider: {
+    width: '100%',
+    height: 1,
+    backgroundColor: '#e0e0e0',
+    marginBottom: 12,
+  },
+  footerText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 6,
+  },
+  footerSubText: {
+    fontSize: 11,
+    color: '#888',
+    marginBottom: 2,
   },
 });

@@ -445,7 +445,7 @@ Check-out: ${formatDate(booking.checkOut)}
                                 <Icon name="event" size={20} color="#b48a64" />
                             </View>
                             <View style={styles.timelineContent}>
-                                <Text style={styles.timelineTitle}>Check-in / Start Time</Text>
+                                <Text style={styles.timelineTitle}>Check-in</Text>
                                 <Text style={styles.timelineDate}>
                                     {formatDate(booking.checkIn || booking.from || booking.startTime || booking.start_time || booking.start || booking.booking_from || booking.bookingDate || booking.booking_date || booking.date)}
                                 </Text>
@@ -457,7 +457,7 @@ Check-out: ${formatDate(booking.checkOut)}
                                 <Icon name="event-busy" size={20} color="#b48a64" />
                             </View>
                             <View style={styles.timelineContent}>
-                                <Text style={styles.timelineTitle}>Check-out / End Time</Text>
+                                <Text style={styles.timelineTitle}>Check-out</Text>
                                 <Text style={styles.timelineDate}>
                                     {formatDate(booking.checkOut || booking.to || booking.endTime || booking.end_time || booking.end || booking.booking_to || booking.endDate || booking.bookingDate || booking.booking_date || booking.date)}
                                 </Text>
@@ -720,12 +720,25 @@ Check-out: ${formatDate(booking.checkOut)}
                         </>
                     ) : (
                         <>
-                            {renderDetailItem('Check-in / Start', formatDate(booking.checkIn || booking.from || booking.startTime || booking.start_time || booking.start || booking.booking_from || booking.bookingDate || booking.booking_date || booking.date), 'event')}
-                            {renderDetailItem('Check-out / End', formatDate(booking.checkOut || booking.to || booking.endTime || booking.end_time || booking.end || booking.booking_to || booking.endDate || booking.bookingDate || booking.booking_date || booking.date), 'event-busy')}
+                            {renderDetailItem('Check-in', formatDate(booking.checkIn || booking.from || booking.startTime || booking.start_time || booking.start || booking.booking_from || booking.bookingDate || booking.booking_date || booking.date), 'event')}
+                            {renderDetailItem('Check-out', formatDate(booking.checkOut || booking.to || booking.endTime || booking.end_time || booking.end || booking.booking_to || booking.endDate || booking.bookingDate || booking.booking_date || booking.date), 'event-busy')}
                             {calculateNights() > 0 && renderDetailItem('Nights Stay', `${calculateNights()} night(s)`, 'nights-stay')}
                         </>
                     )}
                     {renderDetailItem('Booking Date', formatDate(booking.createdAt || booking.bookingDate || booking.booking_date || booking.date), 'schedule')}
+
+                    {/* Room Type for All Bookings */}
+                    {(booking.roomType || booking.room_type) && renderDetailItem('Room Type',
+                        (booking.roomType || booking.room_type).charAt(0).toUpperCase() +
+                        (booking.roomType || booking.room_type).slice(1).toLowerCase(),
+                        'hotel')}
+
+                    {/* Room Number for Guest Bookings */}
+                    {(booking.pricingType || '').toLowerCase() === 'guest' && (booking.roomNumber || booking.room_number) &&
+                        renderDetailItem('Guest Room',
+                            `Guest: Room ${booking.roomNumber || booking.room_number}`,
+                            'meeting-room')}
+
 
                     {booking.specialRequest && (
                         <View style={styles.specialRequestContainer}>
