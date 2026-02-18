@@ -5,11 +5,24 @@ import { name as appName } from './app.json';
 import messaging from '@react-native-firebase/messaging';
 
 // Register background handler for FCM
-// This runs when app is in background or quit state and receives a notification
 messaging().setBackgroundMessageHandler(async remoteMessage => {
     console.log('📩 [Background] Message received:', remoteMessage);
-    console.log('📩 [Background] Data payload:', remoteMessage.data);
-    // Navigation happens via onNotificationOpenedApp when user taps the notification
+
+    // Check for Single Device Session Force Logout
+    if (remoteMessage.data?.action === 'FORCE_LOGOUT') {
+        console.log('🚨 [Background] Force Logout requested');
+        const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+        try {
+            await AsyncStorage.multiRemove([
+                'access_token',
+                'refresh_token',
+                'user_info'
+            ]);
+            console.log('✅ [Background] Auth storage cleared');
+        } catch (err) {
+            console.error('❌ [Background] Failed to clear storage:', err);
+        }
+    }
 });
 
 AppRegistry.registerComponent(appName, () => App);

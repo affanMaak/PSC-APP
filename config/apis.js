@@ -1,7 +1,9 @@
 // config/apis.js
 import axios from 'axios'
-import { Platform } from 'react-native';
+import { Platform, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import messaging from '@react-native-firebase/messaging';
+import eventBus from '../services/eventBus';
 
 export const getBaseUrl = () => {
   if (Platform.OS === 'android') {
@@ -31,12 +33,41 @@ api.interceptors.request.use(
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
+
+      // Add FCM Token check for Single Device Session
+      try {
+        const fcmToken = await messaging().getToken();
+        if (fcmToken) {
+          config.headers['client-fcm-token'] = fcmToken;
+        }
+      } catch (fcmErr) {
+        console.warn('⚠️ Could not get FCM token for header:', fcmErr.message);
+      }
+
     } catch (error) {
-      console.error('Error getting token:', error);
+      console.error('Error in request interceptor:', error);
     }
     return config;
   },
   (error) => Promise.reject(error)
+);
+
+// Response Interceptor for Session Expiration
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    if (error.response?.status === 401 && error.response?.data?.error === 'SESSION_EXPIRED') {
+      console.error('🚨 Session Expired: Logged in on another device');
+
+      // Notify the AuthContext to logout
+      eventBus.emit('FORCE_LOGOUT', {
+        message: error.response?.data?.message || 'You have been logged in on another device.'
+      });
+
+      return new Promise(() => { }); // Stop the promise chain
+    }
+    return Promise.reject(error);
+  }
 );
 
 // Token management functions

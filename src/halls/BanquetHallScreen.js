@@ -1629,7 +1629,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 30,
+    paddingBottom: 20,
   },
   // Welcome Section
   welcomeSection: {

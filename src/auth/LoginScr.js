@@ -1,495 +1,4 @@
 
-// // screens/LoginScr.js
-// import React, { useState } from 'react';
-// import { 
-//   ImageBackground, 
-//   Image, 
-//   StyleSheet, 
-//   SafeAreaView, 
-//   View, 
-//   Text, 
-//   TextInput, 
-//   TouchableOpacity, 
-//   KeyboardAvoidingView, 
-//   Platform, 
-//   ScrollView,
-//   Alert,
-//   ActivityIndicator 
-// } from 'react-native';
-// import axios from 'axios';
-// import { storeAuthData, getBaseUrl } from '../../config/apis';
-// import { useAuth } from './contexts/AuthContext';
-
-// const background = require('../../assets/bg.jpeg');
-// const logo = require('../../assets/logo.jpeg');
-
-// // Function to decode JWT token
-// const decodeJWT = (token) => {
-//   try {
-//     const base64Url = token.split('.')[1];
-//     const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-//     const jsonPayload = decodeURIComponent(
-//       atob(base64)
-//         .split('')
-//         .map(function(c) {
-//           return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-//         })
-//         .join('')
-//     );
-//     return JSON.parse(jsonPayload);
-//   } catch (error) {
-//     console.error('Error decoding JWT:', error);
-//     return null;
-//   }
-// };
-
-// const LoginScr = ({ navigation }) => {
-//   const { login } = useAuth();
-//   const [mode, setMode] = useState('member');
-//   const [memberId, setMemberId] = useState('');
-//   const [otp, setOtp] = useState('');
-//   const [otpSent, setOtpSent] = useState(false);
-//   const [email, setEmail] = useState('');
-//   const [password, setPassword] = useState('');
-//   const [loading, setLoading] = useState(false);
-
-//   const BASE_URL = `${getBaseUrl()}/auth`;
-
-//   // === MEMBER LOGIN ===
-//   const handleSendOTP = async () => {
-//     if (!memberId) return Alert.alert('Error', 'Please enter your Member ID.');
-//     setLoading(true);
-//     try {
-//       console.log('📤 Sending OTP for member:', memberId);
-//       const response = await axios.post(`${BASE_URL}/sendOTP/member`, { 
-//         memberID: memberId 
-//       }, {
-//         headers: {
-//           'client-type': 'mobile'
-//         },
-//         timeout: 100000
-//       });
-
-//       console.log('✅ OTP sent response:', response.data);
-//       setOtpSent(true);
-//       Alert.alert('Success', 'OTP sent to your registered email.');
-//     } catch (err) {
-//       console.error('❌ OTP send error:', {
-//         message: err.message,
-//         status: err.response?.status,
-//         data: err.response?.data,
-//         config: err.config
-//       });
-//       Alert.alert('Error', err.response?.data?.message || 'Failed to send OTP. Please check your Member ID.');
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   const handleVerifyOTP = async () => {
-//     if (!otp) return Alert.alert('Error', 'Please enter the OTP.');
-//     if (!memberId) return Alert.alert('Error', 'Member ID is required.');
-
-//     setLoading(true);
-//     try {
-//       console.log('🔐 Verifying OTP:', { memberId, otp });
-
-//       const res = await axios.post(`${BASE_URL}/login/member`, {
-//         memberID: memberId,
-//         otp: otp,
-//       }, {
-//         headers: {
-//           'client-type': 'mobile'
-//         },
-//         timeout: 10000
-//       });
-
-//       console.log('✅ OTP verification response:', res.data);
-
-//       let tokens = {};
-//       let userInfo = {};
-
-//       if (res.data.access_token && res.data.refresh_token) {
-//         tokens = {
-//           access_token: res.data.access_token,
-//           refresh_token: res.data.refresh_token
-//         };
-
-//         // Decode the JWT token to get member information
-//         const decodedToken = decodeJWT(res.data.access_token);
-//         console.log('🔓 Decoded JWT token:', decodedToken);
-
-//         if (decodedToken) {
-//           userInfo = {
-//             role: 'MEMBER',
-//             name: decodedToken.name || 'Member',
-//             email: decodedToken.email || '',
-//             memberId: decodedToken.id || memberId
-//           };
-//         } else {
-//           // Fallback if decoding fails
-//           userInfo = {
-//             role: 'MEMBER',
-//             name: 'Member',
-//             email: '',
-//             memberId: memberId
-//           };
-//         }
-//       } else {
-//         throw new Error('No tokens received from server');
-//       }
-
-//       console.log('📝 UserInfo to be stored:', userInfo);
-
-//       // Store tokens and user data
-//       await storeAuthData(tokens, userInfo);
-
-//       // Update global auth state
-//       login(userInfo);
-
-//       Alert.alert('Success', 'Login successful!');
-//       console.log('✅ Tokens saved and global auth updated');
-
-//       // Navigate to start without params
-//       navigation.navigate('start');
-
-//     } catch (err) {
-//       console.error('❌ OTP verification error:', {
-//         message: err.message,
-//         status: err.response?.status,
-//         data: err.response?.data,
-//         config: {
-//           url: err.config?.url,
-//           data: err.config?.data
-//         }
-//       });
-
-//       let errorMessage = 'Invalid OTP. Please try again.';
-
-//       if (err.response?.status === 401) {
-//         errorMessage = 'Invalid OTP. Please check and try again.';
-//       } else if (err.response?.status === 404) {
-//         errorMessage = 'Member not found. Please check your Member ID.';
-//       } else if (err.response?.status === 400) {
-//         errorMessage = err.response?.data?.message || 'Invalid request.';
-//       } else if (err.code === 'NETWORK_ERROR' || err.code === 'ECONNREFUSED') {
-//         errorMessage = 'Network error. Please check your connection.';
-//       } else if (err.response?.data?.message) {
-//         errorMessage = err.response.data.message;
-//       }
-
-//       authContext.login(userData);
-
-//       Alert.alert('Error', errorMessage);
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   // === ADMIN LOGIN ===
-//   const handleAdminLogin = async () => {
-//     if (!email || !password)
-//       return Alert.alert('Error', 'Please enter email and password.');
-//     setLoading(true);
-//     try {
-//       console.log('🔐 Admin login attempt:', { email });
-
-//       const res = await axios.post(`${BASE_URL}/login/admin`, { 
-//         email, 
-//         password 
-//       }, {
-//         headers: {
-//           'client-type': 'mobile'
-//         },
-//         timeout: 10000
-//       });
-
-//       console.log('✅ Admin login response:', res.data);
-
-//       let tokens = {};
-//       let userInfo = {};
-
-//       if (res.data.access_token && res.data.refresh_token) {
-//         tokens = {
-//           access_token: res.data.access_token,
-//           refresh_token: res.data.refresh_token
-//         };
-
-//         // Decode the JWT token to get admin information
-//         const decodedToken = decodeJWT(res.data.access_token);
-//         console.log('🔓 Decoded JWT token (Admin):', decodedToken);
-
-//         if (decodedToken) {
-//           userInfo = {
-//             role: decodedToken.role || 'ADMIN',
-//             name: decodedToken.name || 'Admin',
-//             email: decodedToken.email || email
-//           };
-//         } else {
-//           // Fallback if decoding fails
-//           userInfo = {
-//             role: 'ADMIN',
-//             name: 'Admin',
-//             email: email
-//           };
-//         }
-//       } else {
-//         throw new Error('No tokens received from server');
-//       }
-
-//       await storeAuthData(tokens, userInfo);
-
-//       // Update global auth state
-//       login(userInfo);
-
-//       Alert.alert('Success', 'Admin login successful!');
-//       console.log('✅ Admin tokens saved and global auth updated');
-
-//       navigation.navigate('start');
-
-//     } catch (err) {
-//       console.error('❌ Admin login error:', {
-//         message: err.message,
-//         status: err.response?.status,
-//         data: err.response?.data
-//       });
-
-//       let errorMessage = 'Login failed. Please try again.';
-
-//       if (err.response?.status === 401) {
-//         errorMessage = 'Invalid email or password.';
-//       } else if (err.response?.status === 404) {
-//         errorMessage = 'Admin account not found.';
-//       } else if (err.code === 'NETWORK_ERROR') {
-//         errorMessage = 'Network error. Please check your connection.';
-//       } else if (err.response?.data?.message) {
-//         errorMessage = err.response.data.message;
-//       }
-
-//       authContext.login(userData);
-
-//       Alert.alert('Error', errorMessage);
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   const toggleMode = () => {
-//     setMode(mode === 'member' ? 'admin' : 'member');
-//     setOtpSent(false);
-//     setMemberId('');
-//     setOtp('');
-//     setEmail('');
-//     setPassword('');
-//   };
-
-//   return (
-//     <SafeAreaView style={styles.container}>
-//       <KeyboardAvoidingView 
-//         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-//         style={styles.container}
-//       >
-//         <ScrollView contentContainerStyle={styles.scrollContainer}>
-//           <ImageBackground source={background} resizeMode="cover" style={styles.image}>
-//             {/* Logo */}
-//             <View style={styles.logoContainer}>
-//               <Image source={logo} style={styles.logo} resizeMode="contain" />
-//             </View>
-
-//             <View style={styles.welcome}>
-//               <Text style={styles.gret}>
-//                 {mode === 'member' ? 'Member Login' : 'Admin Login'}
-//               </Text>
-
-//               {mode === 'member' ? (
-//                 <>
-//                   {!otpSent ? (
-//                     <>
-//                       <View style={styles.inputContainer}>
-//                         <Text style={styles.icon}>🪪</Text>
-//                         <TextInput
-//                           placeholder="Enter Member ID"
-//                           placeholderTextColor="rgba(0,0,0,0.5)"
-//                           style={styles.input}
-//                           value={memberId}
-//                           onChangeText={setMemberId}
-//                           autoCapitalize="none"
-//                           autoCorrect={false}
-//                           editable={!loading}
-//                         />
-//                       </View>
-
-//                       <TouchableOpacity
-//                         style={[styles.button, loading && styles.buttonDisabled]}
-//                         onPress={handleSendOTP}
-//                         disabled={loading}
-//                       >
-//                         {loading ? (
-//                           <ActivityIndicator color="white" />
-//                         ) : (
-//                           <Text style={styles.buttonText}>Send OTP</Text>
-//                         )}
-//                       </TouchableOpacity>
-//                     </>
-//                   ) : (
-//                     <>
-//                       <View style={styles.inputContainer}>
-//                         <Text style={styles.icon}>📧</Text>
-//                         <TextInput
-//                           placeholder="Enter OTP"
-//                           placeholderTextColor="rgba(0,0,0,0.5)"
-//                           style={styles.input}
-//                           value={otp}
-//                           onChangeText={setOtp}
-//                           keyboardType="number-pad"
-//                           editable={!loading}
-//                         />
-//                       </View>
-
-//                       <TouchableOpacity
-//                         style={[styles.button, loading && styles.buttonDisabled]}
-//                         onPress={handleVerifyOTP}
-//                         disabled={loading}
-//                       >
-//                         {loading ? (
-//                           <ActivityIndicator color="white" />
-//                         ) : (
-//                           <Text style={styles.buttonText}>Verify OTP</Text>
-//                         )}
-//                       </TouchableOpacity>
-
-//                       <TouchableOpacity 
-//                         onPress={() => setOtpSent(false)}
-//                         style={styles.backLink}
-//                       >
-//                         <Text style={styles.backLinkText}>
-//                           ← Back to Member ID
-//                         </Text>
-//                       </TouchableOpacity>
-//                     </>
-//                   )}
-//                 </>
-//               ) : (
-//                 <>
-//                   <View style={styles.inputContainer}>
-//                     <Text style={styles.icon}>📧</Text>
-//                     <TextInput
-//                       placeholder="Enter Admin Email"
-//                       placeholderTextColor="rgba(0,0,0,0.5)"
-//                       style={styles.input}
-//                       value={email}
-//                       onChangeText={setEmail}
-//                       keyboardType="email-address"
-//                       autoCapitalize="none"
-//                       autoCorrect={false}
-//                       editable={!loading}
-//                     />
-//                   </View>
-
-//                   <View style={styles.inputContainer}>
-//                     <Text style={styles.icon}>🔒</Text>
-//                     <TextInput
-//                       placeholder="Enter Password"
-//                       placeholderTextColor="rgba(0,0,0,0.5)"
-//                       style={styles.input}
-//                       value={password}
-//                       onChangeText={setPassword}
-//                       secureTextEntry
-//                       autoCapitalize="none"
-//                       autoCorrect={false}
-//                       editable={!loading}
-//                     />
-//                   </View>
-
-//                   <TouchableOpacity
-//                     style={[styles.button, loading && styles.buttonDisabled]}
-//                     onPress={handleAdminLogin}
-//                     disabled={loading}
-//                   >
-//                     {loading ? (
-//                       <ActivityIndicator color="white" />
-//                     ) : (
-//                       <Text style={styles.buttonText}>Login</Text>
-//                     )}
-//                   </TouchableOpacity>
-//                 </>
-//               )}
-
-//               <TouchableOpacity onPress={toggleMode} style={styles.modeToggle}>
-//                 <Text style={styles.modeToggleText}>
-//                   {mode === 'member' ? 'Login as Admin?' : 'Login as Member?'}
-//                 </Text>
-//               </TouchableOpacity>
-//             </View>
-//           </ImageBackground>
-//         </ScrollView>
-//       </KeyboardAvoidingView>
-//     </SafeAreaView>
-//   );
-// };
-
-// const styles = StyleSheet.create({
-//   container: { flex: 1 },
-//   scrollContainer: { flexGrow: 1 },
-//   image: {
-//     flex: 1,
-//     minHeight: '100%',
-//     justifyContent: 'flex-start',
-//     alignItems: 'center',
-//   },
-//   logoContainer: { alignItems: 'center' },
-//   logo: { width: 400, height: 300, opacity: 0.6 },
-//   welcome: {
-//     marginTop: 100,
-//     alignItems: 'center',
-//     width: '80%',
-//   },
-//   gret: {
-//     fontSize: 38,
-//     color: 'white',
-//     fontWeight: 'bold',
-//     marginBottom: 30,
-//   },
-//   inputContainer: {
-//     flexDirection: 'row',
-//     alignItems: 'center',
-//     width: '100%',
-//     height: 50,
-//     backgroundColor: 'white',
-//     borderWidth: 1,
-//     borderColor: 'rgba(255,255,255,0.5)',
-//     borderRadius: 8,
-//     paddingHorizontal: 15,
-//     marginBottom: 15,
-//   },
-//   icon: { fontSize: 20, marginRight: 10 },
-//   input: {
-//     flex: 1,
-//     height: '100%',
-//     color: 'black',
-//     fontSize: 16,
-//   },
-//   button: {
-//     backgroundColor: 'rgba(216, 184, 54, 0.82)',
-//     paddingVertical: 15,
-//     paddingHorizontal: 40,
-//     borderRadius: 8,
-//     marginTop: 10,
-//     width: '100%',
-//     alignItems: 'center',
-//     borderWidth: 1,
-//     borderColor: 'rgba(255,255,255,0.5)',
-//   },
-//   buttonDisabled: { opacity: 0.6 },
-//   buttonText: { color: 'white', fontSize: 18, fontWeight: 'bold' },
-//   modeToggle: { marginTop: 20 },
-//   modeToggleText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
-//   backLink: { marginTop: 15 },
-//   backLinkText: { color: 'white', fontSize: 14, textDecorationLine: 'underline' },
-// });
-
-// export default LoginScr;
-
 import React, { useState } from 'react';
 import {
   ImageBackground,
@@ -664,13 +173,23 @@ const LoginScr = ({ navigation }) => {
 
     setLoading(true);
     try {
-      console.log('🔐 Verifying OTP:', { memberId, otp });
+      // Get FCM Token for Single Device Session
+      let fcmToken = null;
+      try {
+        if (Platform.OS === 'ios') {
+          await messaging().registerDeviceForRemoteMessages();
+        }
+        fcmToken = await messaging().getToken();
+      } catch (fcmErr) {
+        console.warn('⚠️ Could not get FCM token for login:', fcmErr.message);
+      }
 
       const response = await axios.post(
         `${BASE_URL}/login/member`,
         {
           memberID: memberId.trim(),
           otp: otp.trim(),
+          fcmToken: fcmToken, // Pass fcmToken here
         },
         {
           headers: { 'client-type': 'mobile' },
@@ -811,13 +330,25 @@ const LoginScr = ({ navigation }) => {
 
     setLoading(true);
     try {
-      console.log('🔐 Admin login attempt:', { email });
+      // Get FCM Token for Single Device Session
+      let fcmToken = null;
+      try {
+        if (Platform.OS === 'ios') {
+          await messaging().registerDeviceForRemoteMessages();
+        }
+        fcmToken = await messaging().getToken();
+      } catch (fcmErr) {
+        console.warn('⚠️ Could not get FCM token for admin login:', fcmErr.message);
+      }
+
+      console.log('🔐 Admin login attempt:', { email, fcmToken });
 
       const response = await axios.post(
         `${BASE_URL}/login/admin`,
         {
           email: email.trim(),
-          password: password.trim()
+          password: password.trim(),
+          fcmToken: fcmToken, // Pass fcmToken here
         },
         {
           headers: { 'client-type': 'mobile' },

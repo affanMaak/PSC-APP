@@ -1,6 +1,8 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
+import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { jwtDecode } from 'jwt-decode';
+import eventBus from '../../../services/eventBus';
 
 const AuthContext = createContext();
 
@@ -29,7 +31,7 @@ export const AuthProvider = ({ children }) => {
       role: decodedToken.role || 'MEMBER',
       FCMToken: decodedToken.FCMToken || null
     };
-    
+
     // Add role-specific fields
     if (userData.role === 'ADMIN' || userData.role === 'SUPER_ADMIN') {
       userData.adminId = decodedToken.id;
@@ -73,6 +75,24 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     checkAuthState();
   }, [checkAuthState]);
+
+  // Single Device Session: Listen for Force Logout
+  useEffect(() => {
+    const handleForceLogout = (data) => {
+      console.log('🚨 AuthContext: Force Logout Received', data);
+      logout();
+      Alert.alert(
+        'Session Expired',
+        data?.message || 'You have been logged in on another device. Please login again to continue.',
+        [{ text: 'OK' }]
+      );
+    };
+
+    eventBus.on('FORCE_LOGOUT', handleForceLogout);
+    return () => {
+      eventBus.off('FORCE_LOGOUT', handleForceLogout);
+    };
+  }, [logout]);
 
   const clearAuthStorage = async () => {
     try {
