@@ -14,7 +14,6 @@ import {
   Platform,
   PermissionsAndroid,
 } from 'react-native';
-import Share from 'react-native-share';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { captureRef } from 'react-native-view-shot';
 import { CameraRoll } from '@react-native-camera-roll/camera-roll';
