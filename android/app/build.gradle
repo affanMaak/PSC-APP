@@ -110,6 +110,27 @@ android {
             )
         }
     }
+
+    packagingOptions {
+        pickFirst '**/libc++_shared.so'
+        pickFirst '**/libfbjni.so'
+    }
+
+    /**
+     * Fix for "Duplicate Resources" error during release builds.
+     * This snippet removes duplicate assets from node_modules that may conflict with the main app.
+     */
+    applicationVariants.all { variant ->
+        variant.outputs.each { output ->
+            def processResources = output.processResourcesProvider.get()
+            processResources.doFirst {
+                def resourceDir = project.file("${buildDir}/intermediates/res/merged/${variant.name}")
+                if (resourceDir.exists()) {
+                    delete fileTree(dir: resourceDir, includes: ['drawable-hdpi/node_modules*', 'drawable-mdpi/node_modules*', 'drawable-xhdpi/node_modules*', 'drawable-xxhdpi/node_modules*', 'drawable-xxxhdpi/node_modules*'])
+                }
+            }
+        }
+    }
 }
 
 dependencies {
