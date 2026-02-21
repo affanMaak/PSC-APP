@@ -667,6 +667,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import IconAD from 'react-native-vector-icons/AntDesign';
+import IconMC from 'react-native-vector-icons/MaterialCommunityIcons';
 import {
   getCurrentAdmin,
   getAdminReservations,
@@ -916,22 +917,18 @@ const ReservationsScreen = ({ navigation }) => {
         style={styles.notch}
         imageStyle={styles.notchImage}
       >
-        <View style={styles.notchContent}>
+        <View style={styles.notchRow}>
           <TouchableOpacity
-            style={styles.backButtonNotch}
+            style={styles.iconWrapper}
             onPress={() => navigation && navigation.goBack()}
+            activeOpacity={0.7}
           >
-            <IconAD name="arrowleft" size={28} color="black" />
+            <IconMC name="arrow-left" size={28} color="#000" />
           </TouchableOpacity>
-          <View style={styles.headerTitleContainer}>
-            <Text style={styles.headerTitleNotch}>Reservations</Text>
-            {admin?.name && (
-              <Text style={styles.welcomeTextSmall}>
-                Welcome, {admin.name}
-              </Text>
-            )}
-          </View>
-          <View style={{ width: 40 }} /> {/* Balanced spacer */}
+
+          <Text style={styles.notchTitle}>Reservations</Text>
+
+          <View style={{ width: 40 }} />
         </View>
       </ImageBackground>
 
@@ -947,7 +944,6 @@ const ReservationsScreen = ({ navigation }) => {
         </View>
       ) : reservations.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyEmoji}>📅</Text>
           <Text style={styles.emptyText}>No reservations found</Text>
           <Text style={styles.emptySubText}>
             You don't have any reservations at the moment.
@@ -1314,7 +1310,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   notch: {
-    paddingTop: 45,
+    paddingTop: 50,
     paddingBottom: 20,
     paddingHorizontal: 20,
     borderBottomEndRadius: 30,
@@ -1324,40 +1320,24 @@ const styles = StyleSheet.create({
   },
   notchImage: {
     resizeMode: 'cover',
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderBottomLeftRadius: 25,
-    borderBottomRightRadius: 25,
   },
-  notchContent: {
+  notchRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'center',
   },
-  backButtonNotch: {
+  iconWrapper: {
+    width: 40,
+    height: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 10,
   },
-  headerTitleContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitleNotch: {
+  notchTitle: {
     fontSize: 22,
-    fontWeight: 'bold',
-    color: '#000',
+    fontWeight: "600",
+    color: "#000",
+    flex: 1,
     textAlign: 'center',
-  },
-  welcomeTextSmall: {
-    fontSize: 14,
-    color: '#333',
-    textAlign: 'center',
-    marginTop: 2,
   },
 });
 

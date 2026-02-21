@@ -1251,7 +1251,7 @@ const styles = StyleSheet.create({
   },
   historyTextContainer: {
     paddingHorizontal: 5,
-    marginBottom: 5,
+
   },
   captionText: {
     fontSize: 15,

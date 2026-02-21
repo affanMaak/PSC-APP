@@ -17,6 +17,7 @@ import {
 import Swiper from 'react-native-swiper';
 import { useAuth } from '../src/auth/contexts/AuthContext';
 import { getUserData, removeAuthData, userWho, getAds, getUnseenNotificationsCount } from '../config/apis';
+import { voucherAPI } from '../config/apis';
 import { useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
@@ -45,7 +46,7 @@ export default function start({ navigation }) {
     try {
       if (user?.role !== "ADMIN" && user?.role !== "SUPER_ADMIN") {
         const response = await getUnseenNotificationsCount();
-       
+
         if (response && typeof response === 'number') {
           setUnseenCount(response);
         }
@@ -164,6 +165,39 @@ export default function start({ navigation }) {
   };
 
   const handleLogout = async () => {
+    const isMember = user?.role === 'MEMBER' || (!user?.role || (user?.role !== 'ADMIN' && user?.role !== 'SUPER_ADMIN'));
+
+    if (isMember) {
+      try {
+        const pendingVouchers = await voucherAPI.getTimerVouchers();
+        if (pendingVouchers && Array.isArray(pendingVouchers) && pendingVouchers.length > 0) {
+          Alert.alert(
+            'Pending Voucher',
+            `You have ${pendingVouchers.length} pending voucher(s). Please complete your payment before logging out.\n\nAre you sure you want to logout?`,
+            [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Logout',
+                style: 'destructive',
+                onPress: async () => {
+                  try {
+                    await removeAuthData();
+                    navigation.replace('LoginScr');
+                  } catch (err) {
+                    console.error('Logout error:', err);
+                    Alert.alert('Error', 'Failed to logout');
+                  }
+                },
+              },
+            ]
+          );
+          return;
+        }
+      } catch (err) {
+        console.log('Could not check pending vouchers:', err);
+      }
+    }
+
     Alert.alert('Logout', 'Are you sure you want to logout?', [
       { text: 'Cancel', style: 'cancel' },
       {

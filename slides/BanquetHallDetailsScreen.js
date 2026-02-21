@@ -164,7 +164,7 @@ export default function BanquetHallDetailsScreen({ navigation, route }) {
             )}
           </View>
 
-          <View style={{ height: 90 }} />
+
         </ScrollView>
 
         {/* BOOK NOW BUTTON */}

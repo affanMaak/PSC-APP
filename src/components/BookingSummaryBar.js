@@ -13,6 +13,7 @@ import {
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import AntIcon from 'react-native-vector-icons/AntDesign';
 import { useVoucher } from '../auth/contexts/VoucherContext';
+import { useAuth } from '../auth/contexts/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import notifee from '@notifee/react-native';
 import { voucherAPI } from '../../config/apis';
@@ -20,6 +21,7 @@ import socketService from '../../services/socket.service';
 
 const BookingSummaryBar = () => {
     const { activeVoucher, clearVoucher } = useVoucher();
+    const { user } = useAuth();
     const navigation = useNavigation();
     const [vouchers, setVouchers] = useState([]);
     const [currentTime, setCurrentTime] = useState(new Date().getTime());
@@ -30,6 +32,9 @@ const BookingSummaryBar = () => {
     const fetchInterval = useRef(null);
     const timerInterval = useRef(null);
     const [copiedId, setCopiedId] = useState(null);
+
+    // Don't show timer for admin users or when not logged in (login screen)
+    const isAdmin = !user || user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
 
     const fetchVouchers = async () => {
         try {
@@ -72,6 +77,14 @@ const BookingSummaryBar = () => {
     };
 
     useEffect(() => {
+        // Don't fetch vouchers for admin users
+        if (isAdmin) {
+            setVouchers([]);
+            if (fetchInterval.current) clearInterval(fetchInterval.current);
+            if (timerInterval.current) clearInterval(timerInterval.current);
+            return;
+        }
+
         fetchVouchers();
         fetchInterval.current = setInterval(fetchVouchers, 30000); // Fetch every 30s
 
@@ -83,7 +96,7 @@ const BookingSummaryBar = () => {
             if (fetchInterval.current) clearInterval(fetchInterval.current);
             if (timerInterval.current) clearInterval(timerInterval.current);
         };
-    }, []);
+    }, [isAdmin]);
 
     // Socket subscriptions for real-time payment updates
     useEffect(() => {
@@ -220,7 +233,7 @@ const BookingSummaryBar = () => {
         }
     };
 
-    if (activeVouchers.length === 0) return null;
+    if (isAdmin || activeVouchers.length === 0) return null;
 
     const handlePress = (voucher) => {
         const bookingType = voucher.booking_type || voucher.bookingType || 'ROOM';

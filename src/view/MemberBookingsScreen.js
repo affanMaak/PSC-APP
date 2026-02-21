@@ -759,11 +759,11 @@ export default function MemberBookingsScreen({ navigation }) {
                     }
                     ListHeaderComponent={
                         <View>
-                            {/* Membership Info */}
+                            {/* Membership Info
                             <View style={styles.membershipInfo}>
                                 <Icon name="badge" size={20} color="#b48a64" />
                                 <Text style={styles.membershipText}>Membership: {membershipNo}</Text>
-                            </View>
+                            </View> */}
 
                             {/* Search Bar */}
                             <View style={styles.searchContainer}>
