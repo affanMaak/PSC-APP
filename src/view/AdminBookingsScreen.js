@@ -86,7 +86,8 @@ export default function AdminBookingsScreen({ navigation }) {
                 // Add booking type to each booking
                 const typedBookings = bookingsData.map(booking => ({
                     ...booking,
-                    bookingType: selectedType
+                    bookingType: selectedType,
+                    vouchers: booking.vouchers || []
                 }));
                 setBookings(typedBookings);
                 calculateStats(typedBookings);
@@ -159,7 +160,7 @@ export default function AdminBookingsScreen({ navigation }) {
             filtered = filtered.filter(booking => {
                 const status = (booking.paymentStatus || booking.status || '').toUpperCase();
                 if (selectedStatus === 'Paid') return status === 'PAID' || status === 'COMPLETED' || status === 'CONFIRMED';
-                if (selectedStatus === 'Pending') return status === 'PENDING' || status === 'HALF_PAID' || status === 'PARTIAL';
+                if (selectedStatus === 'Pending') return status === 'PENDING' || status === 'HALF_PAID' || status === 'PARTIAL' || status === 'ADVANCE_PAYMENT';
                 if (selectedStatus === 'Unpaid') return status === 'UNPAID';
                 return true;
             });
@@ -201,6 +202,16 @@ export default function AdminBookingsScreen({ navigation }) {
         })}`;
     };
 
+    const getPricingLabel = (type) => {
+        if (!type) return 'Guest Rate';
+        const t = type.toLowerCase();
+        if (t === 'member') return 'Member Rate';
+        if (t === 'forces') return 'Forces Rate';
+        if (t === 'forces-guest') return 'Forces Guest Rate';
+        if (t === 'guest') return 'Guest Rate';
+        return t.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ') + ' Rate';
+    };
+
     const getStatusColor = (status) => {
         if (!status) return '#6c757d';
         const statusUpper = status.toUpperCase();
@@ -212,6 +223,7 @@ export default function AdminBookingsScreen({ navigation }) {
             case 'PENDING':
             case 'HALF_PAID':
             case 'PARTIAL':
+            case 'ADVANCE_PAYMENT':
                 return '#ffc107';
             case 'UNPAID':
             case 'CANCELLED':
@@ -329,7 +341,7 @@ export default function AdminBookingsScreen({ navigation }) {
                     <View style={styles.headerRight}>
                         <Text style={styles.totalPrice}>{formatCurrency(item.totalPrice || item.amount)}</Text>
                         <Text style={styles.pricingType}>
-                            {item.pricingType === 'member' || item.pricing_type === 'member' ? 'Member Rate' : 'Guest Rate'}
+                            {getPricingLabel(item.pricingType || item.pricing_type)}
                         </Text>
                     </View>
                 </View>
@@ -338,19 +350,33 @@ export default function AdminBookingsScreen({ navigation }) {
                 <View style={styles.bookingDetails}>
                     <View style={styles.detailsRow}>
                         {isRoomBooking && (
-                            <>
-                                <View style={styles.detailItem}>
-                                    <Icon name="meeting-room" size={14} color="#666" />
-                                    <Text style={styles.detailText}>Room #{item.roomId || item.roomNumber}</Text>
+                            <View style={{ flex: 1 }}>
+                                <View style={styles.detailsRow}>
+                                    <View style={styles.detailItem}>
+                                        <Icon name="meeting-room" size={14} color="#666" />
+                                        <Text style={styles.detailText}>
+                                            Room: {item.rooms?.length > 1
+                                                ? item.rooms.map(r => r.room?.roomNumber).filter(Boolean).join(', ')
+                                                : (item.roomId || item.roomNumber)}
+                                        </Text>
+                                    </View>
+                                    <View style={styles.separator} />
+                                    <View style={styles.detailItem}>
+                                        <Icon name="category" size={14} color="#666" />
+                                        <Text style={styles.detailText}>
+                                            Type: {item.rooms?.length > 0
+                                                ? [...new Set(item.rooms.map(r => r.room?.roomType?.type).filter(Boolean))].join(', ')
+                                                : (item.room?.roomType?.type || item.roomType || 'N/A')}
+                                        </Text>
+                                    </View>
                                 </View>
-                                <View style={styles.separator} />
-                                <View style={styles.detailItem}>
+                                <View style={[styles.detailItem, { marginTop: 5 }]}>
                                     <Icon name="people" size={14} color="#666" />
                                     <Text style={styles.detailText}>
                                         {item.numberOfAdults || 0} Adult(s), {item.numberOfChildren || 0} Child(ren)
                                     </Text>
                                 </View>
-                            </>
+                            </View>
                         )}
 
                         {isHallBooking && (
