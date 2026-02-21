@@ -1629,7 +1629,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 30,
+    paddingBottom: 20,
   },
   // Welcome Section
   welcomeSection: {
@@ -1939,7 +1939,7 @@ const styles = StyleSheet.create({
     margin: 15,
     borderRadius: 15,
     padding: 20,
-    marginBottom: 30,
+    marginBottom: 10,
     shadowColor: '#000',
     shadowOpacity: 0.1,
     shadowRadius: 5,
@@ -1957,6 +1957,7 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     textAlign: "center",
     color: '#b48a64',
+    marginLeft: 90,
   },
   policySub: {
     fontWeight: "bold",

@@ -685,7 +685,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingVertical: 20,
     paddingHorizontal: 20,
-    paddingBottom: 100,
+    paddingBottom: 20,
   },
   sliderContainer: {
     height: 230,

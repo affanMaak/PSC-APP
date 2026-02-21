@@ -1503,7 +1503,7 @@ const calender = ({ navigation }) => {
                     {/* Bookings Summary Card */}
                     <View style={styles.bookingsSummaryCard}>
                         <View style={styles.bookingsSummaryHeader}>
-                            <Icon name="event-note" size={24} color="#D9A46C" />
+                            <Icon name="event-note" size={24} color="#b48a64" />
                             <Text style={styles.bookingsSummaryTitle}>Bookings Overview</Text>
                             <View style={styles.bookingsSummaryDateBadge}>
                                 <Text style={styles.bookingsSummaryDate}>
@@ -2332,8 +2332,8 @@ const styles = StyleSheet.create({
         borderColor: '#E2E8F0',
     },
     facilityTypeButtonActive: {
-        backgroundColor: '#BCA382',
-        borderColor: '#BCA382',
+        backgroundColor: '#b48a64',
+        borderColor: '#b48a64',
     },
     facilityTypeButtonText: {
         fontSize: 14,
@@ -2606,8 +2606,8 @@ const styles = StyleSheet.create({
         borderColor: '#E2E8F0',
     },
     roomTypeButtonActive: {
-        backgroundColor: '#BCA382',
-        borderColor: '#BCA382',
+        backgroundColor: '#b48a64',
+        borderColor: '#b48a64',
     },
     roomTypeButtonText: {
         fontSize: 13,
@@ -2643,6 +2643,7 @@ const styles = StyleSheet.create({
         marginRight: 10,
         minHeight: 38,
         justifyContent: 'center',
+        alignItems: 'center',
         borderWidth: 1,
         borderColor: '#E2E8F0',
     },
@@ -2654,6 +2655,7 @@ const styles = StyleSheet.create({
         fontSize: 13,
         color: '#64748B',
         fontWeight: '600',
+        textAlign: 'center',
     },
     statusFilterButtonTextActive: {
         color: '#FFFFFF',
@@ -2884,7 +2886,7 @@ const styles = StyleSheet.create({
         borderTopColor: '#E2E8F0',
     },
     modalButton: {
-        backgroundColor: '#BCA382',
+        backgroundColor: '#b48a64',
         paddingVertical: 16,
         borderRadius: 14,
         alignItems: 'center',
@@ -3270,19 +3272,20 @@ const styles = StyleSheet.create({
     },
     // Filter Counter Styles
     statusFilterCounter: {
-        backgroundColor: '#E2E8F0',
         paddingHorizontal: 8,
         paddingVertical: 2,
         borderRadius: 10,
-        marginLeft: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     statusFilterCounterActive: {
-        backgroundColor: 'rgba(255, 255, 255, 0.3)',
+        backgroundColor: 'transparent',
     },
     statusFilterCounterText: {
         fontSize: 12,
         fontWeight: 'bold',
         color: '#64748B',
+        textAlign: 'center',
     },
     statusFilterCounterTextActive: {
         color: '#FFFFFF',

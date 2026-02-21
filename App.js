@@ -5,10 +5,12 @@ import { View, Button, Alert, LogBox, Image, StyleSheet, Text, TouchableOpacity,
 import { AuthProvider, useAuth } from './src/auth/contexts/AuthContext';
 import { VoucherProvider } from './src/auth/contexts/VoucherContext';
 import BookingSummaryBar from './src/components/BookingSummaryBar';
+import { voucherAPI } from './config/apis';
 import { NavigationContainer, useNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createDrawerNavigator, DrawerContentScrollView, DrawerItemList } from '@react-navigation/drawer';
 import Icon from 'react-native-vector-icons/Ionicons';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // Deep Linking Configuration
@@ -111,7 +113,45 @@ function CustomDrawerContent(props) {
   const { user, logout } = useAuth();
   console.log(":::::::", user)
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    const isMember = user?.role === 'MEMBER' || (!user?.role || (user?.role !== 'ADMIN' && user?.role !== 'SUPER_ADMIN'));
+
+    if (isMember) {
+      try {
+        const pendingVouchers = await voucherAPI.getTimerVouchers();
+        if (pendingVouchers && Array.isArray(pendingVouchers) && pendingVouchers.length > 0) {
+          Alert.alert(
+            'Pending Voucher',
+            `You have ${pendingVouchers.length} pending voucher(s). Please complete your payment before logging out.\n\nAre you sure you want to logout?`,
+            [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Logout',
+                style: 'destructive',
+                onPress: async () => {
+                  try {
+                    await logout();
+                    props.navigation.reset({
+                      index: 0,
+                      routes: [{ name: 'LoginScr' }],
+                    });
+                    Alert.alert('Success', 'Logged out successfully');
+                  } catch (error) {
+                    console.error('Logout error:', error);
+                    Alert.alert('Error', 'Failed to logout. Please try again.');
+                  }
+                }
+              }
+            ],
+            { cancelable: true }
+          );
+          return;
+        }
+      } catch (err) {
+        console.log('Could not check pending vouchers:', err);
+      }
+    }
+
     Alert.alert(
       'Logout',
       'Are you sure you want to logout?',
@@ -220,7 +260,7 @@ function MemberDrawer() {
         options={{
           headerShown: false,
           drawerIcon: ({ color, size }) => (
-            <Icon name="information-circle-outline" size={size} color={color} />
+            <MaterialIcons name="feedback" size={size} color={color} />
           ),
         }}
       />

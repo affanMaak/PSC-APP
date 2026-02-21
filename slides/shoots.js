@@ -1181,16 +1181,20 @@ const shoots = ({ navigation }) => {
     showsPagination
     activeDotColor="#A3834C"
   >
-    {photoshoots?.[0]?.images?.length > 0 &&
-  photoshoots[0].images.map((image, index) => (
-    <Image
-      key={index}
-      source={{ uri: image.url }}
-      style={styles.sliderImage}
-    />
-  ))}
-
-    
+    {photoshoots?.[0]?.images?.length > 0 ?
+      photoshoots[0].images.map((image, index) => (
+        <Image
+          key={index}
+          source={{ uri: image.url }}
+          style={styles.sliderImage}
+        />
+      ))
+    : (
+      <Image
+        source={require('../assets/photoshoot.jpg')}
+        style={styles.sliderImage}
+      />
+    )}
   </Swiper>
 </View>
 
@@ -1218,7 +1222,7 @@ const shoots = ({ navigation }) => {
           </View>
         ) : !error && (
           <View style={styles.emptyContainer}>
-            <Icon name="camerao" size={64} color="#D2B48C" />
+            <Icon name="camerao" size={50} color="#999" />
             <Text style={styles.emptyText}>No photoshoot packages available</Text>
             <Text style={styles.emptySubtext}>Please check back later</Text>
           </View>
@@ -1356,7 +1360,7 @@ moreAboutContainer: {
     fontSize: 14,
     fontWeight: "700",
     marginBottom: 15,
-    color: "#8B4513",
+    color: "#b48a64",
     textAlign: "center",
   },
 
@@ -1443,9 +1447,31 @@ moreAboutContainer: {
   },
   retryText: { color: '#fff', fontWeight: 'bold' },
 
-  emptyContainer: { alignItems: 'center', padding: 40, marginTop: 20 },
-  emptyText: { fontSize: 16, color: '#666', marginTop: 10 },
-  emptySubtext: { fontSize: 14, color: '#999', marginTop: 5 },
+  emptyContainer: {
+    alignItems: 'center',
+    padding: 30,
+    margin: 15,
+    marginTop: 20,
+    backgroundColor: '#f9f9f9',
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#666',
+    marginTop: 10,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: '#999',
+    marginTop: 5,
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 18,
+  },
   
   // Dynamic Rules Styles
   ruleItem: {

@@ -1592,6 +1592,7 @@ const styles = StyleSheet.create({
         marginLeft: 15,
         marginRight: 15,
         borderRadius: 10,
+        marginBottom: 50,
 
     },
     sliderImage: {
@@ -1603,7 +1604,7 @@ const styles = StyleSheet.create({
     noImageContainer: {
         marginTop: 20,
         height: 200,
-        justifyContent: 'center',
+        fyContent: 'center',
         alignItems: 'center',
         backgroundColor: '#f0f0f0',
         marginLeft: 15,
@@ -2136,6 +2137,7 @@ const styles = StyleSheet.create({
         color: '#b48a64',
         fontWeight: 'bold',
         fontSize: 16,
+        paddingTop: 4,
     },
     confirmButton: {
         flex: 1,

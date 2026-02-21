@@ -555,7 +555,7 @@ import {
     TextInput,
 } from 'react-native';
 import { Calendar } from 'react-native-calendars';
-import Icon from 'react-native-vector-icons/AntDesign';
+import Icon from 'react-native-vector-icons/Ionicons';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import DropDownPicker from 'react-native-dropdown-picker';
 import { lawnAPI } from '../../config/apis';
@@ -831,7 +831,7 @@ const LawnReservation = ({ route, navigation }) => {
         ...Object.keys(dateConfigurations).reduce((acc, date) => {
             acc[date] = {
                 selected: true,
-                selectedColor: '#2E7D32',
+                selectedColor: '#b48a64',
                 customStyles: reservedDates[date]?.status === 'RESERVED' ? {
                     container: {
                         borderWidth: 2,
@@ -856,7 +856,7 @@ const LawnReservation = ({ route, navigation }) => {
                         style={styles.backButton}
                         onPress={() => navigation.goBack()}
                     >
-                        <Icon name="arrowleft" size={28} color="#000" />
+                        <Icon name="arrow-back" size={28} color="#000" />
                     </TouchableOpacity>
                     <Text style={styles.headerText}>Lawn Reservation</Text>
                     <View style={styles.placeholder} />
@@ -880,7 +880,7 @@ const LawnReservation = ({ route, navigation }) => {
                         onDayPress={handleDateSelect}
                         markedDates={markedDates}
                         theme={{
-                            selectedDayBackgroundColor: '#b48a6',
+                            selectedDayBackgroundColor: '#b48a64',
                             todayTextColor: '#b48a64',
                             arrowColor: '#b48a64',
                         }}
@@ -934,6 +934,16 @@ const LawnReservation = ({ route, navigation }) => {
                         onChangeText={setRemarks}
                     />
                 </View>
+            </ScrollView>
+
+            <View style={styles.bottomButtonContainer}>
+                <View style={styles.contactContainer}>
+                    <Text style={styles.contactText}>
+                        <Text style={{ fontWeight: 'bold' }}>Note: </Text>
+                        For more details contact booking office{' '}
+                        <Text style={{ fontWeight: 'bold' }}>03419777711</Text>.
+                    </Text>
+                </View>
 
                 <TouchableOpacity
                     style={[styles.submitButton, loading && styles.disabledButton]}
@@ -946,8 +956,8 @@ const LawnReservation = ({ route, navigation }) => {
                         <Text style={styles.submitButtonText}>Confirm Reservation</Text>
                     )}
                 </TouchableOpacity>
-            </ScrollView>
-        </SafeAreaView >
+            </View>
+        </SafeAreaView>
     );
 };
 
@@ -980,7 +990,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     headerText: {
-        fontSize: 22,
+        fontSize: 20,
         fontWeight: 'bold',
         color: '#000',
         textAlign: 'center',
@@ -1004,7 +1014,7 @@ const styles = StyleSheet.create({
         shadowRadius: 4,
     },
     venueName: {
-        fontSize: 18,
+        fontSize: 22,
         fontWeight: 'bold',
         color: '#333',
     },
@@ -1012,7 +1022,6 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#666',
         marginTop: 4,
-        fontWeight: 'bold'
     },
     sectionCard: {
         backgroundColor: '#FFF',
@@ -1067,8 +1076,6 @@ const styles = StyleSheet.create({
         padding: 18,
         borderRadius: 15,
         alignItems: 'center',
-        marginTop: 10,
-        marginBottom: 30,
     },
     submitButtonText: {
         color: '#FFF',
@@ -1088,6 +1095,25 @@ const styles = StyleSheet.create({
         color: '#333',
         minHeight: 100,
         textAlignVertical: 'top',
+    },
+    bottomButtonContainer: {
+        paddingHorizontal: 20,
+        paddingBottom: Platform.OS === 'ios' ? 10 : 20,
+        backgroundColor: '#F8F9FA',
+        borderTopWidth: 1,
+        borderTopColor: '#EEE',
+        paddingTop: 10,
+    },
+    contactContainer: {
+        marginBottom: 10,
+        alignItems: 'center',
+        paddingHorizontal: 10,
+    },
+    contactText: {
+        fontSize: 13,
+        color: '#666',
+        textAlign: 'center',
+        lineHeight: 18,
     },
 });
 
