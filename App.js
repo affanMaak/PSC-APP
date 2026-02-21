@@ -1,4 +1,4 @@
-import 'react-native-gesture-handler';
+//App.js                                                                                                                                                                                                             import 'react-native-gesture-handler';
 import React, { useEffect } from 'react';
 import { enableScreens } from 'react-native-screens';
 import { View, Button, Alert, LogBox, Image, StyleSheet, Text, TouchableOpacity, StatusBar, Linking } from 'react-native';

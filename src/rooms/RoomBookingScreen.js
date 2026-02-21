@@ -156,12 +156,22 @@ export default function RoomBookingScreen({ navigation, route }) {
             return;
         }
 
-        // Check maximum occupancy per room (max 4 people per room)
-        const totalGuests = adults + children;
-        if (totalGuests > roomsCount * 4) {
+        // Strict Occupancy Limit (Max 2 Adults, 2 Children per room)
+        const maxAdults = roomsCount * 2;
+        const maxChildren = roomsCount * 2;
+
+        if (adults > maxAdults) {
             Alert.alert(
                 'Occupancy Limit Exceeded',
-                `A maximum of 4 people (adults + children) are allowed per room.\n\nFor ${totalGuests} people, you need at least ${Math.ceil(totalGuests / 4)} rooms.`
+                `A maximum of 2 adults are allowed per room.\n\nFor ${adults} adults, you need at least ${Math.ceil(adults / 2)} rooms.`
+            );
+            return;
+        }
+
+        if (children > maxChildren) {
+            Alert.alert(
+                'Occupancy Limit Exceeded',
+                `A maximum of 2 children are allowed per room.\n\nFor ${children} children, you need at least ${Math.ceil(children / 2)} rooms.`
             );
             return;
         }
@@ -566,6 +576,17 @@ export default function RoomBookingScreen({ navigation, route }) {
                                 />
                             </View>
                         </View>
+
+                        {/* Strict Occupancy Warning */}
+                        {(parseInt(numberOfAdults) > (parseInt(numberOfRooms) || 1) * 2 ||
+                            parseInt(numberOfChildren) > (parseInt(numberOfRooms) || 1) * 2) && (
+                                <View style={styles.occupancyWarningContainer}>
+                                    <Icon name="warning" size={14} color="#D32F2F" />
+                                    <Text style={styles.occupancyWarningText}>
+                                        Max 2 adults & 2 children allowed per room.
+                                    </Text>
+                                </View>
+                            )}
                     </View>
 
                     {/* Special Request Section - Same as Modal */}
@@ -622,10 +643,14 @@ export default function RoomBookingScreen({ navigation, route }) {
                         style={[
                             styles.submitButton,
                             isGuestBooking ? styles.guestSubmitButton : styles.memberSubmitButton,
-                            loading && styles.submitButtonDisabled
+                            (loading ||
+                                parseInt(numberOfAdults) > (parseInt(numberOfRooms) || 1) * 2 ||
+                                parseInt(numberOfChildren) > (parseInt(numberOfRooms) || 1) * 2) && styles.submitButtonDisabled
                         ]}
                         onPress={handleConfirmBooking}
-                        disabled={loading}
+                        disabled={loading ||
+                            parseInt(numberOfAdults) > (parseInt(numberOfRooms) || 1) * 2 ||
+                            parseInt(numberOfChildren) > (parseInt(numberOfRooms) || 1) * 2}
                     >
                         {loading ? (
                             <ActivityIndicator size="small" color="#FFF" />
@@ -650,6 +675,20 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#FEF9F3',
+    },
+    occupancyWarningContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 10,
+        backgroundColor: '#FFEBEE',
+        padding: 8,
+        borderRadius: 6,
+    },
+    occupancyWarningText: {
+        color: '#D32F2F',
+        fontSize: 12,
+        fontWeight: 'bold',
+        marginLeft: 5,
     },
     notch: {
         paddingTop: 50,

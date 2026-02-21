@@ -17,9 +17,13 @@ import {
     ImageBackground,
     Platform
 } from 'react-native';
+import { useRef } from 'react';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { bookingService } from '../../services/bookingService';
 import { useAuth } from '../auth/contexts/AuthContext';
+import ViewShot, { captureRef } from 'react-native-view-shot';
+import { CameraRoll } from '@react-native-camera-roll/camera-roll';
+import { permissionService } from '../services/PermissionService';
 
 
 const { width } = Dimensions.get('window');
@@ -44,6 +48,8 @@ export default function MemberBookingsScreen({ navigation }) {
     const [selectedBooking, setSelectedBooking] = useState(null);
     const [showCancelModal, setShowCancelModal] = useState(false);
     const [cancellationReason, setCancellationReason] = useState('');
+    const viewShotRefs = useRef({});
+    const [saveLoading, setSaveLoading] = useState({});
 
 
     const bookingTypes = ['Room', 'Hall', 'Lawn', 'Photoshoot'];
@@ -457,207 +463,205 @@ export default function MemberBookingsScreen({ navigation }) {
         return status.replace('_', ' ');
     };
 
+    const handleSaveCard = async (item) => {
+        const id = item.id;
+        try {
+            setSaveLoading(prev => ({ ...prev, [id]: true }));
+
+            const hasPermission = await permissionService.requestPhotoLibraryPermission();
+            if (!hasPermission) {
+                permissionService.handlePermissionDenied();
+                return;
+            }
+
+            const ref = viewShotRefs.current[id];
+            if (ref) {
+                const uri = await captureRef(ref, {
+                    format: 'png',
+                    quality: 1.0,
+                });
+
+                await CameraRoll.save(uri, { type: 'photo' });
+                Alert.alert('Success', 'Booking card saved to gallery!');
+            } else {
+                Alert.alert('Error', 'Capture reference not found for this card.');
+            }
+
+        } catch (error) {
+            console.error('Error saving card:', error);
+            Alert.alert('Error', 'Failed to save card. Please try again.');
+        } finally {
+            setSaveLoading(prev => ({ ...prev, [id]: false }));
+        }
+    };
+
     const renderBookingCard = ({ item }) => {
         const statusColor = getStatusColor(item.paymentStatus);
+        const bookingId = item.id;
 
         return (
-            <TouchableOpacity
-                style={styles.bookingCard}
-                onPress={() => navigation.navigate('BookingDetailsScreen', { booking: item })}
-            >
-                <View style={styles.bookingHeader}>
-                    <View style={styles.bookingTypeBadge}>
-                        {/* <Icon name="receipt" size={14} color="#1565c0" /> */}
-                        <Text style={styles.bookingTypeText}>
-                            Booking #{item.bookingId || item.id}
-                        </Text>
-                    </View>
-                    <View style={[styles.statusBadge, { backgroundColor: `${statusColor}15` }]}>
-                        <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-                        <Text style={[styles.statusText, { color: statusColor }]}>
-                            {getStatusText(item.paymentStatus)}
-                        </Text>
-                    </View>
-                </View>
-
-                <View style={styles.bookingInfo}>
-                    {/* Display Room Number or Venue Name based on type */}
-                    {['Hall', 'Lawn', 'Photoshoot'].includes(item.bookingType) ? (
-                        <View style={styles.roomInfo}>
-                            <Icon name="location-city" size={16} color="#666" />
-                            <Text style={styles.roomText}>{item.venueName || item.bookingType}</Text>
-                        </View>
-                    ) : (
-                        <View>
-                            {item.roomNumber && (
-                                <View style={styles.roomInfo}>
-                                    <Icon name="meeting-room" size={16} color="#666" />
-                                    <Text style={styles.roomText}>Room: {item.roomNumber}</Text>
-                                </View>
-                            )}
-                            {item.roomType && (
-                                <View style={styles.roomInfo}>
-                                    <Icon name="category" size={16} color="#666" />
-                                    <Text style={styles.roomText}>Type: {item.roomType}</Text>
-                                </View>
-                            )}
-                        </View>
-                    )}
-
-                    {/* Conditional Date Display */}
-                    {['Hall', 'Lawn', 'Photoshoot'].includes(item.bookingType) ? (
-                        <View style={styles.datesContainer}>
-                            <View style={styles.dateItem}>
-                                <Icon name="event" size={14} color="#666" />
-                                <Text style={styles.dateLabel}>Event Date:</Text>
-                                <Text style={styles.dateValue}>
-                                    {item.bookingDetails && item.bookingDetails.length > 1
-                                        ? `${formatDate(item.checkIn)} (+${item.bookingDetails.length - 1} more)`
-                                        : formatDate(item.checkIn)}
-                                </Text>
-                            </View>
-                            {/* Optional: Show Time/Type if needed in summary */}
-                        </View>
-                    ) : (
-                        <View style={styles.datesContainer}>
-                            <View style={styles.dateItem}>
-                                <Icon name="event" size={14} color="#666" />
-                                <Text style={styles.dateLabel}>Check-in:</Text>
-                                <Text style={styles.dateValue}>{formatDate(item.checkIn)}</Text>
-                            </View>
-
-                            <View style={styles.dateItem}>
-                                <Icon name="event-busy" size={14} color="#666" />
-                                <Text style={styles.dateLabel}>Check-out:</Text>
-                                <Text style={styles.dateValue}>{formatDate(item.checkOut)}</Text>
-                            </View>
-                        </View>
-                    )}
-
-                    {(item.numberOfAdults || item.numberOfChildren) && (
-                        <View style={styles.guestsInfo}>
-                            <Icon name="people" size={14} color="#666" />
-                            <Text style={styles.guestsText}>
-                                {item.numberOfAdults || 0} Adult{item.numberOfAdults !== 1 ? 's' : ''}
-                                {item.numberOfChildren ? `, ${item.numberOfChildren} Child${item.numberOfChildren !== 1 ? 'ren' : ''}` : ''}
-                            </Text>
-                        </View>
-                    )}
-
-                    {item.guestName && (
-                        <View style={styles.guestInfo}>
-                            <Icon name="person" size={14} color="#666" />
-                            <Text style={styles.guestText}>Guest: {item.guestName}</Text>
-                        </View>
-                    )}
-
-                    <View style={styles.paymentInfo}>
-                        <View style={styles.amountRow}>
-                            <Text style={styles.amountLabel}>Total Amount:</Text>
-                            <Text style={styles.totalAmount}>{formatCurrency(item.totalPrice)}</Text>
-                        </View>
-
-                        <View style={styles.paymentDetails}>
-                            <View style={styles.paymentDetail}>
-                                <Icon name="check-circle" size={12} color="#28a745" />
-                                <Text style={styles.paymentLabel}>Paid:</Text>
-                                <Text style={[styles.paymentValue, { color: '#28a745' }]}>
-                                    {formatCurrency(item.paidAmount)}
-                                </Text>
-                            </View>
-
-                            <View style={styles.paymentDetail}>
-                                <Icon name="pending" size={12} color="#dc3545" />
-                                <Text style={styles.paymentLabel}>Pending:</Text>
-                                <Text style={[styles.paymentValue, { color: '#dc3545' }]}>
-                                    {formatCurrency(item.pendingAmount)}
-                                </Text>
-                            </View>
-                        </View>
-                    </View>
-
-                    {item.specialRequest && (
-                        <View style={styles.specialRequestContainer}>
-                            <Icon name="info" size={12} color="#666" />
-                            <Text style={styles.specialRequestText} numberOfLines={2}>
-                                {item.specialRequest}
-                            </Text>
-                        </View>
-                    )}
-                </View>
-
-                <View style={styles.cardFooter}>
-                    <Text style={styles.createdDate}>
-                        Created: {formatDate(item.createdAt)}
-                    </Text>
+            <View style={styles.cardWrapper}>
+                <ViewShot
+                    ref={el => (viewShotRefs.current[bookingId] = el)}
+                    options={{ format: 'png', quality: 1.0 }}
+                    style={{ backgroundColor: '#fff', borderRadius: 16 }}
+                >
                     <TouchableOpacity
-                        style={styles.viewButton}
+                        style={styles.bookingCard}
                         onPress={() => navigation.navigate('BookingDetailsScreen', { booking: item })}
+                        activeOpacity={0.9}
                     >
-                        <Text style={styles.viewButtonText}>View Details</Text>
-                        <Icon name="chevron-right" size={16} color="#b48a64" />
-                    </TouchableOpacity>
-                </View>
-
-                {item.isCancelled && (
-                    <View style={{ marginBottom: 10 }}>
-                        <View style={[styles.cancelBookingButton, { backgroundColor: '#f8d7da', borderColor: '#f5c6cb', marginBottom: 5 }]}>
-                            <Icon name="cancel" size={16} color="#721c24" />
-                            <Text style={[styles.cancelBookingButtonText, { color: '#721c24' }]}>Booking Cancelled</Text>
+                        <View style={styles.bookingHeader}>
+                            <View style={styles.bookingTypeBadge}>
+                                <Text style={styles.bookingTypeText}>
+                                    Booking #{item.bookingId || item.id}
+                                </Text>
+                            </View>
+                            <View style={[styles.statusBadge, { backgroundColor: `${statusColor}15` }]}>
+                                <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+                                <Text style={[styles.statusText, { color: statusColor }]}>
+                                    {getStatusText(item.paymentStatus)}
+                                </Text>
+                            </View>
                         </View>
-                        {(() => {
-                            const latestReq = item.cancellationRequests && item.cancellationRequests.length > 0
-                                ? item.cancellationRequests[item.cancellationRequests.length - 1]
-                                : null;
-                            if (latestReq && latestReq.status === 'APPROVED') {
-                                return (
-                                    <Text style={{ fontSize: 10, color: '#721c24', textAlign: 'center', fontStyle: 'italic', paddingHorizontal: 10 }}>
-                                        Please contact the PSC administration for your refund amount.
+
+                        <View style={styles.bookingInfo}>
+                            {['Hall', 'Lawn', 'Photoshoot'].includes(item.bookingType) ? (
+                                <View style={styles.roomInfo}>
+                                    <Icon name="location-city" size={16} color="#666" />
+                                    <Text style={styles.roomText}>{item.venueName || item.bookingType}</Text>
+                                </View>
+                            ) : (
+                                <View>
+                                    {item.roomNumber && (
+                                        <View style={styles.roomInfo}>
+                                            <Icon name="meeting-room" size={16} color="#666" />
+                                            <Text style={styles.roomText}>Room: {item.roomNumber}</Text>
+                                        </View>
+                                    )}
+                                    {item.roomType && (
+                                        <View style={styles.roomInfo}>
+                                            <Icon name="category" size={16} color="#666" />
+                                            <Text style={styles.roomText}>Type: {item.roomType}</Text>
+                                        </View>
+                                    )}
+                                </View>
+                            )}
+
+                            {['Hall', 'Lawn', 'Photoshoot'].includes(item.bookingType) ? (
+                                <View style={styles.datesContainer}>
+                                    <View style={styles.dateItem}>
+                                        <Icon name="event" size={14} color="#666" />
+                                        <Text style={styles.dateLabel}>Event Date:</Text>
+                                        <Text style={styles.dateValue}>
+                                            {item.bookingDetails && item.bookingDetails.length > 1
+                                                ? `${formatDate(item.checkIn)} (+${item.bookingDetails.length - 1} more)`
+                                                : formatDate(item.checkIn)}
+                                        </Text>
+                                    </View>
+                                </View>
+                            ) : (
+                                <View style={styles.datesContainer}>
+                                    <View style={styles.dateItem}>
+                                        <Icon name="event" size={14} color="#666" />
+                                        <Text style={styles.dateLabel}>Check-in:</Text>
+                                        <Text style={styles.dateValue}>{formatDate(item.checkIn)}</Text>
+                                    </View>
+
+                                    <View style={styles.dateItem}>
+                                        <Icon name="event-busy" size={14} color="#666" />
+                                        <Text style={styles.dateLabel}>Check-out:</Text>
+                                        <Text style={styles.dateValue}>{formatDate(item.checkOut)}</Text>
+                                    </View>
+                                </View>
+                            )}
+
+                            {(item.numberOfAdults || item.numberOfChildren) && (
+                                <View style={styles.guestsInfo}>
+                                    <Icon name="people" size={14} color="#666" />
+                                    <Text style={styles.guestsText}>
+                                        {item.numberOfAdults || 0} Adult{item.numberOfAdults !== 1 ? 's' : ''}
+                                        {item.numberOfChildren ? `, ${item.numberOfChildren} Child${item.numberOfChildren !== 1 ? 'ren' : ''}` : ''}
                                     </Text>
-                                );
-                            }
-                            return null;
-                        })()}
-                    </View>
-                )}
+                                </View>
+                            )}
 
-                {!item.isCancelled && item.paymentStatus !== 'PAID' && (() => {
-                    const latestReq = item.cancellationRequests && item.cancellationRequests.length > 0
-                        ? item.cancellationRequests[item.cancellationRequests.length - 1]
-                        : null;
-                    const isPending = latestReq && latestReq.status === 'PENDING';
-                    const isPastBooking = item.checkIn && new Date(item.checkIn) < new Date().setHours(0, 0, 0, 0);
+                            {item.guestName && (
+                                <View style={styles.guestInfo}>
+                                    <Icon name="person" size={14} color="#666" />
+                                    <Text style={styles.guestText}>Guest: {item.guestName}</Text>
+                                </View>
+                            )}
 
-                    if (isPending) {
-                        return (
-                            <View style={[styles.cancelBookingButton, { backgroundColor: '#fff3cd', borderColor: '#ffeeba' }]}>
-                                <Icon name="hourglass-empty" size={16} color="#856404" />
-                                <Text style={[styles.cancelBookingButtonText, { color: '#856404' }]}>Cancellation Pending</Text>
+                            <View style={styles.paymentInfo}>
+                                <View style={styles.amountRow}>
+                                    <Text style={styles.amountLabel}>Total Amount:</Text>
+                                    <Text style={styles.totalAmount}>{formatCurrency(item.totalPrice)}</Text>
+                                </View>
+
+                                <View style={styles.paymentDetails}>
+                                    <View style={styles.paymentDetail}>
+                                        <Icon name="check-circle" size={12} color="#28a745" />
+                                        <Text style={styles.paymentLabel}>Paid:</Text>
+                                        <Text style={[styles.paymentValue, { color: '#28a745' }]}>
+                                            {formatCurrency(item.paidAmount)}
+                                        </Text>
+                                    </View>
+
+                                    <View style={styles.paymentDetail}>
+                                        <Icon name="pending" size={12} color="#dc3545" />
+                                        <Text style={styles.paymentLabel}>Pending:</Text>
+                                        <Text style={[styles.paymentValue, { color: '#dc3545' }]}>
+                                            {formatCurrency(item.pendingAmount)}
+                                        </Text>
+                                    </View>
+                                </View>
                             </View>
-                        );
-                    }
 
-                    if (isPastBooking) {
-                        return (
-                            <View style={[styles.cancelBookingButton, { backgroundColor: '#e2e3e5', borderColor: '#d6d8db' }]}>
-                                <Icon name="info" size={16} color="#383d41" />
-                                <Text style={[styles.cancelBookingButtonText, { color: '#383d41' }]}>Cancellation Request (Past Date)</Text>
+                            {item.specialRequest && (
+                                <View style={styles.specialRequestContainer}>
+                                    <Icon name="info" size={12} color="#666" />
+                                    <Text style={styles.specialRequestText} numberOfLines={2}>
+                                        {item.specialRequest}
+                                    </Text>
+                                </View>
+                            )}
+                        </View>
+
+                        <View style={styles.cardFooter}>
+                            <Text style={styles.createdDate}>
+                                Created: {formatDate(item.createdAt)}
+                            </Text>
+                            <View style={styles.viewButton}>
+                                <Text style={styles.viewButtonText}>View Details</Text>
+                                <Icon name="chevron-right" size={16} color="#b48a64" />
                             </View>
-                        );
-                    }
-                    return <View></View>
+                        </View>
 
-                    // return (
-                    //     <TouchableOpacity
-                    //         style={styles.cancelBookingButton}
-                    //         onPress={() => handleCancelBooking(item)}
-                    //     >
-                    //         <Icon name="cancel" size={16} color="#dc3545" />
-                    //         <Text style={styles.cancelBookingButtonText}>Request Cancellation</Text>
-                    //     </TouchableOpacity>
-                    // );
-                })()}
-            </TouchableOpacity>
+                        {item.isCancelled && (
+                            <View style={{ marginBottom: 10 }}>
+                                <View style={[styles.cancelBookingButton, { backgroundColor: '#f8d7da', borderColor: '#f5c6cb', marginBottom: 5 }]}>
+                                    <Icon name="cancel" size={16} color="#721c24" />
+                                    <Text style={[styles.cancelBookingButtonText, { color: '#721c24' }]}>Booking Cancelled</Text>
+                                </View>
+                            </View>
+                        )}
+                    </TouchableOpacity>
+                </ViewShot>
+
+                {/* Individual Save to Gallery Button */}
+                <TouchableOpacity
+                    style={styles.cardSaveButton}
+                    onPress={() => handleSaveCard(item)}
+                    disabled={saveLoading[bookingId]}
+                >
+                    {saveLoading[bookingId] ? (
+                        <ActivityIndicator size="small" color="#b48a64" />
+                    ) : (
+                        <Icon name="file-download" size={20} color="#b48a64" />
+                    )}
+                </TouchableOpacity>
+            </View>
         );
     };
 
@@ -1167,11 +1171,14 @@ const styles = StyleSheet.create({
         fontWeight: '500',
         paddingLeft: 5,
     },
+    cardWrapper: {
+        marginBottom: 16,
+        position: 'relative',
+    },
     bookingCard: {
         backgroundColor: '#fff',
         borderRadius: 16,
         padding: 20,
-        marginBottom: 16,
         borderWidth: 2,
         borderColor: '#e9d8c8',
         shadowColor: '#000',
@@ -1179,6 +1186,25 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.08,
         shadowRadius: 6,
         elevation: 4,
+    },
+    cardSaveButton: {
+        position: 'absolute',
+        top: 10,
+        right: 10,
+        zIndex: 10,
+        backgroundColor: '#f5f0e6',
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#e9d8c8',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 3,
+        elevation: 3,
     },
     bookingHeader: {
         flexDirection: 'row',

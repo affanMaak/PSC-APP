@@ -1089,8 +1089,10 @@ const Lawn = ({ navigation }) => {
       // Multiple lawns or no lawns - show lawn list
       console.log(`📋 ${lawns?.length || 0} lawns found, navigating to LawnListScreen`);
       navigation.navigate('LawnListScreen', {
-        categoryId: category.rawData.id,
-        categoryName: category.rawData.category,
+        categoryId: category.id,
+        categoryName: category.category,
+        categoryImages: category.rawData?.images || [],
+        passedLawns: category.rawData?.lawns || [],
       });
     }
   };

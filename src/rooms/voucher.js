@@ -13,19 +13,15 @@ import {
   Clipboard,
   Platform,
   PermissionsAndroid,
-  Modal,
-  Animated,
-  Dimensions,
-  TouchableWithoutFeedback,
 } from 'react-native';
-import Share from 'react-native-share';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { captureRef } from 'react-native-view-shot';
+import ViewShot, { captureRef } from 'react-native-view-shot';
 import { CameraRoll } from '@react-native-camera-roll/camera-roll';
 import { bookingService } from '../../services/bookingService';
 import { useAuth } from '../auth/contexts/AuthContext';
 import { useVoucher } from '../auth/contexts/VoucherContext';
 import socketService from '../../services/socket.service';
+import { permissionService } from '../services/PermissionService';
 
 export default function voucher({ navigation, route }) {
   const { clearVoucher } = useVoucher();
@@ -43,14 +39,30 @@ export default function voucher({ navigation, route }) {
     memberDetails
   } = route.params || {};
 
+  // Occupancy Check (Max 2 Adults and 2 Children per room)
+  useEffect(() => {
+    if (bookingData) {
+      const adults = parseInt(bookingData.numberOfAdults || 0);
+      const children = parseInt(bookingData.numberOfChildren || 0);
+
+      if (adults > 2 || children > 2) {
+        Alert.alert(
+          'Occupancy Limit Exceeded',
+          'According to club policy, a maximum of 2 Adults and 2 Children are allowed per room for guest room bookings. Please contact the club office for larger occupancy.',
+          [{ text: 'OK', onPress: () => navigation.goBack() }]
+        );
+      }
+    }
+  }, [bookingData, navigation]);
+
   const [invoiceData, setInvoiceData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [timeLeft, setTimeLeft] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [shareLoading, setShareLoading] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
-  const [showShareModal, setShowShareModal] = useState(false);
   const [copied, setCopied] = useState(false);
+  const viewShotRef = useRef(null);
   const invoiceRef = useRef(null);
 
 
@@ -105,7 +117,7 @@ export default function voucher({ navigation, route }) {
         numberOfChildren: bookingData?.numberOfChildren || 0,
         numberOfRooms: bookingData?.numberOfRooms || 1,
       };
-      console.log(bookingData)
+
       setInvoiceData(details);
       setLoading(false);
     } else if (bookingId) {
@@ -387,31 +399,7 @@ export default function voucher({ navigation, route }) {
     );
   };
 
-  const requestStoragePermission = async () => {
-    if (Platform.OS === 'android') {
-      try {
-        if (Platform.Version >= 33) {
-          return true;
-        } else {
-          const granted = await PermissionsAndroid.request(
-            PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
-            {
-              title: 'Storage Permission',
-              message: 'This app needs storage permission to save invoice images to your gallery.',
-              buttonNeutral: 'Ask Me Later',
-              buttonNegative: 'Cancel',
-              buttonPositive: 'OK',
-            }
-          );
-          return granted === PermissionsAndroid.RESULTS.GRANTED;
-        }
-      } catch (error) {
-        console.error('Permission request error:', error);
-        return false;
-      }
-    }
-    return true;
-  };
+  // requestStoragePermission removed as it's now handled by permissionService
 
   const handleSaveToGallery = async () => {
     try {
@@ -422,27 +410,35 @@ export default function voucher({ navigation, route }) {
         return;
       }
 
-      const hasPermission = await requestStoragePermission();
+      const hasPermission = await permissionService.requestPhotoLibraryPermission();
       if (!hasPermission) {
-        Alert.alert('Permission Required', 'Please grant storage permission to save the invoice.');
+        permissionService.handlePermissionDenied();
         return;
       }
 
-      // Wait a tick for the hidden view to render
-      await new Promise(resolve => setTimeout(resolve, 300));
+      // Use viewShotRef for the visible UI as requested
+      if (viewShotRef.current) {
+        const uri = await captureRef(viewShotRef, {
+          format: 'png',
+          quality: 1.0,
+        });
 
-      const uri = await captureRef(invoiceRef, {
-        format: 'png',
-        quality: 1,
-        result: 'tmpfile',
-      });
-
-      await CameraRoll.save(uri, { type: 'photo' });
-      Alert.alert('Success', 'Invoice saved to gallery successfully!');
+        await CameraRoll.save(uri, { type: 'photo' });
+        Alert.alert('Success', 'Voucher saved to gallery successfully!');
+      } else {
+        // Fallback to invoiceRef (hidden view) if visible one fails or isn't assigned
+        const ref = viewShotRef.current || invoiceRef;
+        const uri = await captureRef(ref, {
+          format: 'png',
+          quality: 1.0,
+        });
+        await CameraRoll.save(uri, { type: 'photo' });
+        Alert.alert('Success', 'Voucher saved to gallery successfully!');
+      }
 
     } catch (error) {
       console.error('Error saving invoice:', error);
-      Alert.alert('Error', 'Failed to save invoice. Please try again.');
+      Alert.alert('Error', 'Failed to save voucher. Please try again.');
     } finally {
       setSaveLoading(false);
     }
@@ -628,13 +624,7 @@ export default function voucher({ navigation, route }) {
 
           <Text style={styles.notchTitle}>Booking Invoice</Text>
 
-          {(['PAID', 'CONFIRMED'].includes(invoiceData?.status?.toUpperCase())) ? (
-            <TouchableOpacity onPress={() => setShowShareModal(true)} style={styles.iconWrapper}>
-              <Icon name="share" size={24} color="#000" />
-            </TouchableOpacity>
-          ) : (
-            <View style={styles.iconWrapper} />
-          )}
+          <View style={styles.iconWrapper} />
         </View>
       </ImageBackground>
 
@@ -650,48 +640,50 @@ export default function voucher({ navigation, route }) {
         }
       >
         {invoiceData ? (
-          <View style={styles.invoiceContainer}>
-            {/* Invoice Header */}
-            <View style={styles.invoiceHeader}>
-              <Icon
-                name={statusInfo.icon}
-                size={40}
-                color={invoiceData?.status === 'PAID' || invoiceData?.status === 'CONFIRMED' ? '#2e7d32' : "#b48a64"}
-              />
-              {(invoiceData?.status === 'PAID' || invoiceData?.status === 'CONFIRMED') && (
-                <Text style={{ color: '#2e7d32', fontWeight: 'bold', marginTop: 5 }}>
-                  Payment Successful
-                </Text>
-              )}
-              <Text style={styles.invoiceTitle}>
-                ROOM BOOKING VOUCHER
-              </Text>
-              <Text style={styles.invoiceSubtitle}>
-                {(invoiceData?.status === 'PAID' || invoiceData?.status === 'CONFIRMED')
-                  ? "Payment successful! Your booking is being finalized."
-                  : "Complete payment to confirm your booking"}
-              </Text>
-              {timeLeft && timeLeft !== 'EXPIRED' && invoiceData?.status !== 'PAID' && (
-                <View style={styles.timerWrapper}>
-                  <View style={styles.timerContainer}>
-                    <Icon name="schedule" size={16} color="#dc3545" />
-                    <Text style={styles.timerText}> Expires in: {timeLeft}</Text>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.cancelVoucherGhostButton}
-                    onPress={handleCancelVoucher}
-                  >
-                    <Icon name="close" size={14} color="#666" />
-                    <Text style={styles.cancelVoucherGhostText}>Cancel Booking</Text>
-                  </TouchableOpacity>
+          <>
+            <ViewShot ref={viewShotRef} options={{ format: 'png', quality: 1.0 }} style={{ backgroundColor: '#fffaf2' }}>
+              <View style={styles.invoiceContainer}>
+                {/* Invoice Header */}
+                <View style={styles.invoiceHeader}>
+                  <Icon
+                    name={statusInfo.icon}
+                    size={40}
+                    color={invoiceData?.status === 'PAID' || invoiceData?.status === 'CONFIRMED' ? '#2e7d32' : "#b48a64"}
+                  />
+                  {(invoiceData?.status === 'PAID' || invoiceData?.status === 'CONFIRMED') && (
+                    <Text style={{ color: '#2e7d32', fontWeight: 'bold', marginTop: 5 }}>
+                      Payment Successful
+                    </Text>
+                  )}
+                  <Text style={styles.invoiceTitle}>
+                    ROOM BOOKING VOUCHER
+                  </Text>
+                  <Text style={styles.invoiceSubtitle}>
+                    {(invoiceData?.status === 'PAID' || invoiceData?.status === 'CONFIRMED')
+                      ? "Payment successful! Your booking is being finalized."
+                      : "Complete payment to confirm your booking"}
+                  </Text>
+                  {timeLeft && timeLeft !== 'EXPIRED' && invoiceData?.status !== 'PAID' && (
+                    <View style={styles.timerWrapper}>
+                      <View style={styles.timerContainer}>
+                        <Icon name="schedule" size={16} color="#dc3545" />
+                        <Text style={styles.timerText}> Expires in: {timeLeft}</Text>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.cancelVoucherGhostButton}
+                        onPress={handleCancelVoucher}
+                      >
+                        <Icon name="close" size={14} color="#666" />
+                        <Text style={styles.cancelVoucherGhostText}>Cancel Booking</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                  {timeLeft === 'EXPIRED' && (
+                    <Text style={styles.expiredText}>EXPIRED</Text>
+                  )}
                 </View>
-              )}
-              {timeLeft === 'EXPIRED' && (
-                <Text style={styles.expiredText}>EXPIRED</Text>
-              )}
-            </View>
 
-            {/* Payment Required Alert
+                {/* Payment Required Alert
             <View style={styles.paymentAlert}>
               <Icon name="payment" size={20} color="#856404" />
               <View style={styles.paymentAlertContent}>
@@ -710,68 +702,68 @@ export default function voucher({ navigation, route }) {
 
 
 
-            {/* Invoice Details */}
-            <View style={styles.invoiceSection}>
-              <Text style={styles.sectionTitle}>Invoice Details</Text>
+                {/* Invoice Details */}
+                <View style={styles.invoiceSection}>
+                  <Text style={styles.sectionTitle}>Invoice Details</Text>
 
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Invoice Number:</Text>
-                <Text style={[styles.detailValue, styles.invoiceHighlight]}>
-                  {invoiceData.invoiceNo}
-                </Text>
-              </View>
-
-              {invoiceData.consumerNumber && (
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Consumer Number:</Text>
-                  <TouchableOpacity
-                    onPress={copyToClipboard}
-                    style={styles.copyContainer}
-                  >
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Invoice Number:</Text>
                     <Text style={[styles.detailValue, styles.invoiceHighlight]}>
-                      {invoiceData.consumerNumber}
+                      {invoiceData.invoiceNo}
                     </Text>
-                    <Icon
-                      name={copied ? "check" : "content-copy"}
-                      size={16}
-                      color={copied ? "#2e7d32" : "#b48a64"}
-                      style={{ marginLeft: 8 }}
-                    />
-                  </TouchableOpacity>
-                </View>
-              )}
+                  </View>
 
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Booking ID:</Text>
-                <Text style={styles.detailValue}>
-                  {invoiceData.bookingId}
-                </Text>
-              </View>
+                  {invoiceData.consumerNumber && (
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Consumer Number:</Text>
+                      <TouchableOpacity
+                        onPress={copyToClipboard}
+                        style={styles.copyContainer}
+                      >
+                        <Text style={[styles.detailValue, styles.invoiceHighlight]}>
+                          {invoiceData.consumerNumber}
+                        </Text>
+                        <Icon
+                          name={copied ? "check" : "content-copy"}
+                          size={16}
+                          color={copied ? "#2e7d32" : "#b48a64"}
+                          style={{ marginLeft: 8 }}
+                        />
+                      </TouchableOpacity>
+                    </View>
+                  )}
 
-              {/* <View style={styles.detailRow}>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Booking ID:</Text>
+                    <Text style={styles.detailValue}>
+                      {invoiceData.bookingId}
+                    </Text>
+                  </View>
+
+                  {/* <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Status:</Text>
                 <View style={[styles.statusBadge, statusInfo.style]}>
                   <Text style={styles.statusText}>{statusInfo.text}</Text>
                 </View>
               </View> */}
 
-              {invoiceData.dueDate && (
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Payment Due:</Text>
-                  <Text style={[styles.detailValue, styles.dueDate]}>
-                    {formatDateTime(invoiceData.dueDate)}
-                  </Text>
-                </View>
-              )}
+                  {invoiceData.dueDate && (
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Payment Due:</Text>
+                      <Text style={[styles.detailValue, styles.dueDate]}>
+                        {formatDateTime(invoiceData.dueDate)}
+                      </Text>
+                    </View>
+                  )}
 
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Issued At:</Text>
-                <Text style={styles.detailValue}>
-                  {formatDateTime(invoiceData.issued_at)}
-                </Text>
-              </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Issued At:</Text>
+                    <Text style={styles.detailValue}>
+                      {formatDateTime(invoiceData.issued_at)}
+                    </Text>
+                  </View>
 
-              {/* {invoiceData.issued_by && (
+                  {/* {invoiceData.issued_by && (
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Issued By:</Text>
                   <Text style={styles.detailValue}>
@@ -779,56 +771,56 @@ export default function voucher({ navigation, route }) {
                   </Text>
                 </View>
               )} */}
-            </View>
+                </View>
 
-            {/* Room Information */}
-            <View style={styles.invoiceSection}>
-              <Text style={styles.sectionTitle}>Room Information</Text>
+                {/* Room Information */}
+                <View style={styles.invoiceSection}>
+                  <Text style={styles.sectionTitle}>Room Information</Text>
 
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Room Type:</Text>
-                <Text style={styles.detailValue}>
-                  {invoiceData.roomType || 'N/A'}
-                </Text>
-              </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Room Type:</Text>
+                    <Text style={styles.detailValue}>
+                      {invoiceData.roomType || 'N/A'}
+                    </Text>
+                  </View>
 
-              <View style={[styles.detailRow, { marginBottom: 10, alignItems: 'flex-start' }]}>
-                <Text style={[styles.detailLabel, { marginTop: 0 }]}>Room Number:</Text>
-                {/* Updated Check: Render if roomNumber exists and is not empty */}
-                {(invoiceData.roomNumber && invoiceData.roomNumber !== "") ? (
-                  <Text style={[styles.detailValue, { flex: 1, textAlign: 'right', flexWrap: 'wrap' }]}>
-                    {invoiceData.roomNumber}
-                  </Text>
-                ) : (
-                  <Text style={[styles.detailValue, { color: '#888888' }]}>
-                    Pending Assignment
-                  </Text>
-                )}
-              </View>
+                  <View style={[styles.detailRow, { marginBottom: 10, alignItems: 'flex-start' }]}>
+                    <Text style={[styles.detailLabel, { marginTop: 0 }]}>Room Number:</Text>
+                    {/* Updated Check: Render if roomNumber exists and is not empty */}
+                    {(invoiceData.roomNumber && invoiceData.roomNumber !== "") ? (
+                      <Text style={[styles.detailValue, { flex: 1, textAlign: 'right', flexWrap: 'wrap' }]}>
+                        {invoiceData.roomNumber}
+                      </Text>
+                    ) : (
+                      <Text style={[styles.detailValue, { color: '#888888' }]}>
+                        Pending Assignment
+                      </Text>
+                    )}
+                  </View>
 
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Check-in:</Text>
-                <Text style={styles.detailValue}>
-                  {formatDate(invoiceData.checkIn)}
-                </Text>
-              </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Check-in:</Text>
+                    <Text style={styles.detailValue}>
+                      {formatDate(invoiceData.checkIn)}
+                    </Text>
+                  </View>
 
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Check-out:</Text>
-                <Text style={styles.detailValue}>
-                  {formatDate(invoiceData.checkOut)}
-                </Text>
-              </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Check-out:</Text>
+                    <Text style={styles.detailValue}>
+                      {formatDate(invoiceData.checkOut)}
+                    </Text>
+                  </View>
 
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Guests:</Text>
-                <Text style={styles.detailValue}>
-                  {invoiceData.numberOfAdults} Adults, {invoiceData.numberOfChildren} Children
-                  {invoiceData.numberOfRooms > 1 && `, ${invoiceData.numberOfRooms} Rooms`}
-                </Text>
-              </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Guests:</Text>
+                    <Text style={styles.detailValue}>
+                      {invoiceData.numberOfAdults} Adults, {invoiceData.numberOfChildren} Children
+                      {invoiceData.numberOfRooms > 1 && `, ${invoiceData.numberOfRooms} Rooms`}
+                    </Text>
+                  </View>
 
-              {/* {invoiceData?.status !== 'PAID' && (
+                  {/* {invoiceData?.status !== 'PAID' && (
                 <TouchableOpacity
                   style={styles.cardFooterAction}
                   onPress={handleCancelVoucher}
@@ -837,86 +829,122 @@ export default function voucher({ navigation, route }) {
                   <Icon name="chevron-right" size={18} color="#dc3545" />
                 </TouchableOpacity>
               )} */}
-            </View>
-
-            {/* Payment Information */}
-            <View style={styles.invoiceSection}>
-              <Text style={styles.sectionTitle}>Payment Details</Text>
-
-              {invoiceData.fullTotalPrice && (
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Total Booking Amount:</Text>
-                  <Text style={styles.detailValue}>
-                    Rs. {parseFloat(invoiceData.fullTotalPrice).toFixed(2)}
-                  </Text>
                 </View>
-              )}
 
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Advance Deposit to Pay ({advancePercentage}%):</Text>
-                <Text style={[styles.detailValue, styles.amountHighlight]}>
-                  Rs. {invoiceData.totalPrice ? parseFloat(invoiceData.totalPrice).toFixed(2) : '0.00'}
-                </Text>
-              </View>
+                {/* Payment Information */}
+                <View style={styles.invoiceSection}>
+                  <Text style={styles.sectionTitle}>Payment Details</Text>
 
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Payment Status:</Text>
-                <View style={[styles.statusBadge, statusInfo.style]}>
-                  <Text style={[styles.statusText, { color: statusInfo.textColor }]}>
-                    {statusInfo.text}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Payment Mode:</Text>
-                <Text style={styles.detailValue}>
-                  {invoiceData.paymentMode}
-                </Text>
-              </View>
-            </View>
-
-            {/* Payment Instructions */}
-            {invoiceData.instructions && (
-              <View style={styles.instructionsSection}>
-                <Text style={styles.instructionsTitle}>Payment Instructions</Text>
-                <Text style={styles.instructionsText}>{invoiceData.instructions}</Text>
-              </View>
-            )}
-
-            {/* Payment Channels */}
-            {invoiceData.paymentChannels && (
-              <View style={styles.paymentChannelsSection}>
-                <Text style={styles.paymentChannelsTitle}>Available Payment Methods</Text>
-                <View style={styles.paymentChannelsList}>
-                  {invoiceData.paymentChannels.map((channel, index) => (
-                    <View key={index} style={styles.paymentChannelItem}>
-                      <Icon name="payment" size={16} color="#2e7d32" />
-                      <Text style={styles.paymentChannelText}>{channel}</Text>
+                  {invoiceData.fullTotalPrice && (
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Total Booking Amount:</Text>
+                      <Text style={styles.detailValue}>
+                        Rs. {parseFloat(invoiceData.fullTotalPrice).toFixed(2)}
+                      </Text>
                     </View>
-                  ))}
+                  )}
+
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Advance Deposit to Pay ({advancePercentage}%):</Text>
+                    <Text style={[styles.detailValue, styles.amountHighlight]}>
+                      Rs. {invoiceData.totalPrice ? parseFloat(invoiceData.totalPrice).toFixed(2) : '0.00'}
+                    </Text>
+                  </View>
+
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Payment Status:</Text>
+                    <View style={[styles.statusBadge, statusInfo.style]}>
+                      <Text style={[styles.statusText, { color: statusInfo.textColor }]}>
+                        {statusInfo.text}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Payment Mode:</Text>
+                    <Text style={styles.detailValue}>
+                      {invoiceData.paymentMode}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Payment Instructions */}
+                {invoiceData.instructions && (
+                  <View style={styles.instructionsSection}>
+                    <Text style={styles.instructionsTitle}>Payment Instructions</Text>
+                    <Text style={styles.instructionsText}>{invoiceData.instructions}</Text>
+                  </View>
+                )}
+
+                {/* Payment Channels */}
+                {invoiceData.paymentChannels && (
+                  <View style={styles.paymentChannelsSection}>
+                    <Text style={styles.paymentChannelsTitle}>Available Payment Methods</Text>
+                    <View style={styles.paymentChannelsList}>
+                      {invoiceData.paymentChannels.map((channel, index) => (
+                        <View key={index} style={styles.paymentChannelItem}>
+                          <Icon name="payment" size={16} color="#2e7d32" />
+                          <Text style={styles.paymentChannelText}>{channel}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                )}
+
+                {/* General Instructions */}
+                <View style={styles.instructions}>
+                  <Text style={styles.instructionsTitle}>Important Information</Text>
+                  <View style={styles.instructionItem}>
+                    <Icon name="access-time" size={16} color="#2e7d32" />
+                    <Text style={styles.instructionText}>Check-in: 2:00 PM | Check-out: 12:00 PM</Text>
+                  </View>
+                  <View style={styles.instructionItem}>
+                    <Icon name="credit-card" size={16} color="#2e7d32" />
+                    <Text style={styles.instructionText}>Government ID required at check-in</Text>
+                  </View>
                 </View>
               </View>
-            )}
+            </ViewShot>
 
-            {/* General Instructions */}
-            <View style={styles.instructions}>
-              <Text style={styles.instructionsTitle}>Important Information</Text>
-              <View style={styles.instructionItem}>
-                <Icon name="access-time" size={16} color="#2e7d32" />
-                <Text style={styles.instructionText}>Check-in: 2:00 PM | Check-out: 12:00 PM</Text>
-              </View>
-              <View style={styles.instructionItem}>
-                <Icon name="credit-card" size={16} color="#2e7d32" />
-                <Text style={styles.instructionText}>Government ID required at check-in</Text>
-              </View>
-              <View style={styles.instructionItem}>
-                <Icon name="receipt" size={16} color="#2e7d32" />
-                <Text style={styles.instructionText}>Present payment confirmation at reception</Text>
-              </View>
+            {/* Action Buttons */}
+            <View style={styles.actionButtons}>
+              {(['PAID', 'CONFIRMED'].includes(invoiceData?.status?.toUpperCase())) ? (
+                <>
+                  <TouchableOpacity
+                    style={styles.shareButton}
+                    onPress={handleShareInvoice}
+                    disabled={shareLoading}
+                  >
+                    <Icon name="share" size={20} color="#fff" />
+                    <Text style={styles.shareButtonText}>
+                      {shareLoading ? 'Sharing...' : 'Share'}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.saveButton}
+                    onPress={handleSaveToGallery}
+                    disabled={saveLoading}
+                  >
+                    <Icon name="download" size={20} color="#fff" />
+                    <Text style={styles.saveButtonText}>
+                      {saveLoading ? 'Saving...' : 'Save to Gallery'}
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <TouchableOpacity
+                  style={[styles.saveButton, { backgroundColor: '#666' }]}
+                  onPress={handleSaveToGallery}
+                  disabled={saveLoading}
+                >
+                  <Icon name="file-download" size={20} color="#fff" />
+                  <Text style={styles.saveButtonText}>
+                    {saveLoading ? 'Saving...' : 'Save to Gallery'}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
-
-
 
             {/* Make Payment Button */}
             {/* <TouchableOpacity
@@ -936,7 +964,7 @@ export default function voucher({ navigation, route }) {
                 <Text style={styles.primaryButtonText}>View All Bookings</Text>
               </TouchableOpacity>
             </View> */}
-          </View>
+          </>
         ) : (
           <View style={styles.noInvoiceContainer}>
             <Icon name="receipt" size={60} color="#ccc" />
@@ -955,182 +983,121 @@ export default function voucher({ navigation, route }) {
       </ScrollView>
 
       {/* Hidden Unified Invoice Layout for Screenshot Capture */}
-      {(['PAID', 'CONFIRMED'].includes(invoiceData?.status?.toUpperCase())) && invoiceData && (
-        <View style={shareStyles.offScreenContainer}>
-          <View ref={invoiceRef} collapsable={false} style={shareStyles.invoiceSheet}>
-            {/* Professional Header */}
-            <View style={shareStyles.header}>
-              <Text style={shareStyles.headerTitle}>BOOKING INVOICE</Text>
-              <View style={shareStyles.headerDivider} />
-              <Text style={shareStyles.headerSubtitle}>Room Booking Confirmation</Text>
-            </View>
-
-            {/* Status Badge */}
-            <View style={shareStyles.confirmedBadge}>
-              <Text style={shareStyles.confirmedBadgeText}>✓ PAYMENT CONFIRMED</Text>
-            </View>
-
-            {/* Invoice Details Section */}
-            <View style={shareStyles.section}>
-              <Text style={shareStyles.sectionTitle}>Invoice Details</Text>
-              <View style={shareStyles.sectionDivider} />
-              <View style={shareStyles.row}>
-                <Text style={shareStyles.label}>Invoice No:</Text>
-                <Text style={shareStyles.value}>{invoiceData.invoiceNo}</Text>
+      {
+        (['PAID', 'CONFIRMED'].includes(invoiceData?.status?.toUpperCase())) && invoiceData && (
+          <View style={shareStyles.offScreenContainer}>
+            <View ref={invoiceRef} collapsable={false} style={shareStyles.invoiceSheet}>
+              {/* Professional Header */}
+              <View style={shareStyles.header}>
+                <Text style={shareStyles.headerTitle}>BOOKING INVOICE</Text>
+                <View style={shareStyles.headerDivider} />
+                <Text style={shareStyles.headerSubtitle}>Room Booking Confirmation</Text>
               </View>
-              {invoiceData.consumerNumber && (
+
+              {/* Status Badge */}
+              <View style={shareStyles.confirmedBadge}>
+                <Text style={shareStyles.confirmedBadgeText}>✓ PAYMENT CONFIRMED</Text>
+              </View>
+
+              {/* Invoice Details Section */}
+              <View style={shareStyles.section}>
+                <Text style={shareStyles.sectionTitle}>Invoice Details</Text>
+                <View style={shareStyles.sectionDivider} />
                 <View style={shareStyles.row}>
-                  <Text style={shareStyles.label}>Consumer No:</Text>
-                  <Text style={shareStyles.value}>{invoiceData.consumerNumber}</Text>
+                  <Text style={shareStyles.label}>Invoice No:</Text>
+                  <Text style={shareStyles.value}>{invoiceData.invoiceNo}</Text>
                 </View>
-              )}
-              <View style={shareStyles.row}>
-                <Text style={shareStyles.label}>Booking ID:</Text>
-                <Text style={shareStyles.value}>{invoiceData.bookingId}</Text>
-              </View>
-              <View style={shareStyles.row}>
-                <Text style={shareStyles.label}>Issued At:</Text>
-                <Text style={shareStyles.value}>{formatDateTime(invoiceData.issued_at)}</Text>
-              </View>
-              {invoiceData.dueDate && (
+                {invoiceData.consumerNumber && (
+                  <View style={shareStyles.row}>
+                    <Text style={shareStyles.label}>Consumer No:</Text>
+                    <Text style={shareStyles.value}>{invoiceData.consumerNumber}</Text>
+                  </View>
+                )}
                 <View style={shareStyles.row}>
-                  <Text style={shareStyles.label}>Payment Due:</Text>
-                  <Text style={shareStyles.value}>{formatDateTime(invoiceData.dueDate)}</Text>
+                  <Text style={shareStyles.label}>Booking ID:</Text>
+                  <Text style={shareStyles.value}>{invoiceData.bookingId}</Text>
                 </View>
-              )}
-            </View>
-
-            {/* Room Information Section */}
-            <View style={shareStyles.section}>
-              <Text style={shareStyles.sectionTitle}>Room Information</Text>
-              <View style={shareStyles.sectionDivider} />
-              <View style={shareStyles.row}>
-                <Text style={shareStyles.label}>Room Type:</Text>
-                <Text style={shareStyles.value}>{invoiceData.roomType || 'N/A'}</Text>
-              </View>
-              <View style={shareStyles.row}>
-                <Text style={shareStyles.label}>Room Number:</Text>
-                <Text style={shareStyles.value}>
-                  {invoiceData.roomNumber && invoiceData.roomNumber !== '' ? invoiceData.roomNumber : 'Pending Assignment'}
-                </Text>
-              </View>
-              <View style={shareStyles.row}>
-                <Text style={shareStyles.label}>Check-in:</Text>
-                <Text style={shareStyles.value}>{formatDate(invoiceData.checkIn)}</Text>
-              </View>
-              <View style={shareStyles.row}>
-                <Text style={shareStyles.label}>Check-out:</Text>
-                <Text style={shareStyles.value}>{formatDate(invoiceData.checkOut)}</Text>
-              </View>
-              <View style={shareStyles.row}>
-                <Text style={shareStyles.label}>Guests:</Text>
-                <Text style={shareStyles.value}>
-                  {invoiceData.numberOfAdults} Adults, {invoiceData.numberOfChildren} Children
-                  {invoiceData.numberOfRooms > 1 ? `, ${invoiceData.numberOfRooms} Rooms` : ''}
-                </Text>
-              </View>
-            </View>
-
-            {/* Payment Section */}
-            <View style={shareStyles.section}>
-              <Text style={shareStyles.sectionTitle}>Payment Details</Text>
-              <View style={shareStyles.sectionDivider} />
-              {invoiceData.fullTotalPrice && (
                 <View style={shareStyles.row}>
-                  <Text style={shareStyles.label}>Total Amount:</Text>
-                  <Text style={shareStyles.value}>Rs. {parseFloat(invoiceData.fullTotalPrice).toFixed(2)}</Text>
+                  <Text style={shareStyles.label}>Issued At:</Text>
+                  <Text style={shareStyles.value}>{formatDateTime(invoiceData.issued_at)}</Text>
                 </View>
-              )}
-              <View style={shareStyles.row}>
-                <Text style={shareStyles.label}>Advance Deposit:</Text>
-                <Text style={[shareStyles.value, { color: '#b48a64', fontWeight: 'bold' }]}>
-                  Rs. {invoiceData.totalPrice ? parseFloat(invoiceData.totalPrice).toFixed(2) : '0.00'}
-                </Text>
+                {invoiceData.dueDate && (
+                  <View style={shareStyles.row}>
+                    <Text style={shareStyles.label}>Payment Due:</Text>
+                    <Text style={shareStyles.value}>{formatDateTime(invoiceData.dueDate)}</Text>
+                  </View>
+                )}
               </View>
-              <View style={shareStyles.row}>
-                <Text style={shareStyles.label}>Payment Status:</Text>
-                <Text style={[shareStyles.value, { color: '#2e7d32', fontWeight: 'bold' }]}>CONFIRMED</Text>
-              </View>
-              <View style={shareStyles.row}>
-                <Text style={shareStyles.label}>Payment Mode:</Text>
-                <Text style={shareStyles.value}>{invoiceData.paymentMode}</Text>
-              </View>
-            </View>
 
-            {/* Footer */}
-            <View style={shareStyles.footer}>
-              <View style={shareStyles.footerDivider} />
-              <Text style={shareStyles.footerText}>Thank you for your booking!</Text>
-              <Text style={shareStyles.footerSubText}>Check-in: 2:00 PM | Check-out: 12:00 PM</Text>
-              <Text style={shareStyles.footerSubText}>Government ID required at check-in</Text>
+              {/* Room Information Section */}
+              <View style={shareStyles.section}>
+                <Text style={shareStyles.sectionTitle}>Room Information</Text>
+                <View style={shareStyles.sectionDivider} />
+                <View style={shareStyles.row}>
+                  <Text style={shareStyles.label}>Room Type:</Text>
+                  <Text style={shareStyles.value}>{invoiceData.roomType || 'N/A'}</Text>
+                </View>
+                <View style={shareStyles.row}>
+                  <Text style={shareStyles.label}>Room Number:</Text>
+                  <Text style={shareStyles.value}>
+                    {invoiceData.roomNumber && invoiceData.roomNumber !== '' ? invoiceData.roomNumber : 'Pending Assignment'}
+                  </Text>
+                </View>
+                <View style={shareStyles.row}>
+                  <Text style={shareStyles.label}>Check-in:</Text>
+                  <Text style={shareStyles.value}>{formatDate(invoiceData.checkIn)}</Text>
+                </View>
+                <View style={shareStyles.row}>
+                  <Text style={shareStyles.label}>Check-out:</Text>
+                  <Text style={shareStyles.value}>{formatDate(invoiceData.checkOut)}</Text>
+                </View>
+                <View style={shareStyles.row}>
+                  <Text style={shareStyles.label}>Guests:</Text>
+                  <Text style={shareStyles.value}>
+                    {invoiceData.numberOfAdults} Adults, {invoiceData.numberOfChildren} Children
+                    {invoiceData.numberOfRooms > 1 ? `, ${invoiceData.numberOfRooms} Rooms` : ''}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Payment Section */}
+              <View style={shareStyles.section}>
+                <Text style={shareStyles.sectionTitle}>Payment Details</Text>
+                <View style={shareStyles.sectionDivider} />
+                {invoiceData.fullTotalPrice && (
+                  <View style={shareStyles.row}>
+                    <Text style={shareStyles.label}>Total Amount:</Text>
+                    <Text style={shareStyles.value}>Rs. {parseFloat(invoiceData.fullTotalPrice).toFixed(2)}</Text>
+                  </View>
+                )}
+                <View style={shareStyles.row}>
+                  <Text style={shareStyles.label}>Advance Deposit:</Text>
+                  <Text style={[shareStyles.value, { color: '#b48a64', fontWeight: 'bold' }]}>
+                    Rs. {invoiceData.totalPrice ? parseFloat(invoiceData.totalPrice).toFixed(2) : '0.00'}
+                  </Text>
+                </View>
+                <View style={shareStyles.row}>
+                  <Text style={shareStyles.label}>Payment Status:</Text>
+                  <Text style={[shareStyles.value, { color: '#2e7d32', fontWeight: 'bold' }]}>CONFIRMED</Text>
+                </View>
+                <View style={shareStyles.row}>
+                  <Text style={shareStyles.label}>Payment Mode:</Text>
+                  <Text style={shareStyles.value}>{invoiceData.paymentMode}</Text>
+                </View>
+              </View>
+
+              {/* Footer */}
+              <View style={shareStyles.footer}>
+                <View style={shareStyles.footerDivider} />
+                <Text style={shareStyles.footerText}>Thank you for your booking!</Text>
+                <Text style={shareStyles.footerSubText}>Check-in: 2:00 PM | Check-out: 12:00 PM</Text>
+                <Text style={shareStyles.footerSubText}>Government ID required at check-in</Text>
+              </View>
             </View>
           </View>
-        </View>
-      )}
-
-      {/* Bottom Sheet Modal */}
-      <Modal
-        visible={showShareModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowShareModal(false)}
-      >
-        <TouchableWithoutFeedback onPress={() => setShowShareModal(false)}>
-          <View style={styles.modalOverlay}>
-            <TouchableWithoutFeedback onPress={() => { }}>
-              <View style={styles.modalContent}>
-                {/* Handle bar */}
-                <View style={styles.modalHandle} />
-
-                {/* Share Invoice Option */}
-                <TouchableOpacity
-                  style={styles.modalOption}
-                  onPress={() => {
-                    setShowShareModal(false);
-                    handleShareInvoice();
-                  }}
-                  disabled={shareLoading}
-                >
-                  <View style={styles.modalIconContainer}>
-                    <Icon name="share" size={22} color="#333" />
-                  </View>
-                  <Text style={styles.modalOptionText}>
-                    {shareLoading ? 'Sharing...' : 'Share as Screenshot'}
-                  </Text>
-                </TouchableOpacity>
-
-                <View style={styles.modalDivider} />
-
-                {/* Save as Picture Option */}
-                <TouchableOpacity
-                  style={styles.modalOption}
-                  onPress={() => {
-                    setShowShareModal(false);
-                    handleSaveToGallery();
-                  }}
-                  disabled={saveLoading}
-                >
-                  <View style={styles.modalIconContainer}>
-                    <Icon name="save-alt" size={22} color="#333" />
-                  </View>
-                  <Text style={styles.modalOptionText}>
-                    {saveLoading ? 'Saving...' : 'Save as Picture'}
-                  </Text>
-                </TouchableOpacity>
-
-                {/* Cancel */}
-                <TouchableOpacity
-                  style={styles.modalCancelButton}
-                  onPress={() => setShowShareModal(false)}
-                >
-                  <Text style={styles.modalCancelText}>Cancel</Text>
-                </TouchableOpacity>
-              </View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
-    </View>
+        )
+      }
+    </View >
   );
 }
 
@@ -1585,64 +1552,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 16,
-  },
-  // Bottom Sheet Modal Styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
-  },
-  modalHandle: {
-    width: 40,
-    height: 4,
-    backgroundColor: '#ddd',
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginBottom: 20,
-  },
-  modalOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 16,
-  },
-  modalIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#f5f0ea',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 14,
-  },
-  modalOptionText: {
-    fontSize: 16,
-    color: '#222',
-    fontWeight: '500',
-  },
-  modalDivider: {
-    height: 1,
-    backgroundColor: '#f0ebe5',
-    marginLeft: 54,
-  },
-  modalCancelButton: {
-    marginTop: 10,
-    paddingVertical: 14,
-    alignItems: 'center',
-    backgroundColor: '#f5f0ea',
-    borderRadius: 12,
-  },
-  modalCancelText: {
-    fontSize: 16,
-    color: '#666',
-    fontWeight: '600',
   },
 });
 

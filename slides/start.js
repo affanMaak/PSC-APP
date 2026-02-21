@@ -1,4 +1,3 @@
-// screens/Start.js
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,

@@ -981,7 +981,6 @@
 // // });
 
 // // export default shoots;
-
 import React, { useState, useEffect } from 'react'; 
 import {
   StyleSheet,

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
     View,
     Text,
@@ -15,9 +15,12 @@ import {
     ImageBackground,
     Platform,
     TextInput,
-    Clipboard
+    Clipboard,
+    PermissionsAndroid
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import ViewShot from 'react-native-view-shot';
+import { CameraRoll } from '@react-native-camera-roll/camera-roll';
 import { bookingService } from '../../services/bookingService';
 import { useAuth } from '../auth/contexts/AuthContext';
 
@@ -27,6 +30,8 @@ export default function BookingDetailsScreen({ navigation, route }) {
     const { user } = useAuth();
     const [loading, setLoading] = useState(false);
     const [showCancelModal, setShowCancelModal] = useState(false);
+    const [savingImage, setSavingImage] = useState(false);
+    const viewShotRef = useRef(null);
     const [showInvoiceModal, setShowInvoiceModal] = useState(false);
     const [invoiceData, setInvoiceData] = useState(null);
     const [voucherInfo, setVoucherInfo] = useState({ voucherNumber: null, consumerNumber: null });
@@ -38,11 +43,74 @@ export default function BookingDetailsScreen({ navigation, route }) {
             Alert.alert('Error', 'No booking data found.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
         }, []);
         return (
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                <ActivityIndicator size="large" color="#b48a64" />
-            </View>
+            <SafeAreaView style={{ flex: 1, backgroundColor: '#F4F1EE' }}>
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                    <ActivityIndicator size="large" color="#b48a64" />
+                </View>
+            </SafeAreaView>
         );
     }
+
+    const handleSaveReceipt = async () => {
+        try {
+            // Internal Permission Handling
+            if (Platform.OS === 'android') {
+                const apiLevel = Platform.Version;
+                if (apiLevel >= 33) {
+                    const READ_MEDIA_IMAGES = 'android.permission.READ_MEDIA_IMAGES';
+                    const hasPermission = await PermissionsAndroid.check(READ_MEDIA_IMAGES);
+                    if (!hasPermission) {
+                        const result = await PermissionsAndroid.request(READ_MEDIA_IMAGES);
+                        if (result !== PermissionsAndroid.RESULTS.GRANTED) {
+                            Alert.alert('Gallery Permission Required', 'Please enable gallery access to save your receipt.');
+                            return;
+                        }
+                    }
+                } else {
+                    const hasPermission = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE);
+                    if (!hasPermission) {
+                        const result = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE);
+                        if (result !== PermissionsAndroid.RESULTS.GRANTED) {
+                            Alert.alert('Gallery Permission Required', 'Please enable storage access to save your receipt.');
+                            return;
+                        }
+                    }
+                }
+            } else if (Platform.OS === 'ios') {
+                const authStatus = await CameraRoll.requestAuthorization();
+                if (authStatus === 'denied' || authStatus === 'restricted') {
+                    Alert.alert('Gallery Access Denied', 'Please enable Photos access in Settings to save your receipt.');
+                    return;
+                }
+            }
+
+            setSavingImage(true);
+
+            // Mandatory hardware-inflating delay (150ms)
+            setTimeout(async () => {
+                if (!viewShotRef.current) {
+                    setSavingImage(false);
+                    return;
+                }
+
+                try {
+                    const uri = await viewShotRef.current.capture();
+                    await CameraRoll.save(uri, { type: 'photo' });
+                    Alert.alert('Receipt Saved', 'Digital receipt has been successfully saved to your gallery.');
+                } catch (error) {
+                    console.error('Capture Engine Failure:', error);
+                    Alert.alert('Capture Error', 'The capture engine failed to process the view. Please try again.');
+                } finally {
+                    setSavingImage(false);
+                }
+            }, 150);
+
+        } catch (error) {
+            console.error('Saving internal error:', error);
+            Alert.alert('Internal Error', 'An unexpected error occurred while preparing the receipt.');
+            setSavingImage(false);
+        }
+    };
 
     // Fetch voucher and consumer number from invoice data
     React.useEffect(() => {
@@ -304,6 +372,8 @@ Check-out: ${formatDate(booking.checkOut)}
         );
     };
 
+
+
     const renderDetailItem = (label, value, icon = null, isHighlight = false) => (
         <View style={styles.detailItem}>
             <View style={styles.detailLabelContainer}>
@@ -407,19 +477,39 @@ Check-out: ${formatDate(booking.checkOut)}
         );
 
         return (
-            <View style={styles.paymentSummaryCard}>
-                <View style={styles.cardHeader}>
-                    <Icon name="payments" size={20} color="#b48a64" />
-                    <Text style={[styles.cardTitle, { marginBottom: 0, borderBottomWidth: 0, paddingBottom: 0, marginLeft: 10 }]}>
-                        Payment Summary
+            <View style={styles.voucherSection}>
+                <View style={[styles.cardHeader, { borderBottomWidth: 0, paddingBottom: 0, marginBottom: 15 }]}>
+                    <Icon name="payments" size={22} color="#b48a64" />
+                    <Text style={[styles.cardTitle, { marginBottom: 0, marginLeft: 10, color: '#b48a64' }]}>
+                        Transaction & Payment Status
                     </Text>
                 </View>
 
-                <View style={[styles.paymentRow, styles.paymentRowTotal, { marginTop: 10, borderBottomWidth: 0 }]}>
-                    <Text style={styles.paymentLabel}>Current Status:</Text>
+                <View style={styles.ledgerContainer}>
+                    <View style={styles.ledgerRow}>
+                        <Text style={styles.ledgerLabel}>Total Amount</Text>
+                        <View style={styles.ledgerLine} />
+                        <Text style={styles.ledgerValue}>{formatCurrency(processedBooking.totalPrice)}</Text>
+                    </View>
+                    <View style={styles.ledgerRow}>
+                        <Text style={styles.ledgerLabel}>Paid To Date</Text>
+                        <View style={styles.ledgerLine} />
+                        <Text style={[styles.ledgerValue, { color: '#28a745' }]}>{formatCurrency(processedBooking.paidAmount)}</Text>
+                    </View>
+                    <View style={[styles.ledgerRow, { marginTop: 10 }]}>
+                        <Text style={[styles.ledgerLabel, { fontWeight: 'bold', color: '#333' }]}>Balance Due</Text>
+                        <View style={[styles.ledgerLine, { borderStyle: 'solid', borderColor: '#eee' }]} />
+                        <Text style={[styles.ledgerValue, { fontSize: 20, color: processedBooking.pendingAmount > 0 ? '#dc3545' : '#28a745' }]}>
+                            {formatCurrency(processedBooking.pendingAmount)}
+                        </Text>
+                    </View>
+                </View>
+
+                <View style={styles.paymentStatusRow}>
+                    <Text style={styles.statusLabel}>STATUS:</Text>
                     <View style={[
                         styles.statusBadge,
-                        { backgroundColor: `${getStatusColor(processedBooking.paymentStatus)}20` }
+                        { backgroundColor: `${getStatusColor(processedBooking.paymentStatus)}15`, borderWidth: 0 }
                     ]}>
                         <View style={[
                             styles.statusDot,
@@ -427,28 +517,22 @@ Check-out: ${formatDate(booking.checkOut)}
                         ]} />
                         <Text style={[
                             styles.statusText,
-                            { color: getStatusColor(processedBooking.paymentStatus) }
+                            { color: getStatusColor(processedBooking.paymentStatus), fontWeight: 'bold' }
                         ]}>
                             {getStatusText(processedBooking.paymentStatus)}
                         </Text>
                     </View>
                 </View>
 
-                {sortedVouchers.length > 0 ? (
+                {sortedVouchers.length > 0 && (
                     <View style={styles.vouchersContainer}>
-                        <Text style={styles.subCardTitle}>Payment Vouchers</Text>
+                        <Text style={styles.subCardTitle}>Transaction History</Text>
                         {sortedVouchers.map((voucher, index) => (
                             <View key={index} style={styles.voucherItem}>
                                 <View style={styles.voucherHeader}>
                                     <View style={styles.voucherHeaderLeft}>
-                                        <Icon name="confirmation-number" size={16} color="#b48a64" />
+                                        <Icon name="receipt" size={14} color="#b48a64" />
                                         <Text style={styles.voucherConsumerHeader}>{voucher.consumer_number}</Text>
-                                        <TouchableOpacity
-                                            onPress={() => copyToClipboard(voucher.consumer_number, 'Consumer Number')}
-                                            style={styles.copyIconBtn}
-                                        >
-                                            <Icon name="content-copy" size={14} color="#b48a64" opacity={0.7} />
-                                        </TouchableOpacity>
                                     </View>
                                     <View style={[styles.miniStatusBadge, { backgroundColor: voucher.status === 'CONFIRMED' ? '#d4edda' : '#fff3cd' }]}>
                                         <Text style={[styles.miniStatusText, { color: voucher.status === 'CONFIRMED' ? '#155724' : '#856404' }]}>
@@ -459,50 +543,13 @@ Check-out: ${formatDate(booking.checkOut)}
 
                                 <View style={styles.voucherBody}>
                                     <View style={styles.voucherMainRow}>
-                                        <View>
-                                            <Text style={styles.voucherTypeLabel}>{voucher.voucher_type?.replace('_', ' ')}</Text>
-                                            <Text style={styles.voucherDateLabel}>{formatDate(voucher.issued_at)}</Text>
-                                        </View>
+                                        <Text style={styles.voucherTypeLabel}>{voucher.voucher_type?.replace('_', ' ')}</Text>
                                         <Text style={styles.voucherAmountLarge}>{formatCurrency(voucher.amount)}</Text>
                                     </View>
-
-                                    <View style={styles.voucherDivider} />
-
-                                    <View style={styles.voucherDetailsGrid}>
-                                        <View style={styles.voucherDetailItem}>
-                                            <Text style={styles.voucherDetailLabel}>Payment Mode</Text>
-                                            <Text style={styles.voucherDetailValue}>{getPaymentModeLabel(voucher.payment_mode)} {voucher.channel ? `(${voucher.channel})` : ''}</Text>
-                                        </View>
-                                        {(voucher.transaction_id || voucher.transactionId) && (
-                                            <View style={styles.voucherDetailItem}>
-                                                <Text style={styles.voucherDetailLabel}>Transaction ID</Text>
-                                                <Text style={styles.voucherDetailValue}>{voucher.transaction_id || voucher.transactionId}</Text>
-                                            </View>
-                                        )}
-                                        {voucher.check_number && (
-                                            <View style={styles.voucherDetailItem}>
-                                                <Text style={styles.voucherDetailLabel}>Cheque Number</Text>
-                                                <Text style={styles.voucherDetailValue}>{voucher.check_number}</Text>
-                                            </View>
-                                        )}
-                                        {voucher.bank_name && (
-                                            <View style={styles.voucherDetailItem}>
-                                                <Text style={styles.voucherDetailLabel}>Bank Name</Text>
-                                                <Text style={styles.voucherDetailValue}>{voucher.bank_name.toUpperCase()}</Text>
-                                            </View>
-                                        )}
-                                    </View>
-                                    {voucher.remarks && (
-                                        <Text style={styles.voucherRemarks}>"{voucher.remarks}"</Text>
-                                    )}
+                                    <Text style={styles.voucherDateLabel}>{formatDate(voucher.issued_at)}</Text>
                                 </View>
                             </View>
                         ))}
-                    </View>
-                ) : (
-                    <View style={styles.noVouchersContainer}>
-                        <Icon name="receipt" size={40} color="#ccc" />
-                        <Text style={styles.noVouchersText}>No payment vouchers found</Text>
                     </View>
                 )}
             </View>
@@ -771,12 +818,16 @@ Check-out: ${formatDate(booking.checkOut)}
                         <Icon name="arrow-back" size={28} color="#000000" />
                     </TouchableOpacity>
                     <Text style={styles.ctext}>Booking Details</Text>
-                    <Text style={styles.shareButton}></Text>
-                    {/* <TouchableOpacity
+                    <TouchableOpacity
                         style={styles.shareButton}
-                        onPress={handleShareBooking}>
-                        <Icon name="share" size={24} color="#000000" />
-                    </TouchableOpacity> */}
+                        onPress={handleSaveReceipt}
+                        disabled={savingImage}>
+                        {savingImage ? (
+                            <ActivityIndicator size="small" color="#000000" />
+                        ) : (
+                            <Icon name="file-download" size={24} color="#000000" />
+                        )}
+                    </TouchableOpacity>
                 </View>
             </ImageBackground>
 
@@ -810,91 +861,109 @@ Check-out: ${formatDate(booking.checkOut)}
                     <Text style={styles.bookingType}>{getBookingType()} Booking</Text>
                 </View>
 
-                {/* Booking Details Section (Consolidated) */}
-                <View style={styles.detailsCard}>
-                    <View style={styles.cardHeader}>
-                        <Icon name="info" size={20} color="#b48a64" />
-                        <Text style={[styles.cardTitle, { marginBottom: 0, borderBottomWidth: 0, paddingBottom: 0, marginLeft: 10 }]}>
-                            Booking Information
-                        </Text>
-                    </View>
-
-                    {/* Room Info */}
-                    {processedBooking.roomNumber && renderDetailItem('Room Number', processedBooking.roomNumber, 'meeting-room')}
-                    {processedBooking.roomType && renderDetailItem('Room Type', processedBooking.roomType, 'category')}
-                    {calculateNights() > 0 && renderDetailItem('Duration', `${calculateNights()} Night(s)`, 'nights-stay')}
-                    {renderDetailItem('Pricing', processedBooking.pricingLabel, 'price-change', true)}
-
-                    {/* Venue Specific Info */}
-                    {['Hall', 'Lawn', 'Photoshoot'].includes(getBookingType()) && (
-                        <>
-                            {renderDetailItem('Venue', booking.venueName || booking.hallName || booking.lawnName || booking.name || getBookingType(), 'location-on')}
-                            {renderDetailItem('Event Date', formatDate(booking.checkIn || booking.date || booking.eventDate), 'event')}
-                            {(booking.eventTime || booking.timeSlot) && renderDetailItem('Time Slot', booking.eventTime || booking.timeSlot, 'access-time')}
-                        </>
-                    )}
-
-                    {/* Check-in/out for Rooms */}
-                    {!['Hall', 'Lawn', 'Photoshoot'].includes(getBookingType()) && (
-                        <>
-                            {renderDetailItem('Check-in', formatDate(booking.checkIn || booking.from || booking.bookingDate || booking.date), 'event')}
-                            {renderDetailItem('Check-out', formatDate(booking.checkOut || booking.to || booking.endDate || booking.date), 'event-busy')}
-                        </>
-                    )}
-
-                    {/* Guest Section */}
-                    <View style={styles.sectionDivider} />
-                    <Text style={styles.subCardTitle}>Guest Details</Text>
-                    {renderDetailItem('Guests', `${processedBooking.numberOfAdults || 1} Adult(s)${processedBooking.numberOfChildren ? `, ${processedBooking.numberOfChildren} Child(ren)` : ''}`, 'people')}
-                    {booking.guestName && renderDetailItem('Guest Name', booking.guestName, 'person')}
-                    {booking.guestContact && renderDetailItem('Contact', booking.guestContact, 'phone')}
-                    {booking.guestCNIC && renderDetailItem('CNIC', booking.guestCNIC, 'badge')}
-
-                    {/* Extra Info */}
-                    <View style={styles.sectionDivider} />
-                    {renderDetailItem('Booked On', formatDate(booking.createdAt || booking.bookingDate || booking.date), 'schedule')}
-
-                    {booking.specialRequest && (
-                        <View style={styles.specialRequestContainer}>
-                            <View style={styles.detailLabelContainer}>
-                                <Icon name="info" size={18} color="#666" />
-                                <Text style={styles.detailLabel}>Special Request</Text>
-                            </View>
-                            <Text style={styles.specialRequestText}>{booking.specialRequest}</Text>
+                {/* The Capture Zone (Floating Voucher: specifically wrapping Booking Information + Payment Status) */}
+                <ViewShot
+                    ref={viewShotRef}
+                    options={{ format: 'png', quality: 1.0, snapshotContentContainer: false }}
+                    style={styles.captureZone}
+                >
+                    {/* Booking Details Section */}
+                    <View style={styles.voucherSection}>
+                        <View style={[styles.cardHeader, { borderBottomWidth: 0, paddingBottom: 0, marginBottom: 15 }]}>
+                            <Icon name="info" size={20} color="#b48a64" />
+                            <Text style={[styles.cardTitle, { marginBottom: 0, marginLeft: 10, color: '#b48a64' }]}>
+                                Booking Information
+                            </Text>
                         </View>
-                    )}
 
-                    {booking.remarks && (
-                        <View style={styles.remarksContainer}>
-                            <View style={styles.detailLabelContainer}>
-                                <Icon name="chat" size={18} color="#666" />
-                                <Text style={styles.detailLabel}>Remarks</Text>
-                            </View>
-                            <Text style={styles.remarksText}>{booking.remarks}</Text>
-                        </View>
-                    )}
-                </View>
+                        {/* Room Info */}
+                        {processedBooking.roomNumber && renderDetailItem('Room Number', processedBooking.roomNumber, 'meeting-room')}
+                        {processedBooking.roomType && renderDetailItem('Room Type', processedBooking.roomType, 'category')}
+                        {calculateNights() > 0 && renderDetailItem('Duration', `${calculateNights()} Night(s)`, 'nights-stay')}
+                        {renderDetailItem('Pricing', processedBooking.pricingLabel, 'price-change', true)}
 
-                {/* Multi-date list for Hall/Lawn */}
-                {booking.bookingDetails?.length > 0 && (
-                    <View style={styles.detailsCard}>
-                        <Text style={styles.subCardTitle}>Selected Dates</Text>
-                        {booking.bookingDetails.map((d, index) => (
-                            <View key={index} style={styles.multiDateItem}>
-                                <Icon name="event" size={14} color="#b48a64" />
-                                <View style={styles.multiDateContent}>
-                                    <Text style={styles.multiDateText}>{formatDate(d.date)}</Text>
-                                    <Text style={styles.multiDateSubtext}>
-                                        {d.timeSlot || booking.eventTime || 'N/A'} {d.eventType ? `| ${d.eventType}` : ''}
-                                    </Text>
+                        {/* Venue Specific Info */}
+                        {['Hall', 'Lawn', 'Photoshoot'].includes(getBookingType()) && (
+                            <>
+                                {renderDetailItem('Venue', booking.venueName || booking.hallName || booking.lawnName || booking.name || getBookingType(), 'location-on')}
+                                {renderDetailItem('Event Date', formatDate(booking.checkIn || booking.date || booking.eventDate), 'event')}
+                                {(booking.eventTime || booking.timeSlot) && renderDetailItem('Time Slot', booking.eventTime || booking.timeSlot, 'access-time')}
+                            </>
+                        )}
+
+                        {/* Check-in/out for Rooms */}
+                        {!['Hall', 'Lawn', 'Photoshoot'].includes(getBookingType()) && (
+                            <>
+                                {renderDetailItem('Check-in', formatDate(booking.checkIn || booking.from || booking.bookingDate || booking.date), 'event')}
+                                {renderDetailItem('Check-out', formatDate(booking.checkOut || booking.to || booking.endDate || booking.date), 'event-busy')}
+                            </>
+                        )}
+
+                        {/* Guest Section */}
+                        <View style={styles.sectionDivider} />
+                        <Text style={styles.subCardTitle}>Guest Details</Text>
+                        {renderDetailItem('Guests', `${processedBooking.numberOfAdults || 1} Adult(s)${processedBooking.numberOfChildren ? `, ${processedBooking.numberOfChildren} Child(ren)` : ''}`, 'people')}
+                        {booking.guestName && renderDetailItem('Guest Name', booking.guestName, 'person')}
+                        {booking.guestContact && renderDetailItem('Contact', booking.guestContact, 'phone')}
+                        {booking.guestCNIC && renderDetailItem('CNIC', booking.guestCNIC, 'badge')}
+
+                        {/* Extra Info */}
+                        <View style={styles.sectionDivider} />
+                        {renderDetailItem('Booked On', formatDate(booking.createdAt || booking.bookingDate || booking.date), 'schedule')}
+
+                        {booking.specialRequest && (
+                            <View style={styles.specialRequestContainer}>
+                                <View style={styles.detailLabelContainer}>
+                                    <Icon name="info" size={18} color="#666" />
+                                    <Text style={styles.detailLabel}>Special Request</Text>
                                 </View>
+                                <Text style={styles.specialRequestText}>{booking.specialRequest}</Text>
                             </View>
-                        ))}
-                    </View>
-                )}
+                        )}
 
-                {/* Payment Summary */}
-                {renderPaymentSummary()}
+                        {booking.remarks && (
+                            <View style={styles.remarksContainer}>
+                                <View style={styles.detailLabelContainer}>
+                                    <Icon name="chat" size={18} color="#666" />
+                                    <Text style={styles.detailLabel}>Remarks</Text>
+                                </View>
+                                <Text style={styles.remarksText}>{booking.remarks}</Text>
+                            </View>
+                        )}
+                    </View>
+
+                    {/* Multi-date list for Hall/Lawn */}
+                    {booking.bookingDetails?.length > 0 && (
+                        <>
+                            <View style={styles.subtleDivider} />
+                            <View style={styles.voucherSection}>
+                                <Text style={styles.subCardTitle}>Selected Dates</Text>
+                                {booking.bookingDetails.map((d, index) => (
+                                    <View key={index} style={styles.multiDateItem}>
+                                        <Icon name="event" size={14} color="#b48a64" />
+                                        <View style={styles.multiDateContent}>
+                                            <Text style={styles.multiDateText}>{formatDate(d.date)}</Text>
+                                            <Text style={styles.multiDateSubtext}>
+                                                {d.timeSlot || booking.eventTime || 'N/A'} {d.eventType ? `| ${d.eventType}` : ''}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                ))}
+                            </View>
+                        </>
+                    )}
+
+                    <View style={styles.subtleDivider} />
+
+                    {/* Payment Summary */}
+                    {renderPaymentSummary()}
+
+                    {/* Watermark for Authentic Receipt */}
+                    <View style={styles.watermarkContainer}>
+                        <Icon name="verified" size={16} color="#b48a64" />
+                        <Text style={styles.watermarkText}>VERIFIED DIGITAL RECEIPT • PESHAWAR SERVICES CLUB</Text>
+                    </View>
+                </ViewShot>
 
                 {/* Timeline */}
                 {renderBookingTimeline()}
@@ -908,8 +977,20 @@ Check-out: ${formatDate(booking.checkOut)}
 
                     <View style={styles.actionsGrid}>
 
-
-
+                        <TouchableOpacity
+                            style={[styles.actionButton, styles.downloadButton, { flex: 1, backgroundColor: '#b48a64', borderColor: '#b48a64' }]}
+                            onPress={handleSaveReceipt}
+                            disabled={savingImage}
+                        >
+                            {savingImage ? (
+                                <ActivityIndicator size="small" color="#ffffff" />
+                            ) : (
+                                <Icon name="file-download" size={24} color="#ffffff" />
+                            )}
+                            <Text style={[styles.actionButtonText, { marginLeft: 8, color: '#ffffff' }]}>
+                                {savingImage ? 'Saving...' : 'Save Receipt'}
+                            </Text>
+                        </TouchableOpacity>
                         {!processedBooking.isCancelled && (() => {
                             const latestReq = booking.cancellationRequests && booking.cancellationRequests.length > 0
                                 ? booking.cancellationRequests[booking.cancellationRequests.length - 1]
@@ -964,6 +1045,22 @@ Check-out: ${formatDate(booking.checkOut)}
                     </Text>
                 </View>
             </ScrollView>
+
+            {/* Floating Action Button (FAB) for Capture */}
+            <TouchableOpacity
+                style={styles.fabButton}
+                onPress={handleSaveReceipt}
+                disabled={savingImage}
+                activeOpacity={0.8}
+            >
+                {savingImage ? (
+                    <View style={styles.fabLoading}>
+                        <ActivityIndicator size="small" color="#ffffff" />
+                    </View>
+                ) : (
+                    <Icon name="file-download" size={30} color="#ffffff" />
+                )}
+            </TouchableOpacity>
 
             {/* Cancel Booking Modal */}
             <Modal
@@ -1086,9 +1183,124 @@ Check-out: ${formatDate(booking.checkOut)}
 }
 
 const styles = StyleSheet.create({
+    captureZone: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 24,
+        padding: 24,
+        marginBottom: 20,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.15,
+        shadowRadius: 16,
+        elevation: 12,
+    },
+    voucherSection: {
+        paddingVertical: 10,
+    },
+    subtleDivider: {
+        height: 1,
+        backgroundColor: '#f0e6d8',
+        marginVertical: 10,
+        marginHorizontal: 10,
+    },
+    watermarkContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 20,
+        paddingTop: 15,
+        borderTopWidth: 1,
+        borderTopColor: '#f0f0f0',
+        gap: 8,
+    },
+    watermarkText: {
+        fontSize: 12,
+        color: '#b48a64',
+        fontWeight: '600',
+        textTransform: 'uppercase',
+        letterSpacing: 1,
+    },
+    receiptBreakdown: {
+        backgroundColor: '#f8f9fa',
+        borderRadius: 12,
+        padding: 15,
+        marginTop: 15,
+        marginBottom: 10,
+    },
+    ledgerContainer: {
+        backgroundColor: '#f9f9f9',
+        borderRadius: 15,
+        padding: 20,
+        marginTop: 15,
+    },
+    ledgerRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 12,
+    },
+    ledgerLabel: {
+        fontSize: 14,
+        color: '#666',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+    ledgerLine: {
+        flex: 1,
+        height: 1,
+        borderBottomWidth: 1,
+        borderStyle: 'dashed',
+        borderColor: '#ddd',
+        marginHorizontal: 10,
+    },
+    ledgerValue: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#333',
+    },
+    paymentStatusRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginTop: 15,
+        paddingTop: 15,
+        borderTopWidth: 1,
+        borderTopColor: '#f0f0f0',
+    },
+    statusLabel: {
+        fontSize: 12,
+        fontWeight: 'bold',
+        color: '#b48a64',
+        letterSpacing: 1,
+    },
+    fabButton: {
+        position: 'absolute',
+        bottom: 30,
+        right: 30,
+        width: 60,
+        height: 60,
+        borderRadius: 30,
+        backgroundColor: '#b48a64',
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.3,
+        shadowRadius: 10,
+        elevation: 10,
+        zIndex: 100,
+    },
+    fabLoading: {
+        width: 60,
+        height: 60,
+        borderRadius: 30,
+        backgroundColor: 'rgba(180, 138, 100, 0.9)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
     container: {
         flex: 1,
-        backgroundColor: '#f9f3eb',
+        backgroundColor: '#F4F1EE',
     },
     notch: {
         paddingTop: 50,
@@ -1134,17 +1346,15 @@ const styles = StyleSheet.create({
         paddingBottom: 40,
     },
     banner: {
-        backgroundColor: '#fff',
+        backgroundColor: '#FFFFFF',
         borderRadius: 15,
         padding: 20,
         marginBottom: 20,
-        borderWidth: 1,
-        borderColor: '#e9ecef',
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 3,
-        elevation: 2,
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.1,
+        shadowRadius: 16,
+        elevation: 12,
     },
     bannerContent: {
         flexDirection: 'row',
@@ -1180,12 +1390,15 @@ const styles = StyleSheet.create({
         fontStyle: 'italic',
     },
     roomCard: {
-        backgroundColor: '#fff',
+        backgroundColor: '#FFFFFF',
         borderRadius: 15,
         padding: 20,
         marginBottom: 20,
-        borderWidth: 1,
-        borderColor: '#e9ecef',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.1,
+        shadowRadius: 16,
+        elevation: 12,
     },
     roomHeader: {
         flexDirection: 'row',
@@ -1210,8 +1423,6 @@ const styles = StyleSheet.create({
         padding: 15,
         borderRadius: 12,
         alignItems: 'center',
-        borderWidth: 1,
-        borderColor: '#e9e0d2',
     },
     roomInfoLabel: {
         fontSize: 12,
@@ -1238,8 +1449,6 @@ const styles = StyleSheet.create({
         paddingHorizontal: 12,
         paddingVertical: 8,
         borderRadius: 8,
-        borderWidth: 1,
-        borderColor: '#e9ecef',
     },
     detailBadgeText: {
         fontSize: 12,
@@ -1247,20 +1456,26 @@ const styles = StyleSheet.create({
         marginLeft: 6,
     },
     guestCard: {
-        backgroundColor: '#fff',
+        backgroundColor: '#FFFFFF',
         borderRadius: 15,
         padding: 20,
         marginBottom: 20,
-        borderWidth: 1,
-        borderColor: '#e9ecef',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.1,
+        shadowRadius: 16,
+        elevation: 12,
     },
     detailsCard: {
-        backgroundColor: '#fff',
+        backgroundColor: '#FFFFFF',
         borderRadius: 15,
         padding: 20,
         marginBottom: 20,
-        borderWidth: 1,
-        borderColor: '#e9ecef',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.1,
+        shadowRadius: 16,
+        elevation: 12,
     },
     cardTitle: {
         fontSize: 18,
@@ -1371,12 +1586,15 @@ const styles = StyleSheet.create({
         marginTop: 5,
     },
     paymentSummaryCard: {
-        backgroundColor: '#fff',
+        backgroundColor: '#FFFFFF',
         borderRadius: 15,
         padding: 20,
         marginBottom: 20,
-        borderWidth: 1,
-        borderColor: '#e9ecef',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.1,
+        shadowRadius: 16,
+        elevation: 12,
     },
     paymentRow: {
         flexDirection: 'row',
@@ -1437,14 +1655,12 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff',
         borderRadius: 12,
         marginBottom: 15,
-        borderWidth: 1,
-        borderColor: '#e9ecef',
         overflow: 'hidden',
-        elevation: 1,
+        elevation: 4,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
+        shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.05,
-        shadowRadius: 2,
+        shadowRadius: 8,
     },
     voucherHeader: {
         flexDirection: 'row',
@@ -1536,9 +1752,6 @@ const styles = StyleSheet.create({
         backgroundColor: '#f8f9fa',
         borderRadius: 12,
         marginTop: 15,
-        borderWidth: 1,
-        borderColor: '#eee',
-        borderStyle: 'dashed',
     },
     noVouchersText: {
         fontSize: 14,
@@ -1547,12 +1760,15 @@ const styles = StyleSheet.create({
         fontWeight: '500',
     },
     timelineCard: {
-        backgroundColor: '#fff',
+        backgroundColor: '#FFFFFF',
         borderRadius: 15,
         padding: 20,
         marginBottom: 20,
-        borderWidth: 1,
-        borderColor: '#e9ecef',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.1,
+        shadowRadius: 16,
+        elevation: 12,
     },
     timelineItem: {
         flexDirection: 'row',
@@ -1577,12 +1793,15 @@ const styles = StyleSheet.create({
         color: '#666',
     },
     cancellationCard: {
-        backgroundColor: '#fff',
+        backgroundColor: '#FFFFFF',
         borderRadius: 15,
         padding: 20,
         marginBottom: 20,
-        borderWidth: 1,
-        borderColor: '#f8d7da',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.1,
+        shadowRadius: 16,
+        elevation: 12,
     },
     cardHeader: {
         flexDirection: 'row',
@@ -1656,12 +1875,15 @@ const styles = StyleSheet.create({
         fontStyle: 'italic',
     },
     actionsCard: {
-        backgroundColor: '#fff',
+        backgroundColor: '#FFFFFF',
         borderRadius: 15,
         padding: 20,
         marginBottom: 20,
-        borderWidth: 1,
-        borderColor: '#e9ecef',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.1,
+        shadowRadius: 16,
+        elevation: 12,
     },
     actionsGrid: {
         flexDirection: 'row',
@@ -1683,14 +1905,10 @@ const styles = StyleSheet.create({
         backgroundColor: '#28a745',
     },
     invoiceButton: {
-        backgroundColor: '#fff',
-        borderWidth: 1,
-        borderColor: '#b48a64',
+        backgroundColor: '#f9f3eb',
     },
     cancelButton: {
-        backgroundColor: '#fff',
-        borderWidth: 1,
-        borderColor: '#dc3545',
+        backgroundColor: '#fff5f5',
     },
     supportButton: {
         backgroundColor: '#fff',
@@ -1797,9 +2015,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     cancelModalButton: {
-        backgroundColor: '#f8f9fa',
-        borderWidth: 1,
-        borderColor: '#e9ecef',
+        backgroundColor: '#f1f3f5',
     },
     confirmCancelButton: {
         backgroundColor: '#dc3545',
