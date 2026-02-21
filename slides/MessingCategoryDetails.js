@@ -519,7 +519,7 @@ const MessingCategoryDetails = ({ route, navigation }) => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F9EFE6',
+        backgroundColor: '#FEF9F3',
     },
     loadingContainer: {
         flex: 1,
@@ -635,10 +635,18 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         backgroundColor: '#FFFFFF',
-        paddingVertical: 14,
+        paddingVertical: 16,
         paddingHorizontal: 16,
         marginBottom: 12,
-        borderRadius: 12,
+        borderRadius: 15,
+        shadowColor: "#000",
+        shadowOffset: {
+            width: 0,
+            height: 2,
+        },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
     },
     menuItemLeft: {
         flex: 1,

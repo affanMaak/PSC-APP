@@ -402,7 +402,7 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   confirmButton: {
-    backgroundColor: '#F8CF93',
+    backgroundColor: '#b48a64',
     borderRadius: 16,
     paddingVertical: 16,
     alignItems: 'center',
@@ -417,7 +417,7 @@ const styles = StyleSheet.create({
   confirmButtonText: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#3E341F',
+    color: 'white',
   },
 });
 

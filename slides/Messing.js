@@ -529,7 +529,7 @@ const MessingScreen = ({ navigation }) => {
 
   return (
     <>
-      <StatusBar barStyle="light-content" backgroundColor="#5a472c" />
+      <StatusBar barStyle="dark-content" backgroundColor="white" />
       <View style={styles.container}>
 
         {/* 🔹 Notch Header */}
@@ -594,7 +594,7 @@ const MessingScreen = ({ navigation }) => {
                       >
                         <View style={styles.cardOverlay}>
                           <Text style={styles.cardTitle}>{item.category}</Text>
-                          <Icon name="arrowright" size={28} color="#fff" />
+                          <Icon name="arrowright" size={28} color="black" />
                         </View>
                       </ImageBackground>
                     </TouchableOpacity>
@@ -623,7 +623,7 @@ const MessingScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9EFE6' },
+  container: { flex: 1, backgroundColor: '#FEF9F3' },
 
   notch: {
     paddingTop: 50,
@@ -678,7 +678,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.3)',
     paddingHorizontal: 20,
   },
-  cardTitle: { fontSize: 20, fontWeight: 'bold', color: '#fff' },
+  cardTitle: { fontSize: 20, fontWeight: 'bold', color: 'black' },
 
   safeArea: { flex: 1 },
   scrollView: { flex: 1, backgroundColor: '#F9EFE6' },
