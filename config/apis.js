@@ -7,8 +7,8 @@ import eventBus from '../services/eventBus';
 
 export const getBaseUrl = () => {
   if (Platform.OS === 'android') {
-    return 'https://admin.peshawarservicesclub.com/api';
-    // return 'http://10.0.2.2:3000/api'; 
+    // return 'https://admin.peshawarservicesclub.com/api';
+    return 'http://10.0.2.2:3000/api';
   } else {
     return 'https://admin.peshawarservicesclub.com/api';
   }
@@ -647,6 +647,20 @@ export const voucherAPI = {
       return response.data;
     } catch (error) {
       console.error("❌ Voucher API Error:", error.response?.data || error.message);
+      throw error;
+    }
+  },
+  // Generic voucher fetch by booking type and ID
+  // Used as a fallback when navigating from BookingSummaryBar where full bookingData isn't available
+  getVoucherByType: async (bookingType, bookingId) => {
+    try {
+      const response = await api.get(
+        `/booking/voucher?bookingType=${bookingType}&bookingId=${bookingId}`,
+        { withCredentials: true }
+      );
+      return response;
+    } catch (error) {
+      console.error(`❌ Voucher fetch error [${bookingType}/${bookingId}]:`, error.response?.data || error.message);
       throw error;
     }
   },

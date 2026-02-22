@@ -126,22 +126,25 @@ export default function voucher({ navigation, route }) {
       Alert.alert('Error', 'No booking ID provided');
       navigation.goBack();
     }
-
-    // Real-time payment sync for THIS specific screen
-    const voucherId = voucherData?.voucher?.id || bookingId;
-    let unsubscribe = () => { };
-
-    if (voucherId) {
-      unsubscribe = socketService.subscribeToPayment(voucherId, (data) => {
-        if (data.status === 'PAID' || data.status === 'CANCELLED' || data.status === 'CONFIRMED') {
-          console.log(`💰 [Room Voucher] Real-time status update: ${data.status}`);
-          setInvoiceData(prev => prev ? { ...prev, status: data.status, paymentStatus: data.status } : null);
-        }
-      });
-    }
-
-    return () => unsubscribe();
   }, [bookingId, voucherData]);
+
+  // Real-time payment sync for THIS specific screen - Separate effect for stability
+  useEffect(() => {
+    const voucherId = voucherData?.voucher?.id || bookingId;
+    if (!voucherId) return;
+
+    const unsubscribe = socketService.subscribeToPayment(voucherId, (data) => {
+      if (data.status === 'PAID' || data.status === 'CANCELLED' || data.status === 'CONFIRMED') {
+        console.log(`💰 [Room Voucher] Real-time status update: ${data.status}`);
+        setInvoiceData(prev => prev ? { ...prev, status: data.status, paymentStatus: data.status } : null);
+      }
+    });
+
+    return () => {
+      console.log('🧹 [Room Voucher] Cleaning up socket subscription');
+      unsubscribe();
+    };
+  }, [voucherData?.voucher?.id, bookingId]);
 
   // Countdown Timer Logic
   // Countdown Timer Logic

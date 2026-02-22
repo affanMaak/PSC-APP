@@ -44,6 +44,12 @@ const BookingSummaryBar = () => {
                 // Normalize data: Some responses wrap voucher details in voucherData.voucher
                 const normalizedData = data.map(item => {
                     const v = item.voucherData?.voucher || item;
+
+                    // Booking-level info may be nested in various places depending on type
+                    const bd = item.bookingData || item.booking || {};
+                    const venueInfo = item.venue || item.hall || item.lawn || {};
+                    const memberInfo = item.memberDetails || item.membership || {};
+
                     return {
                         ...item,
                         id: v.id || item.id,
@@ -52,7 +58,35 @@ const BookingSummaryBar = () => {
                         issued_at: v.issued_at || v.issue_date || item.issued_at || item.issue_date,
                         expiresAt: v.expiresAt || v.expires_at || item.expiresAt || item.expires_at || item.dueDate || item.due_date,
                         consumer_number: v.consumer_number || item.consumer_number,
-                        booking_type: v.booking_type || item.booking_type || item.bookingType || 'ROOM'
+                        amount: v.amount || item.amount,
+                        status: v.status || item.status,
+                        payment_mode: v.payment_mode || item.payment_mode,
+                        remarks: v.remarks || item.remarks,
+                        membership_no: memberInfo.no || memberInfo.membershipNo || item.membership_no,
+                        member_name: memberInfo.name || memberInfo.memberName || item.member_name,
+                        booking_type: v.booking_type || item.booking_type || item.bookingType || 'ROOM',
+                        // Room dates
+                        check_in: bd.checkIn || bd.check_in || v.check_in || item.check_in,
+                        check_out: bd.checkOut || bd.check_out || v.check_out || item.check_out,
+                        // Hall/Lawn/Shoot booking date
+                        booking_date: bd.bookingDate || bd.booking_date || bd.eventDate || v.booking_date || v.bookingDate || item.booking_date || item.bookingDate || item.date,
+                        // Venue/Hall info
+                        venue: venueInfo,
+                        venue_name: venueInfo.name || bd.hallName || bd.lawnName || bd.venueName || item.venueName,
+                        // Booking detail fields for Hall/Lawn/Shoot
+                        bookingData: item.bookingData || {
+                            bookingDate: bd.bookingDate || bd.eventDate || bd.booking_date,
+                            eventTime: bd.eventTime || bd.timeSlot || bd.time_slot,
+                            eventType: bd.eventType || bd.event_type,
+                            numberOfGuests: bd.numberOfGuests || bd.number_of_guests || bd.guests,
+                            bookingDetails: bd.bookingDetails || bd.booking_details || [],
+                            hallName: venueInfo.name || bd.hallName,
+                            lawnName: venueInfo.name || bd.lawnName,
+                        },
+                        memberDetails: item.memberDetails || {
+                            memberName: memberInfo.name || memberInfo.memberName,
+                            membershipNo: memberInfo.no || memberInfo.membershipNo,
+                        },
                     };
                 });
 
@@ -98,7 +132,10 @@ const BookingSummaryBar = () => {
         };
     }, [isAdmin]);
 
-    // Socket subscriptions for real-time payment updates
+    // Track which vouchers we've already tried to auto-cancel to avoid loops
+    const autoCancelled = useRef(new Set());
+
+    // 1. Socket subscriptions for real-time payment updates - Only depend on vouchers
     useEffect(() => {
         const unsubscribes = [];
 
@@ -107,23 +144,19 @@ const BookingSummaryBar = () => {
             if (voucherId) {
                 const unsub = socketService.subscribeToPayment(voucherId, (data) => {
                     if (data.status === 'PAID' || data.status === 'CANCELLED') {
-                        // console.log(`📡 Status update for voucher ${voucherId}: ${data.status}`);
+                        console.log(`📡 [Voucher Sync] Voucher ${voucherId} status changed to ${data.status}`);
 
                         if (data.status === 'PAID') {
                             Alert.alert(
-                                'Payment Successful',
-                                `Voucher ${voucher.voucher_no || voucherId} has been paid! Your booking is now confirmed.`,
+                                'Payment Received',
+                                `Your payment for ${voucher.venue_name || 'the booking'} has been confirmed!`,
                                 [{ text: 'Great!' }]
                             );
                         }
 
-                        // Remove the voucher from our local list for both PAID and CANCELLED
                         setVouchers(prev => prev.filter(v => (v.id || v.booking_id) !== voucherId));
-
-                        // Remove from notification tracking
                         notificationSent.current.delete(voucherId);
 
-                        // If this was the active voucher in context, clear it too
                         if (activeVoucher && (activeVoucher.id === voucherId || activeVoucher.bookingId === voucherId)) {
                             clearVoucher();
                         }
@@ -136,7 +169,33 @@ const BookingSummaryBar = () => {
         return () => {
             unsubscribes.forEach(unsub => unsub());
         };
-    }, [vouchers]);
+    }, [vouchers]); // Removed currentTime to avoid re-subscribing every second
+
+    // 2. Auto-cancellation on expiry - Depends on currentTime
+    useEffect(() => {
+        vouchers.forEach(async (voucher) => {
+            const timer = getVoucherTimer(voucher);
+            const voucherId = voucher.id || voucher.booking_id;
+
+            if (timer === 'EXPIRED' && !autoCancelled.current.has(voucherId)) {
+                autoCancelled.current.add(voucherId);
+                console.log(`⏰ [Auto-Cancel] Voucher ${voucherId} expired. Triggering cancellation...`);
+
+                try {
+                    await bookingService.deleteBooking(voucher.consumer_number);
+                    console.log(`✅ [Auto-Cancel] Booking ${voucherId} cancelled successfully.`);
+
+                    setVouchers(prev => prev.filter(v => (v.id || v.booking_id) !== voucherId));
+
+                    if (activeVoucher && (activeVoucher.id === voucherId || activeVoucher.bookingId === voucherId)) {
+                        clearVoucher();
+                    }
+                } catch (error) {
+                    console.error(`❌ [Auto-Cancel] Failed to cancel voucher ${voucherId}:`, error);
+                }
+            }
+        });
+    }, [vouchers, currentTime]);
 
     const getVoucherTimer = (voucher) => {
         const rawIssueDate = voucher?.issued_at;
@@ -237,30 +296,73 @@ const BookingSummaryBar = () => {
 
     const handlePress = (voucher) => {
         const bookingType = voucher.booking_type || voucher.bookingType || 'ROOM';
-        let screen = 'Voucher';
+        let screen = 'voucher';
+
+        // Build a rawInvoiceData-shaped object that all invoice screens expect.
+        // Each screen does: const { invoiceData: rawInvoiceData } = route.params
+        // and then checks `if (rawInvoiceData) { ... } else { Alert "Invoice data not found" }`
+        const builtInvoiceData = {
+            voucher: {
+                id: voucher.id,
+                voucher_no: voucher.voucher_no,
+                consumer_number: voucher.consumer_number,
+                amount: voucher.amount,
+                status: voucher.status || 'PENDING',
+                issued_at: voucher.issued_at,
+                expiresAt: voucher.expiresAt || voucher.expires_at,
+                booking_id: voucher.booking_id || voucher.bookingId,
+                payment_mode: voucher.payment_mode,
+                remarks: voucher.remarks,
+            },
+            due_date: voucher.expiresAt || voucher.expires_at || voucher.dueDate,
+            membership: {
+                no: voucher.membership_no || voucher.membershipNo,
+                name: voucher.member_name || voucher.memberName,
+            },
+            // Preserve any extra data from the API
+            ...((voucher.voucherData) || {}),
+        };
 
         const params = {
             bookingId: voucher.booking_id || voucher.id || voucher.bookingId,
             numericBookingId: voucher.booking_id || voucher.id || voucher.bookingId,
-            voucherData: voucher.voucherData || { voucher: voucher },
+            // Pass as both `invoiceData` (for hall/lawn/shoot screens) and `voucherData` (for room screen)
+            invoiceData: builtInvoiceData,
+            voucherData: voucher.voucherData || builtInvoiceData,
             bookingData: voucher.bookingData,
+            bookingDetails: voucher.bookingDetails,
+            venue: voucher.venue,
             roomType: voucher.roomType,
             memberDetails: voucher.memberDetails,
             isGuest: voucher.isGuest,
             dueDate: voucher.dueDate || voucher.expiresAt,
             bookingType: bookingType,
-            navigationParams: { bookingType: bookingType }
         };
 
         if (bookingType === 'ROOM') {
-            screen = 'voucher';
+            screen = 'voucher';         // lowercase - src/rooms/voucher.js
         } else if (bookingType === 'HALL') {
             screen = 'HallInvoiceScreen';
+        } else if (bookingType === 'LAWN') {
+            screen = 'Voucher';         // uppercase - src/lawn/Voucher.js
         } else if (bookingType === 'SHOOT') {
             screen = 'InvoiceScreen';
         }
 
         navigation.navigate(screen, params);
+    };
+
+    const formatDate = (dateString) => {
+        if (!dateString) return '';
+        try {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric'
+            });
+        } catch (error) {
+            return dateString;
+        }
     };
 
     const copyToClipboard = (text, id) => {
@@ -365,6 +467,20 @@ const BookingSummaryBar = () => {
                                         <Text style={styles.infoValue}>
                                             {v.timer.text}
                                         </Text>
+
+                                        {v.booking_type === 'ROOM' ? (
+                                            (v.check_in || v.check_out) && (
+                                                <Text style={styles.dateRangeText}>
+                                                    {formatDate(v.check_in)} - {formatDate(v.check_out)}
+                                                </Text>
+                                            )
+                                        ) : (
+                                            v.booking_date && (
+                                                <Text style={styles.dateRangeText}>
+                                                    Booking: {formatDate(v.booking_date)}
+                                                </Text>
+                                            )
+                                        )}
                                     </View>
 
                                     <TouchableOpacity
@@ -563,6 +679,12 @@ const styles = StyleSheet.create({
         padding: 4,
         backgroundColor: 'rgba(255,255,255,0.2)',
         borderRadius: 4,
+    },
+    dateRangeText: {
+        color: 'rgba(255,255,255,0.9)',
+        fontSize: 11,
+        marginTop: 2,
+        fontWeight: '500',
     }
 });
 

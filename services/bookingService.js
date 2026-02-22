@@ -205,6 +205,7 @@ export const bookingService = {
           Authorization: `Bearer ${token}`,
         },
       });
+      console.log("asdas:", response)
       return response.data;
     } catch (error) {
       console.error('Error deleting booking:', error);

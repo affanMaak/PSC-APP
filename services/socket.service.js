@@ -10,10 +10,14 @@ console.log('🔌 Socket Service initializing with URL:', SOCKET_URL);
 class SocketService {
     constructor() {
         this.socket = null;
+        this.pendingConnect = false;
     }
 
     connect() {
-        if (this.socket?.connected) return;
+        if (this.socket?.connected || this.pendingConnect) return;
+
+        console.log('🔌 Initiating Socket connection...');
+        this.pendingConnect = true;
 
         this.socket = io(SOCKET_URL, {
             transports: ['websocket'],
@@ -24,14 +28,17 @@ class SocketService {
 
         this.socket.on('connect', () => {
             console.log('✅ Connected to WebSocket');
-        });
-
-        this.socket.on('disconnect', (reason) => {
-            console.log('❌ Disconnected from WebSocket:', reason);
+            this.pendingConnect = false;
         });
 
         this.socket.on('connect_error', (error) => {
             console.error('⚠️ WebSocket connection error:', error.message);
+            this.pendingConnect = false;
+        });
+
+        this.socket.on('disconnect', (reason) => {
+            console.log('❌ Disconnected from WebSocket:', reason);
+            this.pendingConnect = false;
         });
     }
 

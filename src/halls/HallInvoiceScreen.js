@@ -19,6 +19,7 @@ import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { useVoucher } from '../auth/contexts/VoucherContext';
 import socketService from '../../services/socket.service';
 import { bookingService } from '../../services/bookingService';
+import { banquetAPI } from '../../config/apis';
 import { permissionService } from '../services/PermissionService';
 import ViewShot, { captureRef } from 'react-native-view-shot';
 import { CameraRoll } from '@react-native-camera-roll/camera-roll';
@@ -43,51 +44,118 @@ const HallInvoiceScreen = ({ route, navigation }) => {
   const [shareLoading, setShareLoading] = useState(false);
 
   useEffect(() => {
-    if (rawInvoiceData) {
-      console.log('🔄 Mapping Hall Invoice Data');
+    const loadInvoiceData = async () => {
+      if (rawInvoiceData) {
+        console.log('🔄 Mapping Hall Invoice Data');
 
-      const mappedDetails = {
-        invoiceNo: rawInvoiceData.voucher?.id || 'N/A',
-        invoiceNumber: rawInvoiceData.voucher?.id,
-        consumerNumber: rawInvoiceData.voucher?.consumer_number,
-        amount: rawInvoiceData.voucher?.amount,
-        totalPrice: rawInvoiceData.voucher?.amount,
-        dueDate: rawInvoiceData.due_date,
-        status: rawInvoiceData.voucher?.status || 'PENDING',
-        membershipNo: rawInvoiceData.membership?.no,
-        memberName: rawInvoiceData.membership?.name,
-        // Hall specific
-        hallName: venue?.name || bookingData?.hallName,
-        eventDate: bookingData?.bookingDate,
-        eventTime: bookingData?.eventTime,
-        eventType: bookingData?.eventType,
-        bookingDetails: bookingData?.bookingDetails || [],
-        numberOfGuests: bookingData?.numberOfGuests,
-        isGuest: isGuest,
-        advanceAmount: calculateHallAdvance(rawInvoiceData.voucher?.amount || 0),
-      };
-      setInvoiceData(mappedDetails);
-      setLoading(false);
-    } else {
-      Alert.alert('Error', 'Invoice data not found');
-      navigation.goBack();
-    }
+        let resolvedBookingData = bookingData;
 
-    // Real-time payment sync
-    const voucherId = rawInvoiceData?.voucher?.id;
-    let unsubscribe = () => { };
-
-    if (voucherId) {
-      unsubscribe = socketService.subscribeToPayment(voucherId, (data) => {
-        if (data.status === 'PAID') {
-          console.log('💰 [Hall Invoice] Real-time payment detected!');
-          setInvoiceData(prev => prev ? { ...prev, status: 'PAID' } : null);
+        // If bookingData is missing (e.g. navigated from BookingSummaryBar),
+        // fetch full booking details from the API.
+        if (!resolvedBookingData?.bookingDate && !resolvedBookingData?.hallName) {
+          const bookingId = rawInvoiceData.voucher?.booking_id || rawInvoiceData.voucher?.id;
+          if (bookingId) {
+            try {
+              const res = await banquetAPI.getHallVoucher(bookingId);
+              const fetched = res?.data?.Data || res?.data || {};
+              resolvedBookingData = {
+                bookingDate: fetched.booking?.bookingDate || fetched.bookingDate || fetched.eventDate,
+                eventTime: fetched.booking?.timeSlot || fetched.timeSlot || fetched.booking?.eventTime || fetched.eventTime,
+                eventType: fetched.booking?.eventType || fetched.eventType,
+                numberOfGuests: fetched.booking?.numberOfGuests || fetched.numberOfGuests,
+                bookingDetails: fetched.booking?.bookingDetails || fetched.bookingDetails || [],
+                hallName: fetched.hall?.name || fetched.hallName || fetched.booking?.hallName,
+                hallId: fetched.hall?.id || fetched.booking?.hallId,
+              };
+            } catch (err) {
+              console.warn('⚠️ Could not fetch hall booking details:', err);
+            }
+          }
         }
-      });
-    }
 
-    return () => unsubscribe();
+        const mappedDetails = {
+          invoiceNo: rawInvoiceData.voucher?.id || 'N/A',
+          invoiceNumber: rawInvoiceData.voucher?.id,
+          consumerNumber: rawInvoiceData.voucher?.consumer_number,
+          amount: rawInvoiceData.voucher?.amount,
+          totalPrice: rawInvoiceData.voucher?.amount,
+          dueDate: rawInvoiceData.due_date,
+          status: rawInvoiceData.voucher?.status || 'PENDING',
+          membershipNo: rawInvoiceData.membership?.no,
+          memberName: rawInvoiceData.membership?.name,
+          // Hall specific
+          hallName: venue?.name || resolvedBookingData?.hallName,
+          eventDate: resolvedBookingData?.bookingDate,
+          eventTime: resolvedBookingData?.eventTime,
+          eventType: resolvedBookingData?.eventType,
+          bookingDetails: resolvedBookingData?.bookingDetails || [],
+          numberOfGuests: resolvedBookingData?.numberOfGuests,
+          isGuest: isGuest,
+          advanceAmount: calculateHallAdvance(rawInvoiceData.voucher?.amount || 0),
+        };
+        setInvoiceData(mappedDetails);
+        setLoading(false);
+      } else {
+        Alert.alert('Error', 'Invoice data not found');
+        navigation.goBack();
+      }
+    };
+
+    loadInvoiceData();
   }, [rawInvoiceData]);
+
+  // Real-time payment sync - Separate useEffect with proper cleanup
+  useEffect(() => {
+    const voucherId = rawInvoiceData?.voucher?.id;
+    if (!voucherId) return;
+
+    const unsubscribe = socketService.subscribeToPayment(voucherId, (data) => {
+      if (data.status === 'PAID') {
+        console.log('💰 [Hall Invoice] Real-time payment detected!');
+        setInvoiceData(prev => prev ? { ...prev, status: 'PAID' } : null);
+      }
+    });
+
+    return () => {
+      console.log('🧹 [Hall Invoice] Cleaning up socket subscription');
+      unsubscribe();
+    };
+  }, [rawInvoiceData?.voucher?.id]);
+
+  const handleCancelBooking = async () => {
+    console.log(rawInvoiceData)
+    const bookingId = rawInvoiceData.voucher?.consumer_number || rawInvoiceData.voucher?.consumer_number;
+    if (!bookingId) return;
+
+    Alert.alert(
+      'Cancel Booking',
+      'Are you sure you want to cancel this booking request?',
+      [
+        { text: 'No', style: 'cancel' },
+        {
+          text: 'Yes, Cancel',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              await bookingService.deleteBooking(bookingId);
+              await clearVoucher();
+              Alert.alert('Success', 'Booking cancelled successfully');
+              navigation.reset({
+                index: 1,
+                routes: [{ name: 'home' }],
+              });
+            } catch (error) {
+              console.error('Error cancelling booking:', error);
+              Alert.alert('Error', error.message || 'Failed to cancel booking. Please try again.');
+            } finally {
+              setLoading(false);
+            }
+          }
+        }
+      ]
+    );
+  };
 
   // Countdown Timer Logic
   useEffect(() => {
@@ -151,14 +219,16 @@ const HallInvoiceScreen = ({ route, navigation }) => {
   };
 
   const calculateHallAdvance = (price) => {
-    const total = Number(price);
-    if (isNaN(total)) return 0;
-    if (total < 50000) return total; // Full amount
-    return 50000; // Flat fee 50k
+    const total = Number(price) || 0;
+    if (total < 50000) {
+      return total; // If amount is less than 50k, full amount is advance
+    }
+    return 50000; // Otherwise, flat fee of 50k
   };
 
+
   const handleCancelVoucher = async () => {
-    const bookingId = rawInvoiceData.voucher?.booking_id || bookingData?.bookingId;
+    const bookingId = rawInvoiceData.voucher?.consumer_number;
     if (!bookingId) {
       Alert.alert('Error', 'Booking ID not found for cancellation');
       return;
@@ -301,9 +371,10 @@ Thank you for choosing our banquet hall services!
   const formatTimeSlot = (timeSlot) => {
     if (!timeSlot) return 'N/A';
     const slotMap = {
-      'MORNING': 'Morning (8:00 AM - 2:00 PM)',
-      'EVENING': 'Evening (2:00 PM - 8:00 PM)',
-      'NIGHT': 'Night (8:00 PM - 12:00 AM)'
+      'DAY': 'Day',
+      'NIGHT': 'Night',
+      'MORNING': 'Morning',
+      'EVENING': 'Evening'
     };
     return slotMap[timeSlot] || timeSlot;
   };
@@ -549,6 +620,16 @@ Thank you for choosing our banquet hall services!
                 <Text style={styles.detailLabel}>Guests:</Text>
                 <Text style={styles.detailValue}>{invoiceData.numberOfGuests} people</Text>
               </View>
+
+              {invoiceData?.status !== 'PAID' && (
+                <TouchableOpacity
+                  style={styles.cardFooterAction}
+                  onPress={handleCancelBooking}
+                >
+                  <Text style={styles.cardFooterActionText}>Cancel This Booking</Text>
+                  <MaterialIcons name="chevron-right" size={18} color="#dc3545" />
+                </TouchableOpacity>
+              )}
             </View>
 
             {/* Payment Information */}
@@ -843,6 +924,27 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
     color: '#dc3545',
+  },
+  cardFooterAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 15,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+  },
+  cardFooterActionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#dc3545',
+    marginRight: 4,
+  },
+  copyContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'flex-end',
   },
   expiredText: {
     fontSize: 14,

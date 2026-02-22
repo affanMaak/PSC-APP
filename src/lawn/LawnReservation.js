@@ -20,9 +20,8 @@
 // import { useAuth } from '../auth/contexts/AuthContext';
 
 // const timeSlotOptions = [
-//     { label: 'Morning (8:00 AM - 2:00 PM)', value: 'MORNING' },
-//     { label: 'Evening (2:00 PM - 8:00 PM)', value: 'EVENING' },
-//     { label: 'Night (8:00 PM - 12:00 AM)', value: 'NIGHT' },
+//     { label: 'Day', value: 'DAY' },
+//     { label: 'Night', value: 'NIGHT' },
 // ];
 
 // const LawnReservation = ({ route, navigation }) => {

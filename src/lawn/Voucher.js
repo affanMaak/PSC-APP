@@ -21,6 +21,7 @@ import {
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { useVoucher } from '../auth/contexts/VoucherContext';
 import socketService from '../../services/socket.service';
+import { voucherAPI } from '../../config/apis';
 import { permissionService } from '../services/PermissionService';
 import ViewShot, { captureRef } from 'react-native-view-shot';
 import { CameraRoll } from '@react-native-camera-roll/camera-roll';
@@ -44,53 +45,120 @@ const Voucher = ({ route, navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [shareLoading, setShareLoading] = useState(false);
 
-  useEffect(() => {
-    if (rawInvoiceData) {
-      console.log('🔄 Mapping Lawn Invoice Data');
+  const handleCancelBooking = async () => {
+    const bookingId = rawInvoiceData.voucher?.booking_id || rawInvoiceData.voucher?.id;
+    if (!bookingId) return;
 
-      const mappedDetails = {
-        invoiceNo: rawInvoiceData.voucher?.id || 'N/A',
-        invoiceNumber: rawInvoiceData.voucher?.id,
-        consumerNumber: rawInvoiceData.voucher?.consumer_number,
-        amount: rawInvoiceData.voucher?.amount,
-        totalPrice: rawInvoiceData.voucher?.amount,
-        dueDate: rawInvoiceData.due_date,
-        status: rawInvoiceData.voucher?.status || 'PENDING',
-        membershipNo: rawInvoiceData.membership?.no,
-        memberName: rawInvoiceData.membership?.name,
-        // Lawn specific
-        lawnName: venue?.description || bookingDetails?.lawnName,
-        bookingDate: bookingDetails?.bookingDate,
-        eventTime: bookingDetails?.eventTime,
-        numberOfGuests: bookingDetails?.numberOfGuests,
-        isGuest: isGuest,
-        selectedDates: bookingDetails?.selectedDates || [],
-        dateConfigurations: bookingDetails?.dateConfigurations || {},
-        guestName: guestDetails?.guestName || bookingDetails?.guestName,
-        guestContact: guestDetails?.guestContact || bookingDetails?.guestContact,
-      };
-      setInvoiceData(mappedDetails);
-      setLoading(false);
-    } else {
-      Alert.alert('Error', 'Invoice data not found');
-      navigation.goBack();
-    }
-
-    // Real-time payment sync
-    const voucherId = rawInvoiceData?.voucher?.id;
-    let unsubscribe = () => { };
-
-    if (voucherId) {
-      unsubscribe = socketService.subscribeToPayment(voucherId, (data) => {
-        if (data.status === 'PAID') {
-          console.log('💰 [Lawn Invoice] Real-time payment detected!');
-          setInvoiceData(prev => prev ? { ...prev, status: 'PAID' } : null);
+    Alert.alert(
+      'Cancel Booking',
+      'Are you sure you want to cancel this booking request?',
+      [
+        { text: 'No', style: 'cancel' },
+        {
+          text: 'Yes, Cancel',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              await bookingService.deleteBooking(invoiceData.consumerNumber);
+              await clearVoucher();
+              Alert.alert('Success', 'Booking cancelled successfully');
+              navigation.reset({
+                index: 1,
+                routes: [{ name: 'home' }],
+              });
+            } catch (error) {
+              console.error('Error cancelling booking:', error);
+              Alert.alert('Error', error.message || 'Failed to cancel booking. Please try again.');
+            } finally {
+              setLoading(false);
+            }
+          }
         }
-      });
-    }
+      ]
+    );
+  };
 
-    return () => unsubscribe();
+  useEffect(() => {
+    const loadInvoiceData = async () => {
+      if (rawInvoiceData) {
+        console.log('🔄 Mapping Lawn Invoice Data');
+
+        let resolvedDetails = bookingDetails;
+
+        // If bookingDetails is missing (navigated from BookingSummaryBar),
+        // fetch full booking details from the API.
+        if (!resolvedDetails?.bookingDate && !resolvedDetails?.lawnName) {
+          const bookingId = rawInvoiceData.voucher?.booking_id || rawInvoiceData.voucher?.id;
+          if (bookingId) {
+            try {
+              const res = await voucherAPI.getVoucherByType('LAWN', bookingId);
+              const fetched = res?.data?.Data || res?.data || {};
+              resolvedDetails = {
+                lawnName: fetched.lawn?.name || fetched.lawnName || fetched.booking?.lawnName,
+                bookingDate: fetched.booking?.bookingDate || fetched.bookingDate || fetched.eventDate,
+                eventTime: fetched.booking?.timeSlot || fetched.timeSlot || fetched.booking?.eventTime || fetched.eventTime,
+                numberOfGuests: fetched.booking?.numberOfGuests || fetched.numberOfGuests,
+                selectedDates: fetched.booking?.selectedDates || fetched.selectedDates || [],
+                dateConfigurations: fetched.booking?.dateConfigurations || fetched.dateConfigurations || {},
+                guestName: fetched.booking?.guestName || fetched.guestName,
+                guestContact: fetched.booking?.guestContact || fetched.guestContact,
+              };
+            } catch (err) {
+              console.warn('⚠️ Could not fetch lawn booking details:', err);
+            }
+          }
+        }
+
+        const mappedDetails = {
+          invoiceNo: rawInvoiceData.voucher?.id || 'N/A',
+          invoiceNumber: rawInvoiceData.voucher?.id,
+          consumerNumber: rawInvoiceData.voucher?.consumer_number,
+          amount: rawInvoiceData.voucher?.amount,
+          totalPrice: rawInvoiceData.voucher?.amount,
+          dueDate: rawInvoiceData.due_date,
+          status: rawInvoiceData.voucher?.status || 'PENDING',
+          membershipNo: rawInvoiceData.membership?.no,
+          memberName: rawInvoiceData.membership?.name,
+          // Lawn specific
+          lawnName: venue?.description || resolvedDetails?.lawnName,
+          bookingDate: resolvedDetails?.bookingDate,
+          eventTime: resolvedDetails?.eventTime,
+          numberOfGuests: resolvedDetails?.numberOfGuests,
+          isGuest: isGuest,
+          selectedDates: resolvedDetails?.selectedDates || [],
+          dateConfigurations: resolvedDetails?.dateConfigurations || {},
+          guestName: guestDetails?.guestName || resolvedDetails?.guestName,
+          guestContact: guestDetails?.guestContact || resolvedDetails?.guestContact,
+        };
+        setInvoiceData(mappedDetails);
+        setLoading(false);
+      } else {
+        Alert.alert('Error', 'Invoice data not found');
+        navigation.goBack();
+      }
+    };
+
+    loadInvoiceData();
   }, [rawInvoiceData]);
+
+  // Real-time payment sync - Separate useEffect with proper cleanup
+  useEffect(() => {
+    const voucherId = rawInvoiceData?.voucher?.id;
+    if (!voucherId) return;
+
+    const unsubscribe = socketService.subscribeToPayment(voucherId, (data) => {
+      if (data.status === 'PAID') {
+        console.log('💰 [Lawn Invoice] Real-time payment detected!');
+        setInvoiceData(prev => prev ? { ...prev, status: 'PAID' } : null);
+      }
+    });
+
+    return () => {
+      console.log('🧹 [Lawn Invoice] Cleaning up socket subscription');
+      unsubscribe();
+    };
+  }, [rawInvoiceData?.voucher?.id]);
 
   // Countdown Timer Logic
   useEffect(() => {
@@ -260,9 +328,11 @@ Thank you for choosing our lawn services!
   const formatTimeSlot = (timeSlot) => {
     if (!timeSlot) return 'N/A';
     const slotMap = {
+      'DAY': 'Day (8:00 AM - 4:00 PM)',
+      'NIGHT': 'Night (4:00 PM - 12:00 AM)',
       'MORNING': 'Morning (8:00 AM - 2:00 PM)',
       'EVENING': 'Evening (2:00 PM - 8:00 PM)',
-      'NIGHT': 'Night (8:00 PM - 12:00 AM)'
+      'NIGHT_OLD': 'Night (8:00 PM - 12:00 AM)' // Kept for legacy if needed, but the user wants DAY/NIGHT
     };
     return slotMap[timeSlot] || timeSlot;
   };
@@ -501,6 +571,16 @@ Thank you for choosing our lawn services!
                 <Text style={styles.detailLabel}>Guests:</Text>
                 <Text style={styles.detailValue}>{invoiceData.numberOfGuests} people</Text>
               </View>
+
+              {invoiceData?.status !== 'PAID' && (
+                <TouchableOpacity
+                  style={styles.cardFooterAction}
+                  onPress={handleCancelBooking}
+                >
+                  <Text style={styles.cardFooterActionText}>Cancel This Booking</Text>
+                  <MaterialIcons name="chevron-right" size={18} color="#dc3545" />
+                </TouchableOpacity>
+              )}
             </View>
 
             {/* Payment Details */}
@@ -820,6 +900,26 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#1565c0',
     marginBottom: 10,
+  },
+  instructionsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  cardFooterAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 15,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+  },
+  cardFooterActionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#dc3545',
+    marginRight: 4,
   },
   instructionItem: {
     flexDirection: 'row',

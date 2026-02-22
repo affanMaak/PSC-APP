@@ -175,3 +175,14 @@ const handleGenerateInvoice = async () => {
         setBookingLoading(false);
     }
 };
+
+export const handleCancelLawnBooking = async (consumerNumber) => {
+    try {
+        const { bookingService } = require('../../services/bookingService');
+        await bookingService.deleteBooking(consumerNumber);
+        return true;
+    } catch (error) {
+        console.error('❌ Error cancelling lawn booking:', error);
+        throw error;
+    }
+};

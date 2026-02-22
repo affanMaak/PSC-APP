@@ -19,9 +19,11 @@ import {
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { useVoucher } from '../auth/contexts/VoucherContext';
 import socketService from '../../services/socket.service';
+import { voucherAPI } from '../../config/apis';
 import { permissionService } from '../services/PermissionService';
 import ViewShot, { captureRef } from 'react-native-view-shot';
 import { CameraRoll } from '@react-native-camera-roll/camera-roll';
+import { bookingService } from '../../services/bookingService';
 
 const InvoiceScreen = ({ route, navigation }) => {
   const { clearVoucher } = useVoucher();
@@ -41,50 +43,120 @@ const InvoiceScreen = ({ route, navigation }) => {
   const [shareLoading, setShareLoading] = useState(false);
 
   useEffect(() => {
-    if (rawInvoiceData) {
-      console.log('🔄 Mapping Photoshoot Invoice Data');
+    const loadInvoiceData = async () => {
+      if (rawInvoiceData) {
+        console.log('🔄 Mapping Photoshoot Invoice Data');
 
-      const mappedDetails = {
-        invoiceNo: rawInvoiceData.voucher?.id || 'N/A',
-        invoiceNumber: rawInvoiceData.voucher?.id,
-        consumerNumber: rawInvoiceData.voucher?.consumer_number,
-        amount: rawInvoiceData.voucher?.amount,
-        totalPrice: rawInvoiceData.voucher?.amount,
-        dueDate: rawInvoiceData.due_date,
-        status: rawInvoiceData.voucher?.status || 'PENDING',
-        membershipNo: rawInvoiceData.membership?.no,
-        memberName: rawInvoiceData.membership?.name,
-        // Photoshoot specific
-        packageDescription: photoshoot?.description || 'Photoshoot Package',
-        selectedDates: bookingData?.selectedDates,
-        dateConfigurations: bookingData?.dateConfigurations,
-        bookingDate: bookingData?.bookingDate,
-        timeSlot: bookingData?.timeSlot,
-        pricingType: bookingData?.pricingType,
-        remarks: rawInvoiceData.voucher?.remarks,
-      };
-      setInvoiceData(mappedDetails);
-      setLoading(false);
-    } else {
-      Alert.alert('Error', 'Invoice data not found');
-      navigation.goBack();
-    }
+        let resolvedBookingData = bookingData;
+        let resolvedPhotoshoot = photoshoot;
 
-    // Real-time payment sync
-    const voucherId = rawInvoiceData?.voucher?.id;
-    let unsubscribe = () => { };
-
-    if (voucherId) {
-      unsubscribe = socketService.subscribeToPayment(voucherId, (data) => {
-        if (data.status === 'PAID') {
-          console.log('💰 [Shoot Invoice] Real-time payment detected!');
-          setInvoiceData(prev => prev ? { ...prev, status: 'PAID' } : null);
+        // If bookingData is missing (navigated from BookingSummaryBar),
+        // fetch full booking detail from the API.
+        if (!resolvedBookingData?.bookingDate && !resolvedBookingData?.timeSlot) {
+          const bookingId = rawInvoiceData.voucher?.booking_id || rawInvoiceData.voucher?.id;
+          if (bookingId) {
+            try {
+              const res = await voucherAPI.getVoucherByType('SHOOT', bookingId);
+              const fetched = res?.data?.Data || res?.data || {};
+              resolvedBookingData = {
+                bookingDate: fetched.booking?.bookingDate || fetched.bookingDate,
+                timeSlot: fetched.booking?.timeSlot || fetched.timeSlot,
+                selectedDates: fetched.booking?.selectedDates || fetched.selectedDates,
+                dateConfigurations: fetched.booking?.dateConfigurations || fetched.dateConfigurations,
+                pricingType: fetched.booking?.pricingType || fetched.pricingType,
+              };
+              resolvedPhotoshoot = resolvedPhotoshoot || fetched.photoshoot || fetched.package || {};
+            } catch (err) {
+              console.warn('⚠️ Could not fetch photoshoot booking details:', err);
+            }
+          }
         }
-      });
+
+        const mappedDetails = {
+          invoiceNo: rawInvoiceData.voucher?.id || 'N/A',
+          invoiceNumber: rawInvoiceData.voucher?.id,
+          consumerNumber: rawInvoiceData.voucher?.consumer_number,
+          amount: rawInvoiceData.voucher?.amount,
+          totalPrice: rawInvoiceData.voucher?.amount,
+          dueDate: rawInvoiceData.due_date,
+          status: rawInvoiceData.voucher?.status || 'PENDING',
+          membershipNo: rawInvoiceData.membership?.no,
+          memberName: rawInvoiceData.membership?.name,
+          numberOfGuests: rawInvoiceData.voucher?.number_of_guests, // Added numberOfGuests
+          // Photoshoot specific
+          packageDescription: resolvedPhotoshoot?.description || 'Photoshoot Package',
+          selectedDates: resolvedBookingData?.selectedDates,
+          dateConfigurations: resolvedBookingData?.dateConfigurations,
+          bookingDate: resolvedBookingData?.bookingDate,
+          timeSlot: resolvedBookingData?.timeSlot,
+          pricingType: resolvedBookingData?.pricingType,
+          remarks: rawInvoiceData.voucher?.remarks,
+        };
+        setInvoiceData(mappedDetails);
+        setLoading(false);
+      } else {
+        Alert.alert('Error', 'Invoice data not found');
+        navigation.goBack();
+      }
+    };
+
+    loadInvoiceData();
+  }, [rawInvoiceData]);
+
+  // Real-time payment sync - Separate useEffect with proper cleanup
+  useEffect(() => {
+    const voucherId = rawInvoiceData?.voucher?.id;
+    if (!voucherId) return;
+
+    const unsubscribe = socketService.subscribeToPayment(voucherId, (data) => {
+      if (data.status === 'PAID') {
+        console.log('💰 [Shoot Invoice] Real-time payment detected!');
+        setInvoiceData(prev => prev ? { ...prev, status: 'PAID' } : null);
+      }
+    });
+
+    return () => {
+      console.log('🧹 [Shoot Invoice] Cleaning up socket subscription');
+      unsubscribe();
+    };
+  }, [rawInvoiceData?.voucher?.id]);
+
+  const handleCancelBooking = async () => {
+    const bookingId = rawInvoiceData.voucher?.consumer_number;
+    if (!bookingId) {
+      Alert.alert('Error', 'Consumer number not found for cancellation');
+      return;
     }
 
-    return () => unsubscribe();
-  }, [rawInvoiceData]);
+    Alert.alert(
+      'Cancel Booking',
+      'Are you sure you want to cancel this booking request?',
+      [
+        { text: 'No', style: 'cancel' },
+        {
+          text: 'Yes, Cancel',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setBookingLoading(true);
+              await bookingService.deleteBooking(bookingId);
+              await clearVoucher();
+              Alert.alert('Success', 'Booking cancelled successfully');
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'Home' }],
+              });
+            } catch (error) {
+              console.error('Error cancelling booking:', error);
+              Alert.alert('Error', error.message || 'Failed to cancel booking. Please try again.');
+            } finally {
+              setBookingLoading(false);
+            }
+          }
+        }
+      ]
+    );
+  };
 
   // Countdown Timer Logic
   useEffect(() => {
@@ -118,13 +190,6 @@ const InvoiceScreen = ({ route, navigation }) => {
 
     return () => clearInterval(interval);
   }, [invoiceData?.dueDate, invoiceData?.status]);
-
-  const handleRefresh = () => {
-    setRefreshing(true);
-    setTimeout(() => {
-      setRefreshing(false);
-    }, 1000);
-  };
 
   const handleMakePayment = () => {
     Alert.alert(
@@ -187,7 +252,7 @@ Thank you for choosing our photoshoot services!
       console.error('Error sharing:', error);
       Alert.alert('Error', 'Failed to share invoice');
     } finally {
-      setShareLoading(false);
+      setShareLoading(false); // Corrected to setShareLoading
     }
   };
 
@@ -454,6 +519,30 @@ Thank you for choosing our photoshoot services!
                 <Text style={styles.detailLabel}>Membership No:</Text>
                 <Text style={styles.detailValue}>{invoiceData.membershipNo}</Text>
               </View>
+
+              {invoiceData.numberOfGuests && (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Guests:</Text>
+                  <Text style={styles.detailValue}>{invoiceData.numberOfGuests} people</Text>
+                </View>
+              )}
+
+              {invoiceData?.status !== 'PAID' && (
+                <TouchableOpacity
+                  style={styles.cardFooterAction}
+                  onPress={handleCancelBooking}
+                  disabled={bookingLoading}
+                >
+                  {bookingLoading ? (
+                    <ActivityIndicator size="small" color="#dc3545" />
+                  ) : (
+                    <>
+                      <Text style={styles.cardFooterActionText}>Cancel This Booking</Text>
+                      <Icon name="chevron-right" size={18} color="#dc3545" />
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
             </View>
 
             {/* Booking Summary */}
@@ -785,6 +874,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
     color: '#dc3545',
+  },
+  cardFooterAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 15,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+  },
+  cardFooterActionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#dc3545',
+    marginRight: 4,
   },
   expiredText: {
     fontSize: 14,
