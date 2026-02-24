@@ -92,24 +92,54 @@ const FeedbackScreen = ({ navigation }) => {
         try {
             setSubmitting(true);
 
+            // 🚀 STRATEGY: Strict Whitelist & String Casting
+            // We cast all numeric IDs to strings to satisfy the backend's @IsString()
             const payload = {
-                subject: form.subject,
-                message: form.message,
-                categoryId: form.categoryId,
-                subCategoryId: form.subCategoryId === 'OTHER' ? null : form.subCategoryId,
-                otherSubCategory: form.subCategoryId === 'OTHER' ? form.otherSubCategory : null,
+                subject: String(form.subject),
+                message: String(form.message),
+                categoryId: String(form.categoryId),
+                subCategoryId: form.subCategoryId === 'OTHER' ? '0' : String(form.subCategoryId),
             };
 
-            await feedbackAPI.submitFeedback(payload);
+            console.log('🚀 Attempting submission with strictly whitelisted payload:', payload);
+
+            // Step 1: Create the feedback record
+            const response = await feedbackAPI.submitFeedback(payload);
+            const responseData = response.data || response;
+
+            // Step 2: If "OTHER" was selected, update with custom text via PATCH
+            if (form.subCategoryId === 'OTHER' && form.otherSubCategory) {
+                try {
+                    const feedbackId = responseData.id || responseData.feedbackId;
+                    if (feedbackId) {
+                        await feedbackAPI.assignFeedbackSubCategory(
+                            feedbackId,
+                            null,
+                            String(form.otherSubCategory)
+                        );
+                    }
+                } catch (subCategoryError) {
+                    console.error('⚠️ subCategory update failed (Partial Success):', subCategoryError);
+                }
+            }
 
             Alert.alert(
                 'Success',
-                'Thank you for your feedback! We will review it shortly.',
+                'Thank you for your feedback! It has been submitted successfully.',
                 [{ text: 'OK', onPress: () => navigation.goBack() }]
             );
         } catch (error) {
-            console.error('Submit feedback error:', error);
-            Alert.alert('Error', error.response?.data?.message || 'Failed to submit feedback. Please try again.');
+            console.error('❌ Submission failed:', error);
+
+            let errorMessage = 'Failed to submit feedback. Check category/subcategory selection.';
+            const serverMessage = error.response?.data?.message;
+
+            if (serverMessage) {
+                // Join array of validation errors if present
+                errorMessage = Array.isArray(serverMessage) ? serverMessage.join('\n') : serverMessage;
+            }
+
+            Alert.alert('Submission Error', errorMessage);
         } finally {
             setSubmitting(false);
         }
