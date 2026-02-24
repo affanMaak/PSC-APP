@@ -23,6 +23,7 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true,
 
 });
 
@@ -1551,18 +1552,35 @@ export const feedbackAPI = {
     }
   },
 
-  // FIXED: This should call the CREATE endpoint, not add remark
+  // ✅ RESTORED: Using JSON with strict logging to identify DTO validation traps
+  // The backend DTO has @IsString and @Type(() => Number) which is a known contradiction.
+  // We send as JSON and explicitly log the payload and server response.
   submitFeedback: async (feedbackData) => {
     try {
-      const response = await api.post(`${base_url}/feedback`, feedbackData);
+      console.log('📤 Submitting Feedback (Strict JSON):', JSON.stringify(feedbackData, null, 2));
+
+      const response = await api.post(`${base_url}/feedback/create`, feedbackData, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Client-Type': 'mobile'
+        }
+      });
+
+      console.log('✅ Feedback Submission Success:', response.data);
       return response.data;
     } catch (error) {
-      console.error('Submit feedback error:', error);
+      const serverResponse = error.response?.data;
+      console.error('❌ Feedback Submission Failed:', {
+        status: error.response?.status,
+        error: error.response?.data?.error,
+        message: serverResponse?.message || 'No message provided',
+        validationErrors: Array.isArray(serverResponse?.message) ? serverResponse.message : 'Not an array',
+        fullResponse: JSON.stringify(serverResponse, null, 2)
+      });
       throw error;
     }
   },
 
-  // Add remark to existing feedback (if needed later)
   addRemark: async (feedbackId, remarkData) => {
     try {
       const response = await api.post(`${base_url}/feedback/${feedbackId}/remark`, remarkData);
@@ -1572,7 +1590,22 @@ export const feedbackAPI = {
       throw error;
     }
   },
+
+  // Assign feedback subcategory (used when user selects "Other")
+  assignFeedbackSubCategory: async (feedbackId, subCategoryId, otherSubCategory) => {
+    try {
+      const response = await api.patch(`${base_url}/feedback/${feedbackId}/subcategory`, {
+        subCategoryId,
+        otherSubCategory
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Assign feedback subcategory error:', error);
+      throw error;
+    }
+  },
 };
+
 // export const feedbackAPI = {
 //   getCategories: async () => {
 //     try {
@@ -1583,6 +1616,7 @@ export const feedbackAPI = {
 //       throw error;
 //     }
 //   },
+
 //   getSubCategories: async () => {
 //     try {
 //       const response = await api.get(`${base_url}/feedback/subcategories`);
@@ -1592,16 +1626,30 @@ export const feedbackAPI = {
 //       throw error;
 //     }
 //   },
+
+//   // FIXED: This should call the CREATE endpoint, not add remark
 //   submitFeedback: async (feedbackData) => {
 //     try {
-//       const response = await api.post(`${base_url}/:id/remark`, feedbackData);
+//       const response = await api.post(`${base_url}/feedback`, feedbackData);
 //       return response.data;
 //     } catch (error) {
 //       console.error('Submit feedback error:', error);
 //       throw error;
 //     }
 //   },
+
+//   // Add remark to existing feedback (if needed later)
+//   addRemark: async (feedbackId, remarkData) => {
+//     try {
+//       const response = await api.post(`${base_url}/feedback/${feedbackId}/remark`, remarkData);
+//       return response.data;
+//     } catch (error) {
+//       console.error('Add remark error:', error);
+//       throw error;
+//     }
+//   },
 // };
+
 
 export { base_url, api };
 

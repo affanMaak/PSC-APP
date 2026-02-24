@@ -478,25 +478,41 @@ Check-out: ${formatDate(booking.checkOut)}
 
         return (
             <View style={styles.voucherSection}>
-                <View style={[styles.cardHeader, { borderBottomWidth: 0, paddingBottom: 0, marginBottom: 15 }]}>
-                    <Icon name="payments" size={22} color="#b48a64" />
-                    <Text style={[styles.cardTitle, { marginBottom: 0, marginLeft: 10, color: '#b48a64' }]}>
-                        Transaction & Payment Status
-                    </Text>
-                </View>
-
                 <View style={styles.ledgerContainer}>
+                    {/* Financial Summary Breakdown */}
                     <View style={styles.ledgerRow}>
-                        <Text style={styles.ledgerLabel}>Total Amount</Text>
+                        <Text style={styles.ledgerLabel}>Member Charges</Text>
                         <View style={styles.ledgerLine} />
-                        <Text style={styles.ledgerValue}>{formatCurrency(processedBooking.totalPrice)}</Text>
+                        <Text style={styles.ledgerValue}>
+                            {formatCurrency(processedBooking.pricingType?.toLowerCase() === 'member' ? processedBooking.totalPrice : 0)}
+                        </Text>
                     </View>
+                    <View style={styles.ledgerRow}>
+                        <Text style={styles.ledgerLabel}>Guest Charges</Text>
+                        <View style={styles.ledgerLine} />
+                        <Text style={styles.ledgerValue}>
+                            {formatCurrency(processedBooking.pricingType?.toLowerCase() === 'guest' ? processedBooking.totalPrice : 0)}
+                        </Text>
+                    </View>
+                    <View style={styles.ledgerRow}>
+                        <Text style={styles.ledgerLabel}>Service / Add-on Fees</Text>
+                        <View style={styles.ledgerLine} />
+                        <Text style={styles.ledgerValue}>{formatCurrency(0)}</Text>
+                    </View>
+
+                    <View style={[styles.ledgerRow, { marginTop: 15, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#e0e0e0' }]}>
+                        <Text style={[styles.ledgerLabel, { fontWeight: 'bold', color: '#b48a64' }]}>Total Amount</Text>
+                        <View style={[styles.ledgerLine, { borderStyle: 'solid', borderColor: '#b48a64' }]} />
+                        <Text style={[styles.ledgerValue, { fontSize: 18, color: '#b48a64' }]}>{formatCurrency(processedBooking.totalPrice)}</Text>
+                    </View>
+
                     <View style={styles.ledgerRow}>
                         <Text style={styles.ledgerLabel}>Paid To Date</Text>
                         <View style={styles.ledgerLine} />
                         <Text style={[styles.ledgerValue, { color: '#28a745' }]}>{formatCurrency(processedBooking.paidAmount)}</Text>
                     </View>
-                    <View style={[styles.ledgerRow, { marginTop: 10 }]}>
+
+                    <View style={[styles.ledgerRow, { marginTop: 5 }]}>
                         <Text style={[styles.ledgerLabel, { fontWeight: 'bold', color: '#333' }]}>Balance Due</Text>
                         <View style={[styles.ledgerLine, { borderStyle: 'solid', borderColor: '#eee' }]} />
                         <Text style={[styles.ledgerValue, { fontSize: 20, color: processedBooking.pendingAmount > 0 ? '#dc3545' : '#28a745' }]}>
@@ -861,107 +877,76 @@ Check-out: ${formatDate(booking.checkOut)}
                     <Text style={styles.bookingType}>{getBookingType()} Booking</Text>
                 </View>
 
-                {/* The Capture Zone (Floating Voucher: specifically wrapping Booking Information + Payment Status) */}
+                {/* The Capture Zone - Professional Digital Receipt Layout */}
                 <ViewShot
                     ref={viewShotRef}
                     options={{ format: 'png', quality: 1.0, snapshotContentContainer: false }}
                     style={styles.captureZone}
                 >
-                    {/* Booking Details Section */}
-                    <View style={styles.voucherSection}>
-                        <View style={[styles.cardHeader, { borderBottomWidth: 0, paddingBottom: 0, marginBottom: 15 }]}>
-                            <Icon name="info" size={20} color="#b48a64" />
-                            <Text style={[styles.cardTitle, { marginBottom: 0, marginLeft: 10, color: '#b48a64' }]}>
-                                Booking Information
-                            </Text>
-                        </View>
-
-                        {/* Room Info */}
-                        {processedBooking.roomNumber && renderDetailItem('Room Number', processedBooking.roomNumber, 'meeting-room')}
-                        {processedBooking.roomType && renderDetailItem('Room Type', processedBooking.roomType, 'category')}
-                        {calculateNights() > 0 && renderDetailItem('Duration', `${calculateNights()} Night(s)`, 'nights-stay')}
-                        {renderDetailItem('Pricing', processedBooking.pricingLabel, 'price-change', true)}
-
-                        {/* Venue Specific Info */}
-                        {['Hall', 'Lawn', 'Photoshoot'].includes(getBookingType()) && (
-                            <>
-                                {renderDetailItem('Venue', booking.venueName || booking.hallName || booking.lawnName || booking.name || getBookingType(), 'location-on')}
-                                {renderDetailItem('Event Date', formatDate(booking.checkIn || booking.date || booking.eventDate), 'event')}
-                                {(booking.eventTime || booking.timeSlot) && renderDetailItem('Time Slot', booking.eventTime || booking.timeSlot, 'access-time')}
-                            </>
-                        )}
-
-                        {/* Check-in/out for Rooms */}
-                        {!['Hall', 'Lawn', 'Photoshoot'].includes(getBookingType()) && (
-                            <>
-                                {renderDetailItem('Check-in', formatDate(booking.checkIn || booking.from || booking.bookingDate || booking.date), 'event')}
-                                {renderDetailItem('Check-out', formatDate(booking.checkOut || booking.to || booking.endDate || booking.date), 'event-busy')}
-                            </>
-                        )}
-
-                        {/* Guest Section */}
-                        <View style={styles.sectionDivider} />
-                        <Text style={styles.subCardTitle}>Guest Details</Text>
-                        {renderDetailItem('Guests', `${processedBooking.numberOfAdults || 1} Adult(s)${processedBooking.numberOfChildren ? `, ${processedBooking.numberOfChildren} Child(ren)` : ''}`, 'people')}
-                        {booking.guestName && renderDetailItem('Guest Name', booking.guestName, 'person')}
-                        {booking.guestContact && renderDetailItem('Contact', booking.guestContact, 'phone')}
-                        {booking.guestCNIC && renderDetailItem('CNIC', booking.guestCNIC, 'badge')}
-
-                        {/* Extra Info */}
-                        <View style={styles.sectionDivider} />
-                        {renderDetailItem('Booked On', formatDate(booking.createdAt || booking.bookingDate || booking.date), 'schedule')}
-
-                        {booking.specialRequest && (
-                            <View style={styles.specialRequestContainer}>
-                                <View style={styles.detailLabelContainer}>
-                                    <Icon name="info" size={18} color="#666" />
-                                    <Text style={styles.detailLabel}>Special Request</Text>
-                                </View>
-                                <Text style={styles.specialRequestText}>{booking.specialRequest}</Text>
-                            </View>
-                        )}
-
-                        {booking.remarks && (
-                            <View style={styles.remarksContainer}>
-                                <View style={styles.detailLabelContainer}>
-                                    <Icon name="chat" size={18} color="#666" />
-                                    <Text style={styles.detailLabel}>Remarks</Text>
-                                </View>
-                                <Text style={styles.remarksText}>{booking.remarks}</Text>
-                            </View>
-                        )}
+                    {/* Watermark/Status Badge - Absolute Background */}
+                    <View style={styles.captureWatermarkBg}>
+                        <Text style={[
+                            styles.largeWatermarkText,
+                            { color: getStatusColor(processedBooking.paymentStatus) + '15' }
+                        ]}>
+                            {processedBooking.paymentStatus === 'PAID' ? 'FULLY PAID' :
+                                processedBooking.paymentStatus === 'PARTIAL' || processedBooking.paidAmount > 0 ? 'PARTIAL' : 'UNPAID'}
+                        </Text>
                     </View>
 
-                    {/* Multi-date list for Hall/Lawn */}
-                    {booking.bookingDetails?.length > 0 && (
-                        <>
-                            <View style={styles.subtleDivider} />
-                            <View style={styles.voucherSection}>
-                                <Text style={styles.subCardTitle}>Selected Dates</Text>
-                                {booking.bookingDetails.map((d, index) => (
-                                    <View key={index} style={styles.multiDateItem}>
-                                        <Icon name="event" size={14} color="#b48a64" />
-                                        <View style={styles.multiDateContent}>
-                                            <Text style={styles.multiDateText}>{formatDate(d.date)}</Text>
-                                            <Text style={styles.multiDateSubtext}>
-                                                {d.timeSlot || booking.eventTime || 'N/A'} {d.eventType ? `| ${d.eventType}` : ''}
-                                            </Text>
-                                        </View>
-                                    </View>
-                                ))}
+                    {/* Receipt Header */}
+                    <View style={styles.receiptHeaderZone}>
+                        <View style={styles.receiptHeaderLine} />
+                        <View style={styles.pscReceiptBrand}>
+                            <Icon name="verified" size={24} color="#b48a64" />
+                            <Text style={styles.pscReceiptBrandText}>OFFICIAL DIGITAL RECEIPT</Text>
+                        </View>
+                        <Text style={styles.receiptBookingId}>Booking #{booking.bookingId || booking.id}</Text>
+                        <Text style={styles.receiptAgency}>Peshawar Services Club</Text>
+                    </View>
+
+                    {/* Section 1: Guest Details (Top) */}
+                    <View style={styles.receiptSection}>
+                        <View style={styles.receiptSectionHeader}>
+                            <Icon name="people" size={18} color="#b48a64" />
+                            <Text style={styles.receiptSectionTitle}>Guest Details</Text>
+                        </View>
+                        <View style={styles.receiptGrid}>
+                            <View style={styles.receiptGridItem}>
+                                <Text style={styles.receiptGridLabel}>Lead Guest</Text>
+                                <Text style={styles.receiptGridValue}>{booking.guestName || user?.name || 'Valued Member'}</Text>
                             </View>
-                        </>
-                    )}
+                            <View style={styles.receiptGridItem}>
+                                <Text style={styles.receiptGridLabel}>Contact No</Text>
+                                <Text style={styles.receiptGridValue}>{booking.guestContact || user?.phone || 'N/A'}</Text>
+                            </View>
+                            <View style={styles.receiptGridItem}>
+                                <Text style={styles.receiptGridLabel}>Total Guests</Text>
+                                <Text style={styles.receiptGridValue}>
+                                    {processedBooking.numberOfAdults || 1} Adult(s)
+                                    {processedBooking.numberOfChildren ? `, ${processedBooking.numberOfChildren} Child(ren)` : ''}
+                                </Text>
+                            </View>
+                            <View style={styles.receiptGridItem}>
+                                <Text style={styles.receiptGridLabel}>Membership No</Text>
+                                <Text style={styles.receiptGridValue}>{user?.membershipNo || 'N/A'}</Text>
+                            </View>
+                        </View>
+                    </View>
 
-                    <View style={styles.subtleDivider} />
+                    {/* Section 2: Payment Ledger (Middle) */}
+                    <View style={styles.receiptSection}>
+                        <View style={styles.receiptSectionHeader}>
+                            <Icon name="payments" size={18} color="#b48a64" />
+                            <Text style={styles.receiptSectionTitle}>Payment Ledger</Text>
+                        </View>
+                        {renderPaymentSummary()}
+                    </View>
 
-                    {/* Payment Summary */}
-                    {renderPaymentSummary()}
-
-                    {/* Watermark for Authentic Receipt */}
+                    {/* Footnote for Authenticity */}
                     <View style={styles.watermarkContainer}>
-                        <Icon name="verified" size={16} color="#b48a64" />
-                        <Text style={styles.watermarkText}>VERIFIED DIGITAL RECEIPT • PESHAWAR SERVICES CLUB</Text>
+                        <Icon name="lock" size={14} color="#b48a64" />
+                        <Text style={styles.watermarkText}>SECURE DIGITAL COPY • GENERATED ON {new Date().toLocaleDateString()}</Text>
                     </View>
                 </ViewShot>
 
@@ -1178,6 +1163,17 @@ Check-out: ${formatDate(booking.checkOut)}
                     </View>
                 </View>
             </Modal>
+
+            {/* Processing Overlay for Receipt Save */}
+            {savingImage && (
+                <View style={styles.processingOverlay}>
+                    <View style={styles.processingContent}>
+                        <ActivityIndicator size="large" color="#b48a64" />
+                        <Text style={styles.processingText}>Processing Receipt...</Text>
+                        <Text style={styles.processingSubtext}>Preparing a high-fidelity copy for your gallery</Text>
+                    </View>
+                </View>
+            )}
         </SafeAreaView>
     );
 }
@@ -1272,6 +1268,120 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         color: '#b48a64',
         letterSpacing: 1,
+    },
+    receiptSection: {
+        marginBottom: 20,
+        backgroundColor: '#fdfdfd',
+        padding: 15,
+        borderRadius: 15,
+        borderWidth: 1,
+        borderColor: '#f0f0f0',
+    },
+    receiptSectionHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 15,
+        borderBottomWidth: 1,
+        borderBottomColor: '#f0e6d8',
+        paddingBottom: 8,
+    },
+    receiptSectionTitle: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: '#b48a64',
+        marginLeft: 10,
+        textTransform: 'uppercase',
+        letterSpacing: 1,
+    },
+    receiptHeaderZone: {
+        alignItems: 'center',
+        marginBottom: 25,
+        marginTop: 10,
+    },
+    pscReceiptBrand: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 5,
+    },
+    pscReceiptBrandText: {
+        fontSize: 16,
+        fontWeight: '800',
+        color: '#b48a64',
+        letterSpacing: 2,
+    },
+    receiptBookingId: {
+        fontSize: 14,
+        color: '#666',
+        fontWeight: '600',
+    },
+    receiptAgency: {
+        fontSize: 12,
+        color: '#999',
+        textTransform: 'uppercase',
+        marginTop: 2,
+    },
+    receiptGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 15,
+    },
+    receiptGridItem: {
+        width: '45%',
+    },
+    receiptGridLabel: {
+        fontSize: 10,
+        color: '#999',
+        textTransform: 'uppercase',
+        marginBottom: 2,
+    },
+    receiptGridValue: {
+        fontSize: 13,
+        color: '#333',
+        fontWeight: '600',
+    },
+    captureWatermarkBg: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        justifyContent: 'center',
+        alignItems: 'center',
+        opacity: 0.1,
+        transform: [{ rotate: '-30deg' }],
+        zIndex: -1,
+    },
+    largeWatermarkText: {
+        fontSize: 100,
+        fontWeight: '900',
+        textAlign: 'center',
+    },
+    processingOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0,0,0,0.7)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 1000,
+    },
+    processingContent: {
+        backgroundColor: '#FFFFFF',
+        padding: 30,
+        borderRadius: 20,
+        alignItems: 'center',
+        width: '80%',
+    },
+    processingText: {
+        marginTop: 15,
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#333',
+    },
+    processingSubtext: {
+        marginTop: 8,
+        fontSize: 12,
+        color: '#666',
+        textAlign: 'center',
     },
     fabButton: {
         position: 'absolute',
