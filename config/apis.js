@@ -92,10 +92,10 @@ export const getAuthToken = async () => {
   }
 };
 
-export const userWho = async () => {
+export const userWho = async (fcmToken = null) => {
   try {
-    console.log('🔍 Checking user active status...');
-    const response = await api.get(`${base_url}/auth/user-who`);
+    console.log('🔍 Checking user active status...', { fcmToken });
+    const response = await api.get(`${base_url}/auth/user-who?fcmToken=${fcmToken ?? null}`);
     console.log('✅ User status active:', response.data);
     return response.data;
   } catch (error) {

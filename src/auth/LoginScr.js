@@ -232,7 +232,7 @@ const LoginScr = ({ navigation }) => {
 
       // Verify user activeness
       try {
-        const userWhoData = await userWho(userInfo.id);
+        const userWhoData = await userWho(fcmToken);
         console.log('✅ User status check result:', userWhoData);
 
         // Always try to get and send current FCM token
