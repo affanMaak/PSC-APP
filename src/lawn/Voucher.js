@@ -21,7 +21,8 @@ import {
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { useVoucher } from '../auth/contexts/VoucherContext';
 import socketService from '../../services/socket.service';
-import { voucherAPI } from '../../config/apis';
+import { lawnAPI, voucherAPI } from '../../config/apis';
+import { bookingService } from '../../services/bookingService';
 import { permissionService } from '../services/PermissionService';
 import ViewShot, { captureRef } from 'react-native-view-shot';
 import { CameraRoll } from '@react-native-camera-roll/camera-roll';
@@ -46,11 +47,14 @@ const Voucher = ({ route, navigation }) => {
   const [shareLoading, setShareLoading] = useState(false);
 
   const handleCancelBooking = async () => {
-    const bookingId = rawInvoiceData.voucher?.booking_id || rawInvoiceData.voucher?.id;
-    if (!bookingId) return;
+    const bookingId = rawInvoiceData.voucher?.consumer_number;
+    if (!bookingId) {
+      Alert.alert('Error', 'Booking ID not found');
+      return;
+    }
 
     Alert.alert(
-      'Cancel Booking',
+      'Cancel Lawn Booking',
       'Are you sure you want to cancel this booking request?',
       [
         { text: 'No', style: 'cancel' },
@@ -60,16 +64,17 @@ const Voucher = ({ route, navigation }) => {
           onPress: async () => {
             try {
               setLoading(true);
-              await bookingService.deleteBooking(invoiceData.consumerNumber);
+              // Use the EXACT same service method as Halls
+              await bookingService.deleteBooking(bookingId);
               await clearVoucher();
-              Alert.alert('Success', 'Booking cancelled successfully');
+              Alert.alert('Success', 'Lawn booking cancelled successfully');
               navigation.reset({
                 index: 1,
                 routes: [{ name: 'home' }],
               });
             } catch (error) {
-              console.error('Error cancelling booking:', error);
-              Alert.alert('Error', error.message || 'Failed to cancel booking. Please try again.');
+              console.error('Error cancelling lawn booking:', error);
+              Alert.alert('Error', error.message || 'Failed to cancel booking.');
             } finally {
               setLoading(false);
             }
