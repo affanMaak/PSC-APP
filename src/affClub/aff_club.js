@@ -26,7 +26,8 @@ import {
   getUserData,
   getUserAffiliatedClubRequests,
   getAffiliatedClubRequests,
-  getCurrentAdmin
+  getCurrentAdmin,
+  userWho
 } from '../../config/apis';
 
 const aff_club = () => {
@@ -61,7 +62,19 @@ const aff_club = () => {
     fetchAffiliatedClubs();
     // Show instructions modal when the screen opens
     checkFirstVisit();
+    // Verify user status and send FCM token
+    checkUserStatus();
   }, []);
+
+  const checkUserStatus = async () => {
+    try {
+      console.log('🔍 aff_club: Verifying user status...');
+      const statusData = await userWho();
+      console.log('✅ aff_club: User status verified:', statusData);
+    } catch (error) {
+      console.log('❌ aff_club: Error verifying user status:', error);
+    }
+  };
 
   const checkFirstVisit = async () => {
     setInstructionsModalVisible(true);
@@ -131,15 +144,15 @@ const aff_club = () => {
   };
 
   const fetchUserProfile = async () => {
-    try {
-      const profile = await getUserData();
-      setUserProfile(profile);
-      // Try to get membership number from different possible fields
-      setMemberId(profile.membershipNumber || profile.membershipNo || profile.Membership_No || profile.memberId || '');
-    } catch (error) {
-      console.log('Error fetching user profile:', error);
-      Alert.alert('Error', 'Failed to load user information');
-    }
+    // try {
+    //   const profile = await getUserData();
+    //   setUserProfile(profile);
+    //   // Try to get membership number from different possible fields
+    //   setMemberId(profile.membershipNumber || profile.membershipNo || profile.Membership_No || profile.memberId || '');
+    // } catch (error) {
+    //   console.log('Error fetching user profile:', error);
+    //   Alert.alert('Error', 'Failed to load user information');
+    // }
   };
 
   const fetchAffiliatedClubs = async () => {
@@ -351,14 +364,14 @@ const aff_club = () => {
               <View style={styles.textContainer}>
                 <Text style={styles.cardTitle}>{club.name}</Text>
 
-                {club.location && (
+                {!!club.location && (
                   <Text style={styles.cardDescription}>
                     📍 {club.location}
                   </Text>
                 )}
 
                 {/* Admin Stats Badge */}
-                {isAdmin && clubStats[club.id] !== undefined && (
+                {!!isAdmin && clubStats[club.id] !== undefined && (
                   <View style={styles.statBadge}>
                     <Icon name="people" size={14} color="#FFF" />
                     <Text style={styles.statText}>
@@ -502,10 +515,10 @@ const aff_club = () => {
                 </View>
 
                 {/* Club Info */}
-                {selectedClub && (
+                {!!selectedClub && (
                   <View style={styles.selectedClubInfo}>
                     <Text style={styles.selectedClubName}>{selectedClub.name}</Text>
-                    {selectedClub.location && (
+                    {!!selectedClub.location && (
                       <Text style={styles.selectedClubLocation}>📍 {selectedClub.location}</Text>
                     )}
                   </View>
@@ -549,7 +562,7 @@ const aff_club = () => {
                 </View>
 
                 {/* Date Picker */}
-                {showDatePicker && (
+                {!!showDatePicker && (
                   <DateTimePicker
                     value={visitDate}
                     mode="date"
