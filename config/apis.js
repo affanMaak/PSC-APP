@@ -7,8 +7,8 @@ import eventBus from '../services/eventBus';
 
 export const getBaseUrl = () => {
   if (Platform.OS === 'android') {
-    // return 'https://admin.peshawarservicesclub.com/api';
-    return 'http://10.0.2.2:3000/api';
+    return 'https://admin.peshawarservicesclub.com/api';
+
   } else {
     return 'https://admin.peshawarservicesclub.com/api';
   }
@@ -57,6 +57,7 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
+    console.log("Error in response interceptor:", error);
     if (error.response?.status === 401 && error.response?.data?.error === 'SESSION_EXPIRED') {
       console.error('🚨 Session Expired: Logged in on another device');
 
@@ -1561,32 +1562,31 @@ export const feedbackAPI = {
     }
   },
 
-  // ✅ RESTORED: Using JSON with strict logging to identify DTO validation traps
-  // The backend DTO has @IsString and @Type(() => Number) which is a known contradiction.
-  // We send as JSON and explicitly log the payload and server response.
+  // ✅ FIXED: Correct endpoint and payload (no otherSubCategory)
   submitFeedback: async (feedbackData) => {
     try {
-      console.log('📤 Submitting Feedback (Strict JSON):', JSON.stringify(feedbackData, null, 2));
-
-      const response = await api.post(`${base_url}/feedback/create`, feedbackData, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Client-Type': 'mobile'
-        }
-      });
-
-      console.log('✅ Feedback Submission Success:', response.data);
+      // Use the correct backend endpoint: /feedback/create
+      const response = await api.post(`${base_url}/feedback/create`, feedbackData);
       return response.data;
     } catch (error) {
-      const serverResponse = error.response?.data;
-      console.error('❌ Feedback Submission Failed:', {
-        status: error.response?.status,
-        error: error.response?.data?.error,
-        message: serverResponse?.message || 'No message provided',
-        validationErrors: Array.isArray(serverResponse?.message) ? serverResponse.message : 'Not an array',
-        fullResponse: JSON.stringify(serverResponse, null, 2)
-      });
+      console.error('Submit feedback error:', error);
       throw error;
+    }
+  },
+
+  getFeedbacks: async () => {
+    try {
+      const response = await api.get(`${base_url}/feedback`, {
+        withCredentials: true,
+      });
+      return response.data;
+    } catch (error) {
+      const message =
+        error.response?.data?.message ||
+        error.response?.data?.error ||
+        error.message ||
+        "Something went wrong";
+      throw { message, status: error.response?.status || 500 };
     }
   },
 
@@ -1596,20 +1596,6 @@ export const feedbackAPI = {
       return response.data;
     } catch (error) {
       console.error('Add remark error:', error);
-      throw error;
-    }
-  },
-
-  // Assign feedback subcategory (used when user selects "Other")
-  assignFeedbackSubCategory: async (feedbackId, subCategoryId, otherSubCategory) => {
-    try {
-      const response = await api.patch(`${base_url}/feedback/${feedbackId}/subcategory`, {
-        subCategoryId,
-        otherSubCategory
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Assign feedback subcategory error:', error);
       throw error;
     }
   },
