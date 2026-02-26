@@ -18,6 +18,7 @@ import { useAuth } from '../src/auth/contexts/AuthContext';
 import { getUserData, removeAuthData, userWho, getAds, getUnseenNotificationsCount } from '../config/apis';
 import { voucherAPI } from '../config/apis';
 import { useFocusEffect } from '@react-navigation/native';
+import messaging from '@react-native-firebase/messaging';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -71,9 +72,17 @@ export default function start({ navigation }) {
           return;
         }
 
+        // Get FCM token before calling userWho
+        let fcmToken = null;
+        try {
+          fcmToken = await messaging().getToken();
+        } catch (fcmErr) {
+          console.warn('⚠️ start: Could not get FCM token:', fcmErr.message);
+        }
+
         console.log('🔍 Checking status for member...');
         // Call userWho API to check status
-        const statusResponse = await userWho();
+        const statusResponse = await userWho(fcmToken);
         console.log('📊 Status response:', statusResponse);
 
         // If we get here, the user is active (API throws error otherwise)

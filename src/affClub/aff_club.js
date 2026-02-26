@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import messaging from '@react-native-firebase/messaging';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {
@@ -68,11 +69,15 @@ const aff_club = () => {
 
   const checkUserStatus = async () => {
     try {
-      console.log('🔍 aff_club: Verifying user status...');
-      const statusData = await userWho();
-      console.log('✅ aff_club: User status verified:', statusData);
+      let fcmToken = null;
+      try {
+        fcmToken = await messaging().getToken();
+      } catch (fcmErr) {
+        console.log(fcmErr.message);
+      }
+      const statusData = await userWho(fcmToken);
     } catch (error) {
-      console.log('❌ aff_club: Error verifying user status:', error);
+      console.log(error);
     }
   };
 
@@ -144,15 +149,15 @@ const aff_club = () => {
   };
 
   const fetchUserProfile = async () => {
-    // try {
-    //   const profile = await getUserData();
-    //   setUserProfile(profile);
-    //   // Try to get membership number from different possible fields
-    //   setMemberId(profile.membershipNumber || profile.membershipNo || profile.Membership_No || profile.memberId || '');
-    // } catch (error) {
-    //   console.log('Error fetching user profile:', error);
-    //   Alert.alert('Error', 'Failed to load user information');
-    // }
+    try {
+      const profile = await getUserData();
+      setUserProfile(profile);
+      // Try to get membership number from different possible fields
+      setMemberId(profile.membershipNumber || profile.membershipNo || profile.Membership_No || profile.memberId || '');
+    } catch (error) {
+      console.log('Error fetching user profile:', error);
+      Alert.alert('Error', 'Failed to load user information');
+    }
   };
 
   const fetchAffiliatedClubs = async () => {
