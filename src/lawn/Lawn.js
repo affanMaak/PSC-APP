@@ -1338,8 +1338,7 @@ const Lawn = ({ navigation }) => {
             <View style={styles.welcomeSection}>
               <Text style={styles.welcomeTitle}>Host Your Perfect Event</Text>
               <Text style={styles.welcomeText}>
-                Beautifully maintained lawns, perfect for weddings, birthdays,
-                corporate events, and family celebrations. Choose from premium venue
+                Beautifully maintained lawns, perfect for weddings, birthdays and family celebrations. Choose from premium venue
               </Text>
             </View>
 

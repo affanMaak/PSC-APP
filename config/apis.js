@@ -36,13 +36,17 @@ api.interceptors.request.use(
       }
 
       // Add FCM Token check for Single Device Session
-      try {
-        const fcmToken = await messaging().getToken();
-        if (fcmToken) {
-          config.headers['client-fcm-token'] = fcmToken;
+      // Skip for auth endpoints to avoid issues during login
+      const isAuthEndpoint = config.url.includes('/auth/') || config.url.includes('/login');
+      if (!isAuthEndpoint) {
+        try {
+          const fcmToken = await messaging().getToken();
+          if (fcmToken) {
+            config.headers['client-fcm-token'] = fcmToken;
+          }
+        } catch (fcmErr) {
+          console.warn('⚠️ Could not get FCM token for header:', fcmErr.message);
         }
-      } catch (fcmErr) {
-        console.warn('⚠️ Could not get FCM token for header:', fcmErr.message);
       }
 
     } catch (error) {
@@ -98,6 +102,7 @@ export const userWho = async (fcmToken = null) => {
     let tokenToSend = fcmToken;
     if (!tokenToSend) {
       try {
+        // Check if FCM is properly initialized before attempting to get token
         tokenToSend = await messaging().getToken();
       } catch (fcmErr) {
         console.warn('⚠️ userWho: Could not get FCM token:', fcmErr.message);
@@ -1439,9 +1444,45 @@ export const loginAdmin = async (email, password) => {
     const response = await api.post('/auth/login/admin', {
       email,
       password,
+    }, {
+      headers: { 'client-type': 'mobile' }
     });
 
-    const { access_token, refresh_token, admin } = response.data;
+    console.log('Admin login response:', response.data);
+    
+    // The API response might have different structure - check various possibilities
+    const responseData = response.data;
+    const access_token = responseData.access_token || responseData.token || responseData.accessToken;
+    const refresh_token = responseData.refresh_token || responseData.refreshToken;
+    
+    // Backend only returns tokens, no admin data in login response
+    // Need to fetch admin data separately
+    if (!access_token) {
+      throw new Error('Access token not received from server');
+    }
+    
+    // Temporarily store the token to make the user-who call
+    await AsyncStorage.setItem('access_token', access_token);
+    
+    // Fetch admin data using user-who endpoint
+    let admin;
+    try {
+      admin = await userWho();
+      console.log('Admin data fetched from user-who:', admin);
+    } catch (fetchErr) {
+      console.error('Error fetching admin data:', fetchErr);
+      // If we can't fetch admin data, at least create a minimal admin object
+      // Remove the temporary token as it might be invalid
+      await AsyncStorage.removeItem('access_token');
+      
+      // Throw error to indicate login failure
+      throw new Error('Could not fetch admin data after login');
+    }
+    
+    // Validate that we have essential admin data
+    if (!admin || !admin.id) {
+      throw new Error('Invalid admin data received from server');
+    }
 
     // Store in AsyncStorage using consistent keys
     await storeAuthData({ access_token, refresh_token }, {
@@ -1449,13 +1490,22 @@ export const loginAdmin = async (email, password) => {
       role: admin.role || 'ADMIN'
     });
 
+    // Ensure admin object has all required properties
+    const completeAdmin = {
+      id: admin.id,
+      name: admin.name || 'Admin',
+      email: admin.email || email,
+      role: admin.role || 'ADMIN',
+      ...admin
+    };
+    
     // Also store admin specific keys for backward compatibility
     await AsyncStorage.setItem('adminToken', access_token);
-    await AsyncStorage.setItem('adminId', admin.id.toString());
-    await AsyncStorage.setItem('adminName', admin.name);
-    await AsyncStorage.setItem('adminEmail', admin.email);
+    await AsyncStorage.setItem('adminId', completeAdmin.id.toString());
+    await AsyncStorage.setItem('adminName', completeAdmin.name);
+    await AsyncStorage.setItem('adminEmail', completeAdmin.email);
 
-    return { admin, token: access_token };
+    return { admin: completeAdmin, token: access_token };
   } catch (error) {
     console.error('Login error:', error);
     throw error;
