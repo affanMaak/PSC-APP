@@ -58,7 +58,7 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     console.log("Error in response interceptor:", error);
-    if (error.response?.status === 401 && error.response?.data?.error === 'SESSION_EXPIRED') {
+    if (error.response?.status === 403 && error.response?.data?.error === 'SESSION_EXPIRED') {
       console.error('🚨 Session Expired: Logged in on another device');
 
       // Notify the AuthContext to logout
