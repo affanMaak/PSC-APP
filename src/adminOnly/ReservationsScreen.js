@@ -743,7 +743,14 @@ const ReservationsScreen = ({ navigation }) => {
           style: 'destructive',
           onPress: async () => {
             try {
-              await cancelReservation(reservation.id);
+              // For now, pass a simplified data structure
+              const cancelData = {
+                roomIds: [reservation.id], // Assuming ID corresponds to room ID
+                reserveFrom: new Date(reservation.startTime).toISOString().split('T')[0],
+                reserveTo: new Date(reservation.endTime).toISOString().split('T')[0],
+                remarks: reservation.remarks || 'Reservation cancelled'
+              };
+              await cancelReservation(cancelData);
 
               // Update local state immediately
               setReservations(prev =>
@@ -796,13 +803,19 @@ const ReservationsScreen = ({ navigation }) => {
     if (!selectedReservation) return;
 
     try {
-      const updateData = {
-        startTime: startDate.toISOString(),
-        endTime: endDate.toISOString(),
-        remarks: editForm.remarks,
+      const currentReservation = {
+        roomIds: [selectedReservation.id],
+        reserveFrom: new Date(selectedReservation.startTime).toISOString().split('T')[0],
+        reserveTo: new Date(selectedReservation.endTime).toISOString().split('T')[0]
+      };
+      
+      const newDates = {
+        reserveFrom: startDate.toISOString().split('T')[0],
+        reserveTo: endDate.toISOString().split('T')[0],
+        remarks: editForm.remarks
       };
 
-      await updateReservation(selectedReservation.id, updateData);
+      await updateReservation(currentReservation, newDates);
 
       // Update local state
       setReservations(prev =>
@@ -810,9 +823,9 @@ const ReservationsScreen = ({ navigation }) => {
           r.id === selectedReservation.id
             ? {
               ...r,
-              startTime: updateData.startTime,
-              endTime: updateData.endTime,
-              remarks: updateData.remarks
+              startTime: startDate.toISOString(),
+              endTime: endDate.toISOString(),
+              remarks: editForm.remarks
             }
             : r
         )
@@ -1339,6 +1352,16 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'center',
   },
+
+  notchTitle: {
+    fontSize: 22,
+    fontWeight: "600",
+    color: "#000",
+    flex: 1,
+    textAlign: 'center',
+  },
 });
+
+
 
 export default ReservationsScreen;

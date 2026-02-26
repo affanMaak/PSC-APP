@@ -1417,23 +1417,110 @@ export const getAdminReservations = async (adminId, filters = {}) => {
 };
 
 // Cancel reservation
-export const cancelReservation = async (reservationId) => {
+export const cancelReservation = async (reservationData) => {
   try {
-    const response = await api.delete(`/auth/reservations/${reservationId}`);
+    console.log('🔄 Canceling reservation with toggle pattern...', reservationData);
+    
+    // Extract required data from reservationData
+    const { roomIds, reserveFrom, reserveTo, remarks, id } = reservationData;
+    
+    // Handle case where roomIds might not be provided
+    const actualRoomIds = roomIds || (id ? [id] : []);
+    
+    if (actualRoomIds.length === 0) {
+      throw new Error('No room IDs provided for cancellation');
+    }
+    
+    // Use the same toggle pattern as working unreserve logic
+    const payload = {
+      roomIds: actualRoomIds,   // Array of room IDs
+      reserve: false,          // Set to false to cancel/unreserve
+      reserveFrom: reserveFrom, // Same date as original reservation
+      reserveTo: reserveTo,     // Same date as original reservation
+      remarks: remarks || 'Reservation cancelled', // Optional remarks
+    };
+    
+    console.log('📤 Cancel payload:', JSON.stringify(payload, null, 2));
+    
+    // Use the same endpoint as reserveRooms but with reserve: false
+    const response = await api.patch('/room/reserve/rooms', payload, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${await getAuthToken()}`
+      }
+    });
+    
+    console.log('✅ Reservation cancelled successfully:', response.data);
     return response.data;
   } catch (error) {
-    console.error('Cancel reservation error:', error);
+    console.error('❌ Cancel reservation error:', {
+      status: error.response?.status,
+      data: error.response?.data,
+      message: error.message,
+      config: {
+        url: error.config?.url,
+        method: error.config?.method
+      }
+    });
     throw error;
   }
 };
 
 // Update reservation
-export const updateReservation = async (reservationId, updateData) => {
+export const updateReservation = async (reservationData, newDates) => {
   try {
-    const response = await api.put(`/auth/reservations/${reservationId}`, updateData);
+    console.log('🔄 Updating reservation with toggle pattern...', { reservationData, newDates });
+    
+    // Handle missing roomIds
+    const { roomIds, reserveFrom, reserveTo, id } = reservationData;
+    const actualRoomIds = roomIds || (id ? [id] : []);
+    
+    if (actualRoomIds.length === 0) {
+      throw new Error('No room IDs provided for update');
+    }
+    
+    // First, cancel the existing reservation (set reserve: false)
+    const cancelPayload = {
+      roomIds: actualRoomIds,
+      reserve: false,
+      reserveFrom: reserveFrom,
+      reserveTo: reserveTo,
+      remarks: 'Updating reservation dates'
+    };
+    
+    console.log('📤 Cancel existing reservation:', JSON.stringify(cancelPayload, null, 2));
+    await api.patch('/room/reserve/rooms', cancelPayload, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${await getAuthToken()}`
+      }
+    });
+    
+    // Then, create new reservation with updated dates (set reserve: true)
+    const updatePayload = {
+      roomIds: actualRoomIds,
+      reserve: true,
+      reserveFrom: newDates.reserveFrom,
+      reserveTo: newDates.reserveTo,
+      remarks: newDates.remarks || 'Reservation updated'
+    };
+    
+    console.log('📤 Create updated reservation:', JSON.stringify(updatePayload, null, 2));
+    const response = await api.patch('/room/reserve/rooms', updatePayload, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${await getAuthToken()}`
+      }
+    });
+    
+    console.log('✅ Reservation updated successfully:', response.data);
     return response.data;
   } catch (error) {
-    console.error('Update reservation error:', error);
+    console.error('❌ Update reservation error:', {
+      status: error.response?.status,
+      data: error.response?.data,
+      message: error.message
+    });
     throw error;
   }
 };
