@@ -121,6 +121,7 @@ const aff_club = () => {
 
 
   const fetchClubStats = async () => {
+
     try {
       // Frontend Logic: Fetch all requests and count them per club
       // Passing no arguments to get ALL requests (might require backend support for no-filter)

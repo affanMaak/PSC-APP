@@ -905,34 +905,36 @@ Check-out: ${formatDate(booking.checkOut)}
                         <Text style={styles.receiptAgency}>Peshawar Services Club</Text>
                     </View>
 
-                    {/* Section 1: Guest Details (Top) */}
-                    <View style={styles.receiptSection}>
-                        <View style={styles.receiptSectionHeader}>
-                            <Icon name="people" size={18} color="#b48a64" />
-                            <Text style={styles.receiptSectionTitle}>Guest Details</Text>
+                    {/* Section 1: Guest Details (Top) - Only for guest bookings */}
+                    {(booking.pricingType || '').toLowerCase() === 'guest' && (
+                        <View style={styles.receiptSection}>
+                            <View style={styles.receiptSectionHeader}>
+                                <Icon name="people" size={18} color="#b48a64" />
+                                <Text style={styles.receiptSectionTitle}>Guest Details</Text>
+                            </View>
+                            <View style={styles.receiptGrid}>
+                                <View style={styles.receiptGridItem}>
+                                    <Text style={styles.receiptGridLabel}>Lead Guest</Text>
+                                    <Text style={styles.receiptGridValue}>{booking.guestName || 'N/A'}</Text>
+                                </View>
+                                <View style={styles.receiptGridItem}>
+                                    <Text style={styles.receiptGridLabel}>Contact No</Text>
+                                    <Text style={styles.receiptGridValue}>{booking.guestContact || 'N/A'}</Text>
+                                </View>
+                                <View style={styles.receiptGridItem}>
+                                    <Text style={styles.receiptGridLabel}>Total Guests</Text>
+                                    <Text style={styles.receiptGridValue}>
+                                        {processedBooking.numberOfAdults || 0} Adult(s)
+                                        {processedBooking.numberOfChildren ? `, ${processedBooking.numberOfChildren} Child(ren)` : ''}
+                                    </Text>
+                                </View>
+                                <View style={styles.receiptGridItem}>
+                                    <Text style={styles.receiptGridLabel}>Membership No</Text>
+                                    <Text style={styles.receiptGridValue}>{user?.membershipNo || 'N/A'}</Text>
+                                </View>
+                            </View>
                         </View>
-                        <View style={styles.receiptGrid}>
-                            <View style={styles.receiptGridItem}>
-                                <Text style={styles.receiptGridLabel}>Lead Guest</Text>
-                                <Text style={styles.receiptGridValue}>{booking.guestName || user?.name || 'Valued Member'}</Text>
-                            </View>
-                            <View style={styles.receiptGridItem}>
-                                <Text style={styles.receiptGridLabel}>Contact No</Text>
-                                <Text style={styles.receiptGridValue}>{booking.guestContact || user?.phone || 'N/A'}</Text>
-                            </View>
-                            <View style={styles.receiptGridItem}>
-                                <Text style={styles.receiptGridLabel}>Total Guests</Text>
-                                <Text style={styles.receiptGridValue}>
-                                    {processedBooking.numberOfAdults || 1} Adult(s)
-                                    {processedBooking.numberOfChildren ? `, ${processedBooking.numberOfChildren} Child(ren)` : ''}
-                                </Text>
-                            </View>
-                            <View style={styles.receiptGridItem}>
-                                <Text style={styles.receiptGridLabel}>Membership No</Text>
-                                <Text style={styles.receiptGridValue}>{user?.membershipNo || 'N/A'}</Text>
-                            </View>
-                        </View>
-                    </View>
+                    )}
 
                     {/* Section 2: Payment Ledger (Middle) */}
                     <View style={styles.receiptSection}>
