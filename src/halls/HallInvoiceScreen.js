@@ -1,3 +1,535 @@
+//abd27
+// import React, { useState, useEffect, useRef } from 'react';
+// import {
+//   View,
+//   Text,
+//   StyleSheet,
+//   ScrollView,
+//   TouchableOpacity,
+//   ActivityIndicator,
+//   Alert,
+//   StatusBar,
+//   RefreshControl,
+//   ImageBackground,
+//   Clipboard,
+//   Platform,
+//   PermissionsAndroid,
+//   Share,
+// } from 'react-native';
+// import Icon from 'react-native-vector-icons/MaterialIcons';
+// import ViewShot, { captureRef } from 'react-native-view-shot';
+// import { CameraRoll } from '@react-native-camera-roll/camera-roll';
+// import { bookingService } from '../../services/bookingService';
+// import { useAuth } from '../auth/contexts/AuthContext';
+// import { useVoucher } from '../auth/contexts/VoucherContext';
+// import socketService from '../../services/socket.service';
+// import { permissionService } from '../services/PermissionService';
+// import { banquetAPI } from '../../config/apis';
+
+// export default function HallInvoiceScreen({ navigation, route }) {
+//   const { clearVoucher } = useVoucher();
+//   const { user } = useAuth();
+//   const {
+//     invoiceData: rawInvoiceData,
+//     bookingData,
+//     venue,
+//     isGuest,
+//     memberDetails,
+//     guestDetails
+//   } = route.params || {};
+
+//   const [invoiceData, setInvoiceData] = useState(null);
+//   const [loading, setLoading] = useState(true);
+//   const [timeLeft, setTimeLeft] = useState('');
+//   const [refreshing, setRefreshing] = useState(false);
+//   const [shareLoading, setShareLoading] = useState(false);
+//   const [saveLoading, setSaveLoading] = useState(false);
+//   const [copied, setCopied] = useState(false);
+//   const viewShotRef = useRef(null);
+//   const invoiceRef = useRef(null);
+
+//   const calculateHallAdvance = (price) => {
+//     const total = Number(price) || 0;
+//     if (total < 50000) return total;
+//     return 50000;
+//   };
+
+//   useEffect(() => {
+//     const loadInvoiceData = async () => {
+//       if (rawInvoiceData) {
+//         console.log('🔄 Mapping Hall Invoice Data');
+
+//         let resolvedBookingData = bookingData;
+
+//         // Fallback fetch if details are missing
+//         if (!resolvedBookingData?.bookingDate && !resolvedBookingData?.hallName) {
+//           const bookingId = rawInvoiceData.voucher?.booking_id || rawInvoiceData.voucher?.id;
+//           if (bookingId) {
+//             try {
+//               const res = await banquetAPI.getHallVoucher(bookingId);
+//               const fetched = res?.data?.Data || res?.data || {};
+//               resolvedBookingData = {
+//                 bookingDate: fetched.booking?.bookingDate || fetched.bookingDate || fetched.eventDate,
+//                 eventTime: fetched.booking?.timeSlot || fetched.timeSlot || fetched.eventTime,
+//                 eventType: fetched.booking?.eventType || fetched.eventType,
+//                 numberOfGuests: fetched.booking?.numberOfGuests || fetched.numberOfGuests,
+//                 bookingDetails: fetched.booking?.bookingDetails || fetched.bookingDetails || [],
+//                 hallName: fetched.hall?.name || fetched.hallName || fetched.booking?.hallName,
+//               };
+//             } catch (err) {
+//               console.warn('⚠️ Could fetch hall booking details:', err);
+//             }
+//           }
+//         }
+
+//         const mappedDetails = {
+//           invoiceNo: rawInvoiceData.voucher?.voucher_no || rawInvoiceData.voucher?.id || 'N/A',
+//           invoiceNumber: rawInvoiceData.voucher?.voucher_no || rawInvoiceData.voucher?.id,
+//           consumerNumber: rawInvoiceData.voucher?.consumer_number,
+//           bookingId: rawInvoiceData.voucher?.booking_id || rawInvoiceData.voucher?.id,
+//           status: rawInvoiceData.voucher?.status || 'PENDING',
+//           issued_at: rawInvoiceData.issue_date || rawInvoiceData.voucher?.issued_at || new Date().toISOString(),
+//           issued_by: rawInvoiceData.voucher?.issued_by || 'System',
+//           dueDate: rawInvoiceData.due_date || rawInvoiceData.voucher?.expiresAt,
+//           amount: rawInvoiceData.voucher?.amount,
+//           totalPrice: rawInvoiceData.voucher?.amount,
+//           paymentMode: rawInvoiceData.voucher?.payment_mode || 'PENDING',
+//           membershipNo: rawInvoiceData.membership?.no || memberDetails?.membershipNo,
+//           memberName: rawInvoiceData.membership?.name || memberDetails?.memberName,
+//           // Hall specific
+//           hallName: venue?.name || resolvedBookingData?.hallName,
+//           eventDate: resolvedBookingData?.bookingDate,
+//           eventTime: resolvedBookingData?.eventTime,
+//           eventType: resolvedBookingData?.eventType,
+//           bookingDetails: resolvedBookingData?.bookingDetails || [],
+//           numberOfGuests: resolvedBookingData?.numberOfGuests,
+//           isGuest: isGuest,
+//           advanceAmount: calculateHallAdvance(rawInvoiceData.voucher?.amount || 0),
+//         };
+
+//         setInvoiceData(mappedDetails);
+//         setLoading(false);
+//       } else {
+//         Alert.alert('Error', 'Invoice data not found');
+//         navigation.goBack();
+//       }
+//     };
+
+//     loadInvoiceData();
+//   }, [rawInvoiceData]);
+
+//   // Real-time payment sync
+//   useEffect(() => {
+//     const voucherId = rawInvoiceData?.voucher?.id;
+//     if (!voucherId) return;
+
+//     const unsubscribe = socketService.subscribeToPayment(voucherId, (data) => {
+//       if (data.status === 'PAID' || data.status === 'CANCELLED' || data.status === 'CONFIRMED') {
+//         setInvoiceData(prev => prev ? { ...prev, status: data.status } : null);
+//       }
+//     });
+
+//     return () => unsubscribe();
+//   }, [rawInvoiceData?.voucher?.id]);
+
+//   // Countdown Timer
+//   useEffect(() => {
+//     const targetDateStr = invoiceData?.dueDate;
+//     if (!targetDateStr || invoiceData?.status === 'PAID') {
+//       if (timeLeft !== '') setTimeLeft('');
+//       return;
+//     }
+//     const targetDate = new Date(targetDateStr).getTime();
+//     if (isNaN(targetDate)) { setTimeLeft(''); return; }
+//     const interval = setInterval(() => {
+//       const now = new Date().getTime();
+//       const distance = targetDate - now;
+//       if (distance < 0) { clearInterval(interval); setTimeLeft('EXPIRED'); return; }
+//       const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+//       const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+//       const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+//       let timeStr = '';
+//       if (hours > 0) timeStr += `${hours}h `;
+//       timeStr += `${minutes}m ${seconds}s`;
+//       setTimeLeft(timeStr);
+//     }, 1000);
+//     return () => clearInterval(interval);
+//   }, [invoiceData?.dueDate, invoiceData?.status]);
+
+//   const handleRefresh = () => {
+//     setRefreshing(true);
+//     setTimeout(() => setRefreshing(false), 1000);
+//   };
+
+//   const handleMakePayment = () => {
+//     // Porting Room's payment flow - DIRECT navigation per request
+//     clearVoucher();
+//     Alert.alert(
+//       'Payment Gateway',
+//       'Payment integration would happen here. For now, please check your bookings list after payment completion.',
+//       [{ text: 'OK' }]
+//     );
+//   };
+
+//   const handleSaveToGallery = async () => {
+//     try {
+//       setSaveLoading(true);
+//       const hasPermission = await permissionService.requestPhotoLibraryPermission();
+//       if (!hasPermission) {
+//         permissionService.handlePermissionDenied();
+//         return;
+//       }
+//       const ref = viewShotRef.current || invoiceRef.current;
+//       if (ref) {
+//         const uri = await captureRef(ref, { format: 'png', quality: 1.0 });
+//         await CameraRoll.save(uri, { type: 'photo' });
+//         Alert.alert('Success', 'Invoice saved to gallery successfully!');
+//       }
+//     } catch (error) {
+//       Alert.alert('Error', 'Failed to save invoice.');
+//     } finally {
+//       setSaveLoading(false);
+//     }
+//   };
+
+//   const handleShareInvoice = async () => {
+//     try {
+//       setShareLoading(true);
+//       await new Promise(resolve => setTimeout(resolve, 300));
+//       const uri = await captureRef(invoiceRef, { format: 'png', quality: 1, result: 'tmpfile' });
+//       await Share.share({
+//         title: `Hall Invoice - ${invoiceData.invoiceNo}`,
+//         url: uri,
+//         message: `Here is the invoice for your PSC hall booking: ${invoiceData.invoiceNo}`,
+//       });
+//     } catch (error) { console.log('Share failed:', error); } finally { setShareLoading(false); }
+//   };
+
+//   const copyToClipboard = () => {
+//     if (!invoiceData?.consumerNumber) return;
+//     Clipboard.setString(invoiceData.consumerNumber);
+//     setCopied(true);
+//     setTimeout(() => setCopied(false), 2000);
+//   };
+
+//   const handleCancelVoucher = async () => {
+//     if (!invoiceData?.consumerNumber) return;
+
+//     Alert.alert(
+//       'Cancel Voucher',
+//       'Are you sure you want to cancel this hall booking request?',
+//       [
+//         { text: 'No', style: 'cancel' },
+//         {
+//           text: 'Yes, Cancel',
+//           style: 'destructive',
+//           onPress: async () => {
+//             try {
+//               setRefreshing(true);
+//               await bookingService.deleteBooking(invoiceData?.consumerNumber);
+//               await clearVoucher();
+//               Alert.alert('Success', 'Booking cancelled');
+//               navigation.reset({ index: 1, routes: [{ name: 'home' }] });
+//             } catch (error) {
+//               Alert.alert('Error', 'Failed to cancel.');
+//             } finally { setRefreshing(false); }
+//           }
+//         }
+//       ]
+//     );
+//   };
+
+//   const formatDate = (dateString) => {
+//     if (!dateString) return 'N/A';
+//     try {
+//       return new Date(dateString).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+//     } catch (error) { return dateString; }
+//   };
+
+//   const formatDateTime = (dateString) => {
+//     if (!dateString) return 'N/A';
+//     try {
+//       return new Date(dateString).toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+//     } catch (error) { return dateString; }
+//   };
+
+//   const formatTimeSlot = (timeSlot) => {
+//     if (!timeSlot) return 'N/A';
+//     const slotMap = { 'DAY': 'Day', 'NIGHT': 'Night', 'MORNING': 'Morning', 'EVENING': 'Evening' };
+//     return slotMap[timeSlot.toUpperCase()] || timeSlot;
+//   };
+
+//   const statusInfo = (() => {
+//     const s = invoiceData?.status?.toUpperCase();
+//     switch (s) {
+//       case 'CONFIRMED': case 'PAID':
+//         return { text: 'CONFIRMED', style: styles.statusConfirmed, icon: 'check-circle', textColor: '#2e7d32' };
+//       case 'CANCELLED':
+//         return { text: 'CANCELLED', style: styles.statusCancelled, icon: 'cancel', textColor: '#dc3545' };
+//       default:
+//         return { text: 'PAYMENT PENDING', style: styles.statusPending, icon: 'payment', textColor: '#aa2e25' };
+//     }
+//   })();
+
+//   if (loading) {
+//     return (
+//       <View style={styles.container}>
+//         <StatusBar backgroundColor="#fffaf2" barStyle="dark-content" />
+//         <ImageBackground source={require("../../assets/notch.jpg")} style={styles.notch} imageStyle={styles.notchImage}>
+//           <View style={styles.notchRow}>
+//             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconWrapper}><Icon name="arrow-back" size={28} color="#000" /></TouchableOpacity>
+//             <Text style={styles.notchTitle}>Hall Invoice</Text>
+//             <View style={styles.iconWrapper} />
+//           </View>
+//         </ImageBackground>
+//         <View style={styles.loadingContainer}>
+//           <ActivityIndicator size="large" color="#b48a64" />
+//           <Text style={styles.loadingText}>Generating invoice...</Text>
+//         </View>
+//       </View>
+//     );
+//   }
+
+//   return (
+//     <View style={styles.container}>
+//       <StatusBar backgroundColor="#fffaf2" barStyle="dark-content" />
+//       <ImageBackground source={require("../../assets/notch.jpg")} style={styles.notch} imageStyle={styles.notchImage}>
+//         <View style={styles.notchRow}>
+//           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconWrapper}><Icon name="arrow-back" size={28} color="#000" /></TouchableOpacity>
+//           <Text style={styles.notchTitle}>Hall Invoice</Text>
+//           <View style={styles.iconWrapper} />
+//         </View>
+//       </ImageBackground>
+
+//       <ScrollView
+//         style={styles.content}
+//         showsVerticalScrollIndicator={false}
+//         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={['#b48a64']} />}
+//       >
+//         {invoiceData && (
+//           <>
+//             <ViewShot ref={viewShotRef} options={{ format: 'png', quality: 1.0 }} style={{ backgroundColor: '#fffaf2' }}>
+//               <View style={styles.invoiceContainer}>
+//                 {/* Header Section */}
+//                 <View style={styles.invoiceHeader}>
+//                   <Icon name={statusInfo.icon} size={40} color={['PAID', 'CONFIRMED'].includes(invoiceData.status.toUpperCase()) ? '#2e7d32' : "#b48a64"} />
+//                   {['PAID', 'CONFIRMED'].includes(invoiceData.status.toUpperCase()) && (
+//                     <Text style={{ color: '#2e7d32', fontWeight: 'bold', marginTop: 5 }}>Payment Successful</Text>
+//                   )}
+//                   <Text style={styles.invoiceTitle}>BANQUET HALL BOOKING</Text>
+//                   <Text style={styles.invoiceSubtitle}>{['PAID', 'CONFIRMED'].includes(invoiceData.status.toUpperCase()) ? "Booking confirmed!" : "Complete payment to confirm."}</Text>
+
+//                   {timeLeft && timeLeft !== 'EXPIRED' && invoiceData.status !== 'PAID' && (
+//                     <View style={styles.timerWrapper}>
+//                       <View style={styles.timerContainer}>
+//                         <Icon name="schedule" size={16} color="#dc3545" />
+//                         <Text style={styles.timerText}> Expires in: {timeLeft}</Text>
+//                       </View>
+//                       <TouchableOpacity style={styles.cancelVoucherGhostButton} onPress={handleCancelVoucher}>
+//                         <Icon name="close" size={14} color="#dc3545" />
+//                         <Text style={styles.cancelVoucherGhostText}> Cancel Voucher</Text>
+//                       </TouchableOpacity>
+//                     </View>
+//                   )}
+//                   {timeLeft === 'EXPIRED' && <Text style={styles.expiredText}>EXPIRED</Text>}
+//                 </View>
+
+//                 {/* Details Section */}
+//                 <View style={styles.invoiceSection}>
+//                   <Text style={styles.sectionTitle}>Invoice Details</Text>
+//                   {[
+//                     { label: 'Invoice Number:', value: invoiceData.invoiceNo, highlight: true },
+//                     { label: 'Consumer Number:', value: invoiceData.consumerNumber, copy: true },
+//                     { label: 'Booking ID:', value: invoiceData.bookingId },
+//                     { label: 'Payment Due:', value: formatDateTime(invoiceData.dueDate), warning: true },
+//                     { label: 'Member Name:', value: invoiceData.memberName },
+//                     { label: 'Membership No:', value: invoiceData.membershipNo }
+//                   ].map((row, i) => row.value ? (
+//                     <View key={i} style={styles.detailRow}>
+//                       <Text style={styles.detailLabel}>{row.label}</Text>
+//                       {row.copy ? (
+//                         <TouchableOpacity onPress={copyToClipboard} style={styles.copyContainer}>
+//                           <Text style={[styles.detailValue, styles.invoiceHighlight]}>{row.value}</Text>
+//                           <Icon name={copied ? "check" : "content-copy"} size={16} color={copied ? "#2e7d32" : "#b48a64"} style={{ marginLeft: 8 }} />
+//                         </TouchableOpacity>
+//                       ) : (
+//                         <Text style={[styles.detailValue, row.highlight && styles.invoiceHighlight, row.warning && styles.dueDate]}>{row.value}</Text>
+//                       )}
+//                     </View>
+//                   ) : null)}
+//                 </View>
+
+//                 {/* Hall Booking Summary */}
+//                 <View style={styles.invoiceSection}>
+//                   <Text style={styles.sectionTitle}>Hall Booking Information</Text>
+//                   <View style={styles.detailRow}><Text style={styles.detailLabel}>Hall Name:</Text><Text style={styles.detailValue}>{invoiceData.hallName}</Text></View>
+
+//                   {invoiceData.bookingDetails?.length > 0 ? (
+//                     <View style={styles.multiDateContainer}>
+//                       <Text style={styles.detailLabel}>Dates & Configurations:</Text>
+//                       {invoiceData.bookingDetails.map((item, index) => (
+//                         <View key={index} style={styles.dateConfigItem}>
+//                           <View style={styles.itemRow}>
+//                             <View style={styles.dateCol}><Icon name="event" size={16} color="#b48a64" /><Text style={styles.dateText}>{formatDate(item.date)}</Text></View>
+//                             <View style={styles.configCol}>
+//                               <View style={styles.configChip}><Text style={styles.configText}>{formatTimeSlot(item.timeSlot)}</Text></View>
+//                               <View style={styles.configChip}><Text style={styles.configText}>{item.eventType}</Text></View>
+//                             </View>
+//                           </View>
+//                         </View>
+//                       ))}
+//                     </View>
+//                   ) : (
+//                     <>
+//                       <View style={styles.detailRow}><Text style={styles.detailLabel}>Event Date:</Text><Text style={styles.detailValue}>{formatDate(invoiceData.eventDate)}</Text></View>
+//                       <View style={styles.detailRow}><Text style={styles.detailLabel}>Time Slot:</Text><Text style={styles.detailValue}>{formatTimeSlot(invoiceData.eventTime)}</Text></View>
+//                       <View style={styles.detailRow}><Text style={styles.detailLabel}>Event Type:</Text><Text style={styles.detailValue}>{invoiceData.eventType}</Text></View>
+//                     </>
+//                   )}
+//                   <View style={styles.detailRow}><Text style={styles.detailLabel}>Expected Guests:</Text><Text style={styles.detailValue}>{invoiceData.numberOfGuests} Persons</Text></View>
+//                 </View>
+
+//                 {/* Payment Breakdown */}
+//                 <View style={styles.invoiceSection}>
+//                   <Text style={styles.sectionTitle}>Payment Details</Text>
+//                   <View style={styles.detailRow}>
+//                     <Text style={styles.detailLabel}>Total Amount:</Text>
+//                     <Text style={[styles.detailValue, styles.totalAmountText]}>Rs. {parseFloat(invoiceData.totalPrice || 0).toLocaleString()}</Text>
+//                   </View>
+//                   <View style={styles.detailRow}>
+//                     <Text style={styles.detailLabel}>Advance Deposit Required:</Text>
+//                     <Text style={[styles.detailValue, styles.advanceAmountText]}>Rs. {parseFloat(invoiceData.advanceAmount || 0).toLocaleString()}</Text>
+//                   </View>
+//                   <View style={styles.detailRow}>
+//                     <Text style={styles.detailLabel}>Status:</Text>
+//                     <View style={[styles.statusBadge, statusInfo.style]}><Text style={[styles.statusText, { color: statusInfo.textColor }]}>{statusInfo.text}</Text></View>
+//                   </View>
+//                 </View>
+
+//                 {/* Footer Info */}
+//                 <View style={styles.instructions}>
+//                   <Text style={styles.instructionsTitle}>Important Information</Text>
+//                   {["Complete payment within 1 hour.", "Present this voucher at the club office.", "Adhere to hall booking policies."].map((txt, i) => (
+//                     <View key={i} style={styles.instructionItem}><Icon name="info-outline" size={16} color="#1565c0" /><Text style={styles.instructionText}>{txt}</Text></View>
+//                   ))}
+//                 </View>
+//               </View>
+//             </ViewShot>
+
+//             {/* Hidden capture view */}
+//             <View style={shareStyles.offScreenContainer}>
+//               <ViewShot ref={invoiceRef} options={{ format: 'png', quality: 1.0 }} style={shareStyles.invoiceSheet}>
+//                 <View style={shareStyles.header}><Text style={shareStyles.headerTitle}>PSC BANQUET HALL</Text><View style={shareStyles.headerDivider} /><Text style={shareStyles.headerSubtitle}>Official Booking Invoice</Text></View>
+//                 <View style={shareStyles.confirmedBadge}><Text style={shareStyles.confirmedBadgeText}>✓ {statusInfo.text}</Text></View>
+//                 <View style={shareStyles.section}>
+//                   <Text style={shareStyles.sectionTitle}>Booking Summary</Text><View style={shareStyles.sectionDivider} />
+//                   <View style={shareStyles.row}><Text style={shareStyles.label}>Invoice:</Text><Text style={shareStyles.value}>{invoiceData.invoiceNo}</Text></View>
+//                   <View style={shareStyles.row}><Text style={shareStyles.label}>Hall:</Text><Text style={shareStyles.value}>{invoiceData.hallName}</Text></View>
+//                   <View style={shareStyles.row}><Text style={shareStyles.label}>Advance:</Text><Text style={shareStyles.value}>Rs. {parseFloat(invoiceData.advanceAmount || 0).toLocaleString()}</Text></View>
+//                 </View>
+//                 <View style={shareStyles.footer}><View style={shareStyles.footerDivider} /><Text style={shareStyles.footerText}>Thank you for choosing PSC!</Text></View>
+//               </ViewShot>
+//             </View>
+
+//             {/* Actions */}
+//             <View style={{ padding: 15 }}>
+//               <View style={styles.actionButtons}>
+//                 <TouchableOpacity style={styles.secondaryButton} onPress={handleSaveToGallery} disabled={saveLoading}>
+//                   {saveLoading ? <ActivityIndicator size="small" /> : <><Icon name="file-download" size={20} color="#b48a64" /><Text style={styles.secondaryButtonText}>Save to Gallery</Text></>}
+//                 </TouchableOpacity>
+//                 <TouchableOpacity style={styles.shareButton} onPress={handleShareInvoice} disabled={shareLoading}>
+//                   <Icon name="share" size={20} color="#fff" /><Text style={styles.shareButtonText}>Share Invoice</Text>
+//                 </TouchableOpacity>
+//               </View>
+//               {invoiceData.status !== 'PAID' && (
+//                 <TouchableOpacity style={styles.primaryButton} onPress={handleMakePayment}>
+//                   <Icon name="payment" size={20} color="#fff" /><Text style={styles.primaryButtonText}>Pay Advance Now</Text>
+//                 </TouchableOpacity>
+//               )}
+//             </View>
+//           </>
+//         )}
+//       </ScrollView>
+//     </View>
+//   );
+// }
+
+// const styles = StyleSheet.create({
+//   container: { flex: 1, backgroundColor: '#f9f3eb' },
+//   notch: { paddingTop: 50, paddingBottom: 25, paddingHorizontal: 20, borderBottomLeftRadius: 30, borderBottomRightRadius: 30, overflow: "hidden", backgroundColor: "#D2B48C" },
+//   notchImage: { resizeMode: "cover" },
+//   notchRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingBottom: 10 },
+//   iconWrapper: { width: 40, height: 40, justifyContent: "center", alignItems: "center" },
+//   notchTitle: { fontSize: 22, fontWeight: "600", color: "#000" },
+//   content: { flex: 1 },
+//   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
+//   loadingText: { marginTop: 10, color: '#666', fontSize: 16 },
+//   invoiceContainer: { padding: 15 },
+//   invoiceHeader: { alignItems: 'center', padding: 20, backgroundColor: '#fff', borderRadius: 12, marginBottom: 20, elevation: 2 },
+//   invoiceTitle: { fontSize: 20, fontWeight: 'bold', color: '#333', marginTop: 10, textAlign: 'center' },
+//   invoiceSubtitle: { fontSize: 14, color: '#666', textAlign: 'center' },
+//   invoiceSection: { backgroundColor: '#fff', padding: 18, borderRadius: 12, marginBottom: 15, elevation: 2 },
+//   sectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#333', marginBottom: 15, borderBottomWidth: 1, borderBottomColor: '#eee', paddingBottom: 8 },
+//   detailRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+//   detailLabel: { fontSize: 12, color: '#666', fontWeight: '500' },
+//   detailValue: { fontSize: 14, color: '#333', fontWeight: '600', textAlign: 'right', flex: 1, marginLeft: 10 },
+//   invoiceHighlight: { color: '#b48a64', fontWeight: 'bold' },
+//   timerWrapper: { alignItems: 'center', marginTop: 10 },
+//   timerContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff1f0', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 15, borderWidth: 1, borderColor: '#ffa39e' },
+//   timerText: { fontSize: 14, fontWeight: 'bold', color: '#dc3545' },
+//   cancelVoucherGhostButton: { flexDirection: 'row', alignItems: 'center', marginTop: 10, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: '#ffa39e', backgroundColor: '#fff1f0' },
+//   cancelVoucherGhostText: { fontSize: 13, fontWeight: 'bold', color: '#dc3545' },
+//   expiredText: { fontSize: 14, fontWeight: 'bold', color: '#dc3545', marginTop: 10 },
+//   dueDate: { color: '#dc3545', fontWeight: 'bold' },
+//   multiDateContainer: { marginTop: 10, marginBottom: 10 },
+//   dateConfigItem: { backgroundColor: '#f8f9fa', borderRadius: 10, padding: 10, marginTop: 8, borderWidth: 1, borderColor: '#eee' },
+//   itemRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+//   dateCol: { flexDirection: 'row', alignItems: 'center' },
+//   dateText: { fontSize: 13, fontWeight: 'bold', color: '#333', marginLeft: 6 },
+//   configCol: { flexDirection: 'row', alignItems: 'center' },
+//   configChip: { backgroundColor: '#fff', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, borderWidth: 1, borderColor: '#e2e8f0', marginLeft: 4 },
+//   configText: { fontSize: 11, color: '#4A5568', textTransform: 'capitalize' },
+//   totalAmountText: { fontSize: 15, color: '#333', fontWeight: '600' },
+//   advanceAmountText: { fontSize: 18, fontWeight: 'bold', color: '#b48a64' },
+//   statusBadge: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 },
+//   statusConfirmed: { backgroundColor: '#d4efdf' },
+//   statusPending: { backgroundColor: '#fadbd8' },
+//   statusCancelled: { backgroundColor: '#f8d7da' },
+//   statusText: { fontSize: 12, fontWeight: 'bold' },
+//   copyContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', flex: 1 },
+//   instructions: { backgroundColor: '#f0f7ff', padding: 16, borderRadius: 12, marginTop: 5 },
+//   instructionsTitle: { fontSize: 14, fontWeight: 'bold', color: '#1565c0', marginBottom: 10 },
+//   instructionItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+//   instructionText: { fontSize: 12, color: '#1565c0', marginLeft: 8, flex: 1 },
+//   actionButtons: { flexDirection: 'row', marginBottom: 10 },
+//   secondaryButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#b48a64', marginRight: 10 },
+//   secondaryButtonText: { color: '#b48a64', fontWeight: '600', marginLeft: 8 },
+//   shareButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 12, borderRadius: 8, backgroundColor: '#2196f3' },
+//   shareButtonText: { color: '#fff', fontWeight: '600', marginLeft: 8 },
+//   primaryButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#b48a64', padding: 15, borderRadius: 8 },
+//   primaryButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 16, marginLeft: 8 },
+// });
+
+// const shareStyles = StyleSheet.create({
+//   offScreenContainer: { position: 'absolute', left: -9999, top: 0, opacity: 1 },
+//   invoiceSheet: { width: 380, backgroundColor: '#ffffff', padding: 24 },
+//   header: { alignItems: 'center', marginBottom: 16 },
+//   headerTitle: { fontSize: 22, fontWeight: 'bold', color: '#1a1a1a', letterSpacing: 1.5 },
+//   headerDivider: { width: 60, height: 3, backgroundColor: '#b48a64', marginVertical: 10, borderRadius: 2 },
+//   headerSubtitle: { fontSize: 13, color: '#777' },
+//   confirmedBadge: { backgroundColor: '#e8f5e9', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 6, alignItems: 'center', marginBottom: 18, borderWidth: 1, borderColor: '#c8e6c9' },
+//   confirmedBadgeText: { color: '#2e7d32', fontWeight: 'bold', fontSize: 14 },
+//   section: { marginBottom: 16 },
+//   sectionTitle: { fontSize: 14, fontWeight: 'bold', color: '#444', marginBottom: 6, textTransform: 'uppercase' },
+//   sectionDivider: { height: 1, backgroundColor: '#e0e0e0', marginBottom: 10 },
+//   row: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5 },
+//   label: { fontSize: 13, color: '#666' },
+//   value: { fontSize: 13, color: '#222', fontWeight: '600', textAlign: 'right', flex: 1, marginLeft: 10 },
+//   footer: { alignItems: 'center', marginTop: 8, paddingTop: 12 },
+//   footerDivider: { width: '100%', height: 1, backgroundColor: '#e0e0e0', marginBottom: 12 },
+//   footerText: { fontSize: 14, fontWeight: '600', color: '#333' },
+// });
+
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -57,26 +589,77 @@ export default function HallInvoiceScreen({ navigation, route }) {
     const loadInvoiceData = async () => {
       if (rawInvoiceData) {
         console.log('🔄 Mapping Hall Invoice Data');
+        console.log('📦 bookingData from params:', JSON.stringify(bookingData));
+        console.log('📦 venue from params:', JSON.stringify(venue));
 
-        let resolvedBookingData = bookingData;
+        let resolvedBookingData = bookingData || {};
+        let resolvedVenue = venue || {};
+
+        // Check if critical hall booking fields are actually populated
+        const hasCriticalDetails = (
+          (resolvedBookingData?.bookingDate || resolvedBookingData?.eventDate) &&
+          (resolvedBookingData?.hallName || resolvedVenue?.name)
+        );
 
         // Fallback fetch if details are missing
-        if (!resolvedBookingData?.bookingDate && !resolvedBookingData?.hallName) {
+        if (!hasCriticalDetails) {
           const bookingId = rawInvoiceData.voucher?.booking_id || rawInvoiceData.voucher?.id;
+          console.log('🔍 Missing hall details, attempting fallback fetch for bookingId:', bookingId);
           if (bookingId) {
             try {
               const res = await banquetAPI.getHallVoucher(bookingId);
+              console.log('📥 getHallVoucher response:', JSON.stringify(res?.data));
               const fetched = res?.data?.Data || res?.data || {};
+
+              // The API may return data in various nested structures
+              const booking = fetched.booking || fetched.Booking || {};
+              const hall = fetched.hall || fetched.Hall || {};
+              const voucherData = fetched.voucher || fetched.Voucher || {};
+
               resolvedBookingData = {
-                bookingDate: fetched.booking?.bookingDate || fetched.bookingDate || fetched.eventDate,
-                eventTime: fetched.booking?.timeSlot || fetched.timeSlot || fetched.eventTime,
-                eventType: fetched.booking?.eventType || fetched.eventType,
-                numberOfGuests: fetched.booking?.numberOfGuests || fetched.numberOfGuests,
-                bookingDetails: fetched.booking?.bookingDetails || fetched.bookingDetails || [],
-                hallName: fetched.hall?.name || fetched.hallName || fetched.booking?.hallName,
+                bookingDate: booking.bookingDate || booking.booking_date || fetched.bookingDate || fetched.eventDate || booking.eventDate,
+                eventTime: booking.timeSlot || booking.time_slot || booking.eventTime || fetched.timeSlot || fetched.eventTime,
+                eventType: booking.eventType || booking.event_type || fetched.eventType,
+                numberOfGuests: booking.numberOfGuests || booking.number_of_guests || fetched.numberOfGuests,
+                bookingDetails: booking.bookingDetails || booking.booking_details || fetched.bookingDetails || [],
+                hallName: hall.name || booking.hallName || fetched.hallName,
               };
+
+              // Also resolve venue from the fetch if we don't have it
+              if (!resolvedVenue?.name && (hall.name || fetched.hallName)) {
+                resolvedVenue = { ...resolvedVenue, name: hall.name || fetched.hallName };
+              }
+
+              console.log('✅ Resolved booking data from API:', JSON.stringify(resolvedBookingData));
             } catch (err) {
-              console.warn('⚠️ Could fetch hall booking details:', err);
+              console.warn('⚠️ Could not fetch hall booking details from getHallVoucher:', err);
+
+              // Secondary fallback: try voucherAPI.getVoucherByType
+              try {
+                const { voucherAPI } = require('../../config/apis');
+                const res2 = await voucherAPI.getVoucherByType('HALL', bookingId);
+                console.log('📥 getVoucherByType HALL response:', JSON.stringify(res2?.data));
+                const fetched2 = res2?.data?.Data || res2?.data || {};
+                const booking2 = fetched2.booking || fetched2.Booking || {};
+                const hall2 = fetched2.hall || fetched2.Hall || {};
+
+                resolvedBookingData = {
+                  bookingDate: booking2.bookingDate || booking2.booking_date || fetched2.bookingDate || fetched2.eventDate,
+                  eventTime: booking2.timeSlot || booking2.time_slot || booking2.eventTime || fetched2.timeSlot || fetched2.eventTime,
+                  eventType: booking2.eventType || booking2.event_type || fetched2.eventType,
+                  numberOfGuests: booking2.numberOfGuests || booking2.number_of_guests || fetched2.numberOfGuests,
+                  bookingDetails: booking2.bookingDetails || booking2.booking_details || fetched2.bookingDetails || [],
+                  hallName: hall2.name || booking2.hallName || fetched2.hallName,
+                };
+
+                if (!resolvedVenue?.name && (hall2.name || fetched2.hallName)) {
+                  resolvedVenue = { ...resolvedVenue, name: hall2.name || fetched2.hallName };
+                }
+
+                console.log('✅ Resolved booking data from secondary fallback:', JSON.stringify(resolvedBookingData));
+              } catch (err2) {
+                console.warn('⚠️ Secondary fallback also failed:', err2);
+              }
             }
           }
         }
@@ -95,9 +678,9 @@ export default function HallInvoiceScreen({ navigation, route }) {
           paymentMode: rawInvoiceData.voucher?.payment_mode || 'PENDING',
           membershipNo: rawInvoiceData.membership?.no || memberDetails?.membershipNo,
           memberName: rawInvoiceData.membership?.name || memberDetails?.memberName,
-          // Hall specific
-          hallName: venue?.name || resolvedBookingData?.hallName,
-          eventDate: resolvedBookingData?.bookingDate,
+          // Hall specific - try venue first, then resolvedBookingData
+          hallName: resolvedVenue?.name || resolvedBookingData?.hallName,
+          eventDate: resolvedBookingData?.bookingDate || resolvedBookingData?.eventDate,
           eventTime: resolvedBookingData?.eventTime,
           eventType: resolvedBookingData?.eventType,
           bookingDetails: resolvedBookingData?.bookingDetails || [],
@@ -106,6 +689,7 @@ export default function HallInvoiceScreen({ navigation, route }) {
           advanceAmount: calculateHallAdvance(rawInvoiceData.voucher?.amount || 0),
         };
 
+        console.log('📋 Final mapped invoice details:', JSON.stringify(mappedDetails));
         setInvoiceData(mappedDetails);
         setLoading(false);
       } else {
@@ -155,9 +739,39 @@ export default function HallInvoiceScreen({ navigation, route }) {
     return () => clearInterval(interval);
   }, [invoiceData?.dueDate, invoiceData?.status]);
 
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1000);
+    try {
+      // If hall details are missing, try to re-fetch them
+      if (!invoiceData?.hallName || !invoiceData?.eventDate) {
+        const bookingId = rawInvoiceData?.voucher?.booking_id || rawInvoiceData?.voucher?.id;
+        if (bookingId) {
+          try {
+            const res = await banquetAPI.getHallVoucher(bookingId);
+            const fetched = res?.data?.Data || res?.data || {};
+            const booking = fetched.booking || fetched.Booking || {};
+            const hall = fetched.hall || fetched.Hall || {};
+
+            setInvoiceData(prev => ({
+              ...prev,
+              hallName: prev?.hallName || hall.name || booking.hallName || fetched.hallName,
+              eventDate: prev?.eventDate || booking.bookingDate || booking.booking_date || fetched.bookingDate || fetched.eventDate,
+              eventTime: prev?.eventTime || booking.timeSlot || booking.time_slot || booking.eventTime || fetched.timeSlot || fetched.eventTime,
+              eventType: prev?.eventType || booking.eventType || booking.event_type || fetched.eventType,
+              numberOfGuests: prev?.numberOfGuests || booking.numberOfGuests || booking.number_of_guests || fetched.numberOfGuests,
+              bookingDetails: (prev?.bookingDetails?.length > 0) ? prev.bookingDetails : (booking.bookingDetails || booking.booking_details || fetched.bookingDetails || []),
+            }));
+            console.log('✅ Refreshed hall booking details successfully');
+          } catch (err) {
+            console.warn('⚠️ Refresh: Could not fetch hall details:', err);
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('⚠️ Refresh error:', error);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const handleMakePayment = () => {
@@ -361,7 +975,7 @@ export default function HallInvoiceScreen({ navigation, route }) {
                 {/* Hall Booking Summary */}
                 <View style={styles.invoiceSection}>
                   <Text style={styles.sectionTitle}>Hall Booking Information</Text>
-                  <View style={styles.detailRow}><Text style={styles.detailLabel}>Hall Name:</Text><Text style={styles.detailValue}>{invoiceData.hallName}</Text></View>
+                  <View style={styles.detailRow}><Text style={styles.detailLabel}>Hall Name:</Text><Text style={styles.detailValue}>{invoiceData.hallName || 'N/A'}</Text></View>
 
                   {invoiceData.bookingDetails?.length > 0 ? (
                     <View style={styles.multiDateContainer}>
@@ -385,7 +999,7 @@ export default function HallInvoiceScreen({ navigation, route }) {
                       <View style={styles.detailRow}><Text style={styles.detailLabel}>Event Type:</Text><Text style={styles.detailValue}>{invoiceData.eventType}</Text></View>
                     </>
                   )}
-                  <View style={styles.detailRow}><Text style={styles.detailLabel}>Expected Guests:</Text><Text style={styles.detailValue}>{invoiceData.numberOfGuests} Persons</Text></View>
+                  <View style={styles.detailRow}><Text style={styles.detailLabel}>Expected Guests:</Text><Text style={styles.detailValue}>{invoiceData.numberOfGuests ? `${invoiceData.numberOfGuests} Persons` : 'N/A'}</Text></View>
                 </View>
 
                 {/* Payment Breakdown */}
@@ -406,10 +1020,13 @@ export default function HallInvoiceScreen({ navigation, route }) {
                 </View>
 
                 {/* Footer Info */}
-                <View style={styles.instructions}>
-                  <Text style={styles.instructionsTitle}>Important Information</Text>
+                <View style={[styles.invoiceSection, { marginTop: 5 }]}>
+                  <Text style={styles.sectionTitle}>Important Information</Text>
                   {["Complete payment within 1 hour.", "Present this voucher at the club office.", "Adhere to hall booking policies."].map((txt, i) => (
-                    <View key={i} style={styles.instructionItem}><Icon name="info-outline" size={16} color="#1565c0" /><Text style={styles.instructionText}>{txt}</Text></View>
+                    <View key={i} style={styles.instructionItem}>
+                      <Icon name="info-outline" size={16} color="#b48a64" />
+                      <Text style={styles.instructionText}>{txt}</Text>
+                    </View>
                   ))}
                 </View>
               </View>
@@ -433,18 +1050,25 @@ export default function HallInvoiceScreen({ navigation, route }) {
             {/* Actions */}
             <View style={{ padding: 15 }}>
               <View style={styles.actionButtons}>
-                <TouchableOpacity style={styles.secondaryButton} onPress={handleSaveToGallery} disabled={saveLoading}>
-                  {saveLoading ? <ActivityIndicator size="small" /> : <><Icon name="file-download" size={20} color="#b48a64" /><Text style={styles.secondaryButtonText}>Save to Gallery</Text></>}
+                <TouchableOpacity
+                  style={styles.saveButton}
+                  onPress={handleSaveToGallery}
+                  disabled={saveLoading}
+                >
+                  <Icon name="file-download" size={20} color="#fff" />
+                  <Text style={styles.saveButtonText}>
+                    {saveLoading ? 'Saving...' : 'Save to Gallery'}
+                  </Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.shareButton} onPress={handleShareInvoice} disabled={shareLoading}>
+                {/* <TouchableOpacity style={styles.shareButton} onPress={handleShareInvoice} disabled={shareLoading}>
                   <Icon name="share" size={20} color="#fff" /><Text style={styles.shareButtonText}>Share Invoice</Text>
-                </TouchableOpacity>
+                </TouchableOpacity> */}
               </View>
-              {invoiceData.status !== 'PAID' && (
+              {/* {invoiceData.status !== 'PAID' && (
                 <TouchableOpacity style={styles.primaryButton} onPress={handleMakePayment}>
                   <Icon name="payment" size={20} color="#fff" /><Text style={styles.primaryButtonText}>Pay Advance Now</Text>
                 </TouchableOpacity>
-              )}
+              )} */}
             </View>
           </>
         )}
@@ -496,11 +1120,28 @@ const styles = StyleSheet.create({
   statusCancelled: { backgroundColor: '#f8d7da' },
   statusText: { fontSize: 12, fontWeight: 'bold' },
   copyContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', flex: 1 },
-  instructions: { backgroundColor: '#f0f7ff', padding: 16, borderRadius: 12, marginTop: 5 },
-  instructionsTitle: { fontSize: 14, fontWeight: 'bold', color: '#1565c0', marginBottom: 10 },
-  instructionItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  instructionText: { fontSize: 12, color: '#1565c0', marginLeft: 8, flex: 1 },
-  actionButtons: { flexDirection: 'row', marginBottom: 10 },
+  instructionItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+  instructionText: { fontSize: 13, color: '#666', marginLeft: 10, flex: 1 },
+  actionButtons: {
+    flexDirection: 'row',
+    marginBottom: 15,
+    paddingHorizontal: 0, // Padding handled by parent container
+  },
+  saveButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: '#b48a64',
+  },
+  saveButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
+    marginLeft: 8,
+  },
   secondaryButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#b48a64', marginRight: 10 },
   secondaryButtonText: { color: '#b48a64', fontWeight: '600', marginLeft: 8 },
   shareButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 12, borderRadius: 8, backgroundColor: '#2196f3' },
