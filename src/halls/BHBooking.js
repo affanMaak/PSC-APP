@@ -2659,45 +2659,34 @@ const BHBooking = ({ route, navigation }) => {
       console.log("hall booking res:", response)
 
       if (response.status === 201) {
-        Alert.alert(
-          'Invoice Generated Successfully!',
-          'Please complete the payment to confirm your reservation.',
-          [
-            {
-              text: 'Proceed to Payment',
-              onPress: () => {
-                // Prepare navigation params
-                const navigationParams = {
-                  invoiceData: response.data.Data || response.data,
-                  bookingData: {
-                    ...bookingData,
-                    hallId: venue.id,
-                    hallName: venue.name,
-                    hallDescription: venue.description,
-                    totalAmount: response.data.Data?.Amount || response.data.Amount,
-                  },
-                  venue: venue,
-                  isGuest: isGuest,
-                  memberDetails: !isGuest ? {
-                    memberName: userName,
-                    membershipNo: membershipNo
-                  } : null,
-                  guestDetails: isGuest ? {
-                    guestName,
-                    guestContact
-                  } : null,
-                  module: 'HALL'
-                };
+        // Prepare navigation params
+        const navigationParams = {
+          invoiceData: response.data.Data || response.data,
+          bookingData: {
+            ...bookingData,
+            hallId: venue.id,
+            hallName: venue.name,
+            hallDescription: venue.description,
+            totalAmount: response.data.Data?.Amount || response.data.Amount,
+          },
+          venue: venue,
+          isGuest: isGuest,
+          memberDetails: !isGuest ? {
+            memberName: userName,
+            membershipNo: membershipNo
+          } : null,
+          guestDetails: isGuest ? {
+            guestName,
+            guestContact
+          } : null,
+          module: 'HALL'
+        };
 
-                // Set global voucher for persistent timer
-                setVoucher(response.data.Data || response.data, navigationParams);
+        // Set global voucher for persistent timer
+        setVoucher(response.data.Data || response.data, navigationParams);
 
-                // Navigate to invoice screen
-                navigation.navigate('HallInvoiceScreen', navigationParams);
-              }
-            },
-          ]
-        );
+        // Navigate to invoice screen
+        navigation.navigate('HallInvoiceScreen', navigationParams);
       } else {
         throw new Error(response.data.ResponseMessage || 'Failed to generate invoice');
       }

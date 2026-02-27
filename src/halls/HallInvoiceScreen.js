@@ -555,7 +555,7 @@ import { useAuth } from '../auth/contexts/AuthContext';
 import { useVoucher } from '../auth/contexts/VoucherContext';
 import socketService from '../../services/socket.service';
 import { permissionService } from '../services/PermissionService';
-import { banquetAPI } from '../../config/apis';
+import { banquetAPI, getAuthToken, getBaseUrl } from '../../config/apis';
 
 export default function HallInvoiceScreen({ navigation, route }) {
   const { clearVoucher } = useVoucher();
@@ -589,78 +589,235 @@ export default function HallInvoiceScreen({ navigation, route }) {
     const loadInvoiceData = async () => {
       if (rawInvoiceData) {
         console.log('🔄 Mapping Hall Invoice Data');
-        console.log('📦 bookingData from params:', JSON.stringify(bookingData));
-        console.log('📦 venue from params:', JSON.stringify(venue));
+        console.log('📦 Received bookingData:', JSON.stringify(bookingData));
+        console.log('📦 Received venue:', JSON.stringify(venue));
+        console.log('📦 Received memberDetails:', JSON.stringify(memberDetails));
 
-        let resolvedBookingData = bookingData || {};
-        let resolvedVenue = venue || {};
+        // Prioritize passed data over API fetch
+        let resolvedBookingData = {};
+        let resolvedVenue = {};
 
-        // Check if critical hall booking fields are actually populated
-        const hasCriticalDetails = (
-          (resolvedBookingData?.bookingDate || resolvedBookingData?.eventDate) &&
-          (resolvedBookingData?.hallName || resolvedVenue?.name)
+        // Use passed bookingData if available AND it has real content
+        // bookingData from SummaryBarTimer is often just {"bookingDetails":[]} (empty shell)
+        const hasRealBookingData = bookingData && (
+          bookingData.eventTime || bookingData.timeSlot || bookingData.time_slot ||
+          bookingData.eventType || bookingData.event_type ||
+          bookingData.numberOfGuests || bookingData.number_of_guests || bookingData.guests ||
+          (bookingData.bookingDetails && bookingData.bookingDetails.length > 0)
         );
 
-        // Fallback fetch if details are missing
-        if (!hasCriticalDetails) {
+        if (hasRealBookingData) {
+          console.log('📦 Using passed bookingData (has real content):', JSON.stringify(bookingData));
+          resolvedBookingData = {
+            ...bookingData,
+            hallName: bookingData.hallName || bookingData.hall_name || venue?.name,
+            bookingDate: bookingData.bookingDate || bookingData.booking_date || bookingData.eventDate || bookingData.event_date,
+            eventTime: bookingData.eventTime || bookingData.timeSlot || bookingData.event_time || bookingData.time_slot,
+            eventType: bookingData.eventType || bookingData.event_type,
+            numberOfGuests: bookingData.numberOfGuests || bookingData.number_of_guests || bookingData.guests,
+            bookingDetails: bookingData.bookingDetails || bookingData.booking_details || [],
+          };
+        } else {
+          console.log('⚠️ No real bookingData passed (empty or missing), will fetch from API');
+          // Preserve hallName / bookingDate from the empty shell if they exist
+          if (bookingData) {
+            resolvedBookingData.hallName = bookingData.hallName || bookingData.hall_name;
+            resolvedBookingData.bookingDate = bookingData.bookingDate || bookingData.booking_date || bookingData.eventDate;
+          }
+        }
+
+        // Use passed venue data
+        if (venue && Object.keys(venue).length > 0) {
+          resolvedVenue = { ...venue };
+        }
+
+        // Extract from rawInvoiceData nested objects
+        if (rawInvoiceData?.hall) {
+          if (!resolvedBookingData.hallName) resolvedBookingData.hallName = rawInvoiceData.hall.name || rawInvoiceData.hall.Name || rawInvoiceData.hall.hallName;
+        }
+        if (rawInvoiceData?.booking) {
+          if (!resolvedBookingData.bookingDate) resolvedBookingData.bookingDate = rawInvoiceData.booking.bookingDate || rawInvoiceData.booking.eventDate;
+          if (!resolvedBookingData.eventTime) resolvedBookingData.eventTime = rawInvoiceData.booking.eventTime || rawInvoiceData.booking.timeSlot || rawInvoiceData.booking.bookingTime;
+          if (!resolvedBookingData.eventType) resolvedBookingData.eventType = rawInvoiceData.booking.eventType;
+          if (!resolvedBookingData.numberOfGuests) resolvedBookingData.numberOfGuests = rawInvoiceData.booking.numberOfGuests;
+          if (!resolvedBookingData.bookingDetails?.length) resolvedBookingData.bookingDetails = rawInvoiceData.booking.bookingDetails || [];
+        }
+
+        // Extract from rawInvoiceData top-level fields
+        if (!resolvedBookingData.hallName) resolvedBookingData.hallName = rawInvoiceData?.hallName || rawInvoiceData?.bookingName;
+        if (!resolvedBookingData.eventTime) resolvedBookingData.eventTime = rawInvoiceData?.timeSlot || rawInvoiceData?.time_slot || rawInvoiceData?.eventTime;
+        if (!resolvedBookingData.eventType) resolvedBookingData.eventType = rawInvoiceData?.eventType || rawInvoiceData?.event_type;
+        if (!resolvedBookingData.numberOfGuests) resolvedBookingData.numberOfGuests = rawInvoiceData?.numberOfGuests || rawInvoiceData?.guests || rawInvoiceData?.no_of_guests || rawInvoiceData?.guest_count;
+        if (!resolvedBookingData.bookingDate) resolvedBookingData.bookingDate = rawInvoiceData?.eventDate || rawInvoiceData?.bookingDate;
+
+        // Extract hall name and date from remarks string as partial fallback
+        const remarks = rawInvoiceData?.voucher?.remarks || '';
+        if (remarks) {
+          console.log('🔍 Checking remarks for data:', remarks);
+
+          if (!resolvedBookingData.hallName) {
+            const hallMatch = remarks.match(/for\s+(.*?)\s+booking/i);
+            if (hallMatch) {
+              resolvedBookingData.hallName = hallMatch[1].trim();
+            }
+          }
+
+          if (!resolvedBookingData.bookingDate) {
+            const dateMatch = remarks.match(/on\s+(\d{1,2}\/\d{1,2}\/\d{4}|\d{4}-\d{2}-\d{2})/i);
+            if (dateMatch) {
+              const extractedDate = dateMatch[1];
+              let dateObj;
+              if (extractedDate.includes('/')) {
+                const parts = extractedDate.split('/');
+                if (parts.length === 3) {
+                  const isoDate = `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
+                  dateObj = new Date(isoDate);
+                }
+              } else {
+                dateObj = new Date(extractedDate);
+              }
+              if (dateObj && !isNaN(dateObj.getTime())) {
+                resolvedBookingData.bookingDate = dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+              } else {
+                resolvedBookingData.bookingDate = extractedDate;
+              }
+            }
+          }
+
+          // Try to extract event type from remarks (common event keywords)
+          if (!resolvedBookingData.eventType) {
+            const eventMatch = remarks.match(/(wedding|anniversary|birthday|valima|mehndi|mehandi|reception|party|corporate|seminar|conference|engagement|nikah|aqeeqah)/i);
+            if (eventMatch) {
+              resolvedBookingData.eventType = eventMatch[1].toLowerCase();
+            }
+          }
+
+          // Try to extract time slot from remarks
+          if (!resolvedBookingData.eventTime) {
+            const timeMatch = remarks.match(/(MORNING|EVENING|DAY|NIGHT)/i);
+            if (timeMatch) {
+              resolvedBookingData.eventTime = timeMatch[1].toUpperCase();
+            }
+          }
+
+          // Try to extract guest count from remarks
+          if (!resolvedBookingData.numberOfGuests) {
+            const guestsMatch = remarks.match(/(\d+)\s*(?:guests?|persons?|pax)/i) || remarks.match(/(?:guests?|persons?|pax)\s*[:=]?\s*(\d+)/i);
+            if (guestsMatch) {
+              resolvedBookingData.numberOfGuests = parseInt(guestsMatch[1], 10);
+            }
+          }
+        }
+
+        // Use passed member details
+        const resolvedMemberDetails = memberDetails || {};
+
+        // Check if we still need to fetch — are any of the KEY display fields missing?
+        const needsFetch = !resolvedBookingData.eventTime ||
+          !resolvedBookingData.eventType ||
+          !resolvedBookingData.numberOfGuests ||
+          (!resolvedBookingData.bookingDetails?.length && !resolvedBookingData.bookingDate);
+
+        console.log('📊 needsFetch:', needsFetch, '| eventTime:', resolvedBookingData.eventTime, '| eventType:', resolvedBookingData.eventType, '| guests:', resolvedBookingData.numberOfGuests);
+        console.log('📊 resolvedBookingData:', JSON.stringify(resolvedBookingData));
+        console.log('📊 resolvedVenue:', JSON.stringify(resolvedVenue));
+
+        if (needsFetch) {
           const bookingId = rawInvoiceData.voucher?.booking_id || rawInvoiceData.voucher?.id;
-          console.log('🔍 Missing hall details, attempting fallback fetch for bookingId:', bookingId);
+          console.log('🔍 Missing hall details, fetching from API for bookingId:', bookingId);
           if (bookingId) {
             try {
-              const res = await banquetAPI.getHallVoucher(bookingId);
-              console.log('📥 getHallVoucher response:', JSON.stringify(res?.data));
-              const fetched = res?.data?.Data || res?.data || {};
+              // PRIMARY: Fetch all halls — each hall has a bookings[] array with full details
+              const hallsRes = await banquetAPI.getAllHalls();
+              const hallsData = hallsRes?.data?.Data || hallsRes?.data || [];
+              const allHalls = Array.isArray(hallsData) ? hallsData : [];
+              console.log('📥 getAllHalls: found', allHalls.length, 'halls');
 
-              // The API may return data in various nested structures
-              const booking = fetched.booking || fetched.Booking || {};
-              const hall = fetched.hall || fetched.Hall || {};
-              const voucherData = fetched.voucher || fetched.Voucher || {};
-
-              resolvedBookingData = {
-                bookingDate: booking.bookingDate || booking.booking_date || fetched.bookingDate || fetched.eventDate || booking.eventDate,
-                eventTime: booking.timeSlot || booking.time_slot || booking.eventTime || fetched.timeSlot || fetched.eventTime,
-                eventType: booking.eventType || booking.event_type || fetched.eventType,
-                numberOfGuests: booking.numberOfGuests || booking.number_of_guests || fetched.numberOfGuests,
-                bookingDetails: booking.bookingDetails || booking.booking_details || fetched.bookingDetails || [],
-                hallName: hall.name || booking.hallName || fetched.hallName,
-              };
-
-              // Also resolve venue from the fetch if we don't have it
-              if (!resolvedVenue?.name && (hall.name || fetched.hallName)) {
-                resolvedVenue = { ...resolvedVenue, name: hall.name || fetched.hallName };
+              // Search all halls' bookings for our booking_id
+              let matchedBooking = null;
+              let matchedHall = null;
+              for (const hall of allHalls) {
+                const bookings = hall.bookings || [];
+                const found = bookings.find(b => b.id === bookingId || b.id === Number(bookingId));
+                if (found) {
+                  matchedBooking = found;
+                  matchedHall = hall;
+                  break;
+                }
               }
 
-              console.log('✅ Resolved booking data from API:', JSON.stringify(resolvedBookingData));
-            } catch (err) {
-              console.warn('⚠️ Could not fetch hall booking details from getHallVoucher:', err);
+              if (matchedBooking) {
+                console.log('✅ Found matching booking:', JSON.stringify({
+                  id: matchedBooking.id,
+                  eventType: matchedBooking.eventType,
+                  numberOfGuests: matchedBooking.numberOfGuests,
+                  bookingTime: matchedBooking.bookingTime,
+                  bookingDetails: matchedBooking.bookingDetails,
+                }));
 
-              // Secondary fallback: try voucherAPI.getVoucherByType
+                const bd = matchedBooking.bookingDetails || [];
+                let apiEventTime = matchedBooking.bookingTime || matchedBooking.timeSlot || matchedBooking.eventTime;
+                let apiEventType = matchedBooking.eventType;
+                let apiGuests = matchedBooking.numberOfGuests;
+
+                // Also extract from bookingDetails[0] if top-level is missing
+                if (bd.length > 0) {
+                  const first = bd[0];
+                  if (!apiEventTime) apiEventTime = first.timeSlot || first.time_slot;
+                  if (!apiEventType) apiEventType = first.eventType || first.event_type;
+                }
+
+                resolvedBookingData = {
+                  ...resolvedBookingData,
+                  bookingDate: resolvedBookingData.bookingDate || matchedBooking.bookingDate,
+                  eventTime: resolvedBookingData.eventTime || apiEventTime,
+                  eventType: resolvedBookingData.eventType || apiEventType,
+                  numberOfGuests: resolvedBookingData.numberOfGuests || apiGuests,
+                  bookingDetails: (resolvedBookingData.bookingDetails?.length > 0) ? resolvedBookingData.bookingDetails : bd,
+                  hallName: resolvedBookingData.hallName || matchedHall?.name,
+                };
+
+                if (!resolvedVenue?.name && matchedHall?.name) {
+                  resolvedVenue = { ...resolvedVenue, name: matchedHall.name };
+                }
+
+                console.log('✅ After hall booking merge:', JSON.stringify(resolvedBookingData));
+              } else {
+                console.warn('⚠️ No matching booking found in halls for bookingId:', bookingId);
+              }
+            } catch (err) {
+              console.warn('⚠️ getAllHalls fetch failed:', err?.message || err);
+            }
+
+            // If we still don't have the data after getAllHalls, try the voucher API as a last resort
+            if (!resolvedBookingData.eventTime || !resolvedBookingData.eventType || !resolvedBookingData.numberOfGuests) {
               try {
                 const { voucherAPI } = require('../../config/apis');
                 const res2 = await voucherAPI.getVoucherByType('HALL', bookingId);
-                console.log('📥 getVoucherByType HALL response:', JSON.stringify(res2?.data));
-                const fetched2 = res2?.data?.Data || res2?.data || {};
-                const booking2 = fetched2.booking || fetched2.Booking || {};
-                const hall2 = fetched2.hall || fetched2.Hall || {};
+                console.log('📥 getVoucherByType fallback response:', JSON.stringify(res2?.data));
+                const fetched = res2?.data?.Data || res2?.data || {};
+                // Handle if response is an array (voucher list)
+                const voucherObj = Array.isArray(fetched) ? fetched[0] : fetched;
+                const booking = voucherObj?.booking || voucherObj?.Booking || {};
 
-                resolvedBookingData = {
-                  bookingDate: booking2.bookingDate || booking2.booking_date || fetched2.bookingDate || fetched2.eventDate,
-                  eventTime: booking2.timeSlot || booking2.time_slot || booking2.eventTime || fetched2.timeSlot || fetched2.eventTime,
-                  eventType: booking2.eventType || booking2.event_type || fetched2.eventType,
-                  numberOfGuests: booking2.numberOfGuests || booking2.number_of_guests || fetched2.numberOfGuests,
-                  bookingDetails: booking2.bookingDetails || booking2.booking_details || fetched2.bookingDetails || [],
-                  hallName: hall2.name || booking2.hallName || fetched2.hallName,
-                };
-
-                if (!resolvedVenue?.name && (hall2.name || fetched2.hallName)) {
-                  resolvedVenue = { ...resolvedVenue, name: hall2.name || fetched2.hallName };
+                if (!resolvedBookingData.eventTime) resolvedBookingData.eventTime = booking.bookingTime || booking.timeSlot || booking.eventTime;
+                if (!resolvedBookingData.eventType) resolvedBookingData.eventType = booking.eventType;
+                if (!resolvedBookingData.numberOfGuests) resolvedBookingData.numberOfGuests = booking.numberOfGuests;
+                if (!resolvedBookingData.bookingDetails?.length && booking.bookingDetails?.length) {
+                  resolvedBookingData.bookingDetails = booking.bookingDetails;
                 }
-
-                console.log('✅ Resolved booking data from secondary fallback:', JSON.stringify(resolvedBookingData));
               } catch (err2) {
-                console.warn('⚠️ Secondary fallback also failed:', err2);
+                console.warn('⚠️ voucherAPI fallback also failed:', err2?.message || err2);
               }
             }
+          }
+
+          // Final fallback: if bookingDetails has items but top-level fields are still empty, extract from first detail
+          if (resolvedBookingData.bookingDetails?.length > 0) {
+            const firstDetail = resolvedBookingData.bookingDetails[0];
+            if (!resolvedBookingData.eventTime) resolvedBookingData.eventTime = firstDetail.timeSlot || firstDetail.time_slot;
+            if (!resolvedBookingData.eventType) resolvedBookingData.eventType = firstDetail.eventType || firstDetail.event_type;
+            if (!resolvedBookingData.bookingDate) resolvedBookingData.bookingDate = firstDetail.date;
           }
         }
 
@@ -676,9 +833,9 @@ export default function HallInvoiceScreen({ navigation, route }) {
           amount: rawInvoiceData.voucher?.amount,
           totalPrice: rawInvoiceData.voucher?.amount,
           paymentMode: rawInvoiceData.voucher?.payment_mode || 'PENDING',
-          membershipNo: rawInvoiceData.membership?.no || memberDetails?.membershipNo,
-          memberName: rawInvoiceData.membership?.name || memberDetails?.memberName,
-          // Hall specific - try venue first, then resolvedBookingData
+          membershipNo: rawInvoiceData.membership?.no || resolvedMemberDetails?.membershipNo,
+          memberName: rawInvoiceData.membership?.name || resolvedMemberDetails?.memberName,
+          // Hall specific - prioritize passed data
           hallName: resolvedVenue?.name || resolvedBookingData?.hallName,
           eventDate: resolvedBookingData?.bookingDate || resolvedBookingData?.eventDate,
           eventTime: resolvedBookingData?.eventTime,
@@ -699,7 +856,7 @@ export default function HallInvoiceScreen({ navigation, route }) {
     };
 
     loadInvoiceData();
-  }, [rawInvoiceData]);
+  }, [rawInvoiceData, bookingData, venue, memberDetails, isGuest]);
 
   // Real-time payment sync
   useEffect(() => {
@@ -743,22 +900,67 @@ export default function HallInvoiceScreen({ navigation, route }) {
     setRefreshing(true);
     try {
       // If hall details are missing, try to re-fetch them
-      if (!invoiceData?.hallName || !invoiceData?.eventDate) {
+      if (!invoiceData?.hallName || !invoiceData?.eventDate || !invoiceData?.eventTime || !invoiceData?.eventType || !invoiceData?.numberOfGuests) {
         const bookingId = rawInvoiceData?.voucher?.booking_id || rawInvoiceData?.voucher?.id;
         if (bookingId) {
           try {
-            const res = await banquetAPI.getHallVoucher(bookingId);
+            const base_url = getBaseUrl();
+            // Try more specific API calls to get booking details
+            let res;
+            try {
+              // First try the specific booking details API
+              const bookingRes = await fetch(`${base_url}/booking/${bookingId}`, {
+                headers: {
+                  'Authorization': `Bearer ${await getAuthToken()}`
+                }
+              });
+              if (bookingRes.ok) {
+                res = await bookingRes.json();
+                console.log('✅ Got booking details from specific API');
+              }
+            } catch (specificErr) {
+              console.log('⚠️ Specific booking API failed, falling back to voucher API');
+            }
+
+            // If specific API didn't work, fall back to voucher API
+            if (!res) {
+              res = await banquetAPI.getHallVoucher(bookingId);
+            }
+
             const fetched = res?.data?.Data || res?.data || {};
             const booking = fetched.booking || fetched.Booking || {};
             const hall = fetched.hall || fetched.Hall || {};
 
+            // Process date if available
+            let processedEventDate = invoiceData?.eventDate;
+            const rawDate = booking.bookingDate || booking.booking_date || fetched.bookingDate || fetched.eventDate;
+            if (rawDate && typeof rawDate === 'string') {
+              if (rawDate.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
+                // Format MM/DD/YYYY
+                const [month, day, year] = rawDate.split('/');
+                const isoDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+                const dateObj = new Date(isoDate);
+                if (!isNaN(dateObj.getTime())) {
+                  processedEventDate = dateObj.toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric'
+                  });
+                } else {
+                  processedEventDate = rawDate;
+                }
+              } else {
+                processedEventDate = rawDate;
+              }
+            }
+
             setInvoiceData(prev => ({
               ...prev,
               hallName: prev?.hallName || hall.name || booking.hallName || fetched.hallName,
-              eventDate: prev?.eventDate || booking.bookingDate || booking.booking_date || fetched.bookingDate || fetched.eventDate,
+              eventDate: processedEventDate,
               eventTime: prev?.eventTime || booking.timeSlot || booking.time_slot || booking.eventTime || fetched.timeSlot || fetched.eventTime,
               eventType: prev?.eventType || booking.eventType || booking.event_type || fetched.eventType,
-              numberOfGuests: prev?.numberOfGuests || booking.numberOfGuests || booking.number_of_guests || fetched.numberOfGuests,
+              numberOfGuests: prev?.numberOfGuests || booking.numberOfGuests || booking.number_of_guests || fetched.numberOfGuests || booking.guests || fetched.guests,
               bookingDetails: (prev?.bookingDetails?.length > 0) ? prev.bookingDetails : (booking.bookingDetails || booking.booking_details || fetched.bookingDetails || []),
             }));
             console.log('✅ Refreshed hall booking details successfully');
@@ -842,7 +1044,7 @@ export default function HallInvoiceScreen({ navigation, route }) {
               await bookingService.deleteBooking(invoiceData?.consumerNumber);
               await clearVoucher();
               Alert.alert('Success', 'Booking cancelled');
-              navigation.reset({ index: 1, routes: [{ name: 'home' }] });
+              navigation.navigate('start');
             } catch (error) {
               Alert.alert('Error', 'Failed to cancel.');
             } finally { setRefreshing(false); }
@@ -854,9 +1056,41 @@ export default function HallInvoiceScreen({ navigation, route }) {
 
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
-    try {
-      return new Date(dateString).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-    } catch (error) { return dateString; }
+
+    // If it's already a properly formatted date string, return as is
+    if (typeof dateString === 'string' && isNaN(Date.parse(dateString)) === false) {
+      try {
+        return new Date(dateString).toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric'
+        });
+      } catch (error) {
+        return dateString;
+      }
+    }
+
+    // If it's already a formatted date string like "Mar 14, 2026", return as is
+    if (typeof dateString === 'string' && dateString.match(/^[A-Za-z]{3}\s\d{1,2},\s\d{4}$/)) {
+      return dateString;
+    }
+
+    // Handle MM/DD/YYYY format from remarks
+    if (typeof dateString === 'string' && dateString.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
+      const [month, day, year] = dateString.split('/');
+      const isoDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+      try {
+        return new Date(isoDate).toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric'
+        });
+      } catch (error) {
+        return dateString;
+      }
+    }
+
+    return dateString;
   };
 
   const formatDateTime = (dateString) => {
@@ -996,7 +1230,7 @@ export default function HallInvoiceScreen({ navigation, route }) {
                     <>
                       <View style={styles.detailRow}><Text style={styles.detailLabel}>Event Date:</Text><Text style={styles.detailValue}>{formatDate(invoiceData.eventDate)}</Text></View>
                       <View style={styles.detailRow}><Text style={styles.detailLabel}>Time Slot:</Text><Text style={styles.detailValue}>{formatTimeSlot(invoiceData.eventTime)}</Text></View>
-                      <View style={styles.detailRow}><Text style={styles.detailLabel}>Event Type:</Text><Text style={styles.detailValue}>{invoiceData.eventType}</Text></View>
+                      <View style={styles.detailRow}><Text style={styles.detailLabel}>Event Type:</Text><Text style={[styles.detailValue, { textTransform: 'capitalize' }]}>{invoiceData.eventType || 'N/A'}</Text></View>
                     </>
                   )}
                   <View style={styles.detailRow}><Text style={styles.detailLabel}>Expected Guests:</Text><Text style={styles.detailValue}>{invoiceData.numberOfGuests ? `${invoiceData.numberOfGuests} Persons` : 'N/A'}</Text></View>
