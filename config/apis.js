@@ -36,13 +36,17 @@ api.interceptors.request.use(
       }
 
       // Add FCM Token check for Single Device Session
-      try {
-        const fcmToken = await messaging().getToken();
-        if (fcmToken) {
-          config.headers['client-fcm-token'] = fcmToken;
+      // Skip for auth endpoints to avoid issues during login
+      const isAuthEndpoint = config.url.includes('/auth/') || config.url.includes('/login');
+      if (!isAuthEndpoint) {
+        try {
+          const fcmToken = await messaging().getToken();
+          if (fcmToken) {
+            config.headers['client-fcm-token'] = fcmToken;
+          }
+        } catch (fcmErr) {
+          console.warn('⚠️ Could not get FCM token for header:', fcmErr.message);
         }
-      } catch (fcmErr) {
-        console.warn('⚠️ Could not get FCM token for header:', fcmErr.message);
       }
 
     } catch (error) {
@@ -98,6 +102,7 @@ export const userWho = async (fcmToken = null) => {
     let tokenToSend = fcmToken;
     if (!tokenToSend) {
       try {
+        // Check if FCM is properly initialized before attempting to get token
         tokenToSend = await messaging().getToken();
       } catch (fcmErr) {
         console.warn('⚠️ userWho: Could not get FCM token:', fcmErr.message);
@@ -1412,23 +1417,110 @@ export const getAdminReservations = async (adminId, filters = {}) => {
 };
 
 // Cancel reservation
-export const cancelReservation = async (reservationId) => {
+export const cancelReservation = async (reservationData) => {
   try {
-    const response = await api.delete(`/auth/reservations/${reservationId}`);
+    console.log('🔄 Canceling reservation with toggle pattern...', reservationData);
+    
+    // Extract required data from reservationData
+    const { roomIds, reserveFrom, reserveTo, remarks, id } = reservationData;
+    
+    // Handle case where roomIds might not be provided
+    const actualRoomIds = roomIds || (id ? [id] : []);
+    
+    if (actualRoomIds.length === 0) {
+      throw new Error('No room IDs provided for cancellation');
+    }
+    
+    // Use the same toggle pattern as working unreserve logic
+    const payload = {
+      roomIds: actualRoomIds,   // Array of room IDs
+      reserve: false,          // Set to false to cancel/unreserve
+      reserveFrom: reserveFrom, // Same date as original reservation
+      reserveTo: reserveTo,     // Same date as original reservation
+      remarks: remarks || 'Reservation cancelled', // Optional remarks
+    };
+    
+    console.log('📤 Cancel payload:', JSON.stringify(payload, null, 2));
+    
+    // Use the same endpoint as reserveRooms but with reserve: false
+    const response = await api.patch('/room/reserve/rooms', payload, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${await getAuthToken()}`
+      }
+    });
+    
+    console.log('✅ Reservation cancelled successfully:', response.data);
     return response.data;
   } catch (error) {
-    console.error('Cancel reservation error:', error);
+    console.error('❌ Cancel reservation error:', {
+      status: error.response?.status,
+      data: error.response?.data,
+      message: error.message,
+      config: {
+        url: error.config?.url,
+        method: error.config?.method
+      }
+    });
     throw error;
   }
 };
 
 // Update reservation
-export const updateReservation = async (reservationId, updateData) => {
+export const updateReservation = async (reservationData, newDates) => {
   try {
-    const response = await api.put(`/auth/reservations/${reservationId}`, updateData);
+    console.log('🔄 Updating reservation with toggle pattern...', { reservationData, newDates });
+    
+    // Handle missing roomIds
+    const { roomIds, reserveFrom, reserveTo, id } = reservationData;
+    const actualRoomIds = roomIds || (id ? [id] : []);
+    
+    if (actualRoomIds.length === 0) {
+      throw new Error('No room IDs provided for update');
+    }
+    
+    // First, cancel the existing reservation (set reserve: false)
+    const cancelPayload = {
+      roomIds: actualRoomIds,
+      reserve: false,
+      reserveFrom: reserveFrom,
+      reserveTo: reserveTo,
+      remarks: 'Updating reservation dates'
+    };
+    
+    console.log('📤 Cancel existing reservation:', JSON.stringify(cancelPayload, null, 2));
+    await api.patch('/room/reserve/rooms', cancelPayload, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${await getAuthToken()}`
+      }
+    });
+    
+    // Then, create new reservation with updated dates (set reserve: true)
+    const updatePayload = {
+      roomIds: actualRoomIds,
+      reserve: true,
+      reserveFrom: newDates.reserveFrom,
+      reserveTo: newDates.reserveTo,
+      remarks: newDates.remarks || 'Reservation updated'
+    };
+    
+    console.log('📤 Create updated reservation:', JSON.stringify(updatePayload, null, 2));
+    const response = await api.patch('/room/reserve/rooms', updatePayload, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${await getAuthToken()}`
+      }
+    });
+    
+    console.log('✅ Reservation updated successfully:', response.data);
     return response.data;
   } catch (error) {
-    console.error('Update reservation error:', error);
+    console.error('❌ Update reservation error:', {
+      status: error.response?.status,
+      data: error.response?.data,
+      message: error.message
+    });
     throw error;
   }
 };
@@ -1439,9 +1531,45 @@ export const loginAdmin = async (email, password) => {
     const response = await api.post('/auth/login/admin', {
       email,
       password,
+    }, {
+      headers: { 'client-type': 'mobile' }
     });
 
-    const { access_token, refresh_token, admin } = response.data;
+    console.log('Admin login response:', response.data);
+    
+    // The API response might have different structure - check various possibilities
+    const responseData = response.data;
+    const access_token = responseData.access_token || responseData.token || responseData.accessToken;
+    const refresh_token = responseData.refresh_token || responseData.refreshToken;
+    
+    // Backend only returns tokens, no admin data in login response
+    // Need to fetch admin data separately
+    if (!access_token) {
+      throw new Error('Access token not received from server');
+    }
+    
+    // Temporarily store the token to make the user-who call
+    await AsyncStorage.setItem('access_token', access_token);
+    
+    // Fetch admin data using user-who endpoint
+    let admin;
+    try {
+      admin = await userWho();
+      console.log('Admin data fetched from user-who:', admin);
+    } catch (fetchErr) {
+      console.error('Error fetching admin data:', fetchErr);
+      // If we can't fetch admin data, at least create a minimal admin object
+      // Remove the temporary token as it might be invalid
+      await AsyncStorage.removeItem('access_token');
+      
+      // Throw error to indicate login failure
+      throw new Error('Could not fetch admin data after login');
+    }
+    
+    // Validate that we have essential admin data
+    if (!admin || !admin.id) {
+      throw new Error('Invalid admin data received from server');
+    }
 
     // Store in AsyncStorage using consistent keys
     await storeAuthData({ access_token, refresh_token }, {
@@ -1449,13 +1577,22 @@ export const loginAdmin = async (email, password) => {
       role: admin.role || 'ADMIN'
     });
 
+    // Ensure admin object has all required properties
+    const completeAdmin = {
+      id: admin.id,
+      name: admin.name || 'Admin',
+      email: admin.email || email,
+      role: admin.role || 'ADMIN',
+      ...admin
+    };
+    
     // Also store admin specific keys for backward compatibility
     await AsyncStorage.setItem('adminToken', access_token);
-    await AsyncStorage.setItem('adminId', admin.id.toString());
-    await AsyncStorage.setItem('adminName', admin.name);
-    await AsyncStorage.setItem('adminEmail', admin.email);
+    await AsyncStorage.setItem('adminId', completeAdmin.id.toString());
+    await AsyncStorage.setItem('adminName', completeAdmin.name);
+    await AsyncStorage.setItem('adminEmail', completeAdmin.email);
 
-    return { admin, token: access_token };
+    return { admin: completeAdmin, token: access_token };
   } catch (error) {
     console.error('Login error:', error);
     throw error;
