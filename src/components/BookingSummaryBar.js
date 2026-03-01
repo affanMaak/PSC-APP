@@ -701,6 +701,7 @@ import {
     AppState,
     Alert,
     Clipboard,
+    ScrollView,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import AntIcon from 'react-native-vector-icons/AntDesign';
@@ -1173,74 +1174,76 @@ const BookingSummaryBar = () => {
                         {
                             height: expandAnim.interpolate({
                                 inputRange: [0, 1],
-                                outputRange: [0, Math.min(activeVouchers.length * 80 + 20, 400)]
+                                outputRange: [0, Math.min(activeVouchers.length * 80 + 30, 400)]
                             })
                         }
                     ]}>
-                        <View style={styles.divider} />
+                        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 10 }}>
+                            <View style={styles.divider} />
 
-                        {activeVouchers.map((v, index) => (
-                            <View key={v.id || index} style={styles.voucherItem}>
-                                <View style={styles.infoRow}>
-                                    <View style={styles.infoBlock}>
-                                        <View style={styles.voucherLabelRow}>
-                                            <View style={styles.consumerContainer}>
-                                                <Text style={styles.infoLabel}>
-                                                    Consumer #{' '}
+                            {activeVouchers.map((v, index) => (
+                                <View key={v.id || index} style={styles.voucherItem}>
+                                    <View style={styles.infoRow}>
+                                        <View style={styles.infoBlock}>
+                                            <View style={styles.voucherLabelRow}>
+                                                <View style={styles.consumerContainer}>
+                                                    <Text style={styles.infoLabel}>
+                                                        Consumer #{' '}
+                                                    </Text>
+                                                    <Text style={styles.consumerValue} numberOfLines={1}>
+                                                        {v.consumer_number || 'N/A'}
+                                                    </Text>
+                                                    {v.consumer_number && (
+                                                        <TouchableOpacity
+                                                            onPress={() => copyToClipboard(v.consumer_number, v.id || index)}
+                                                            style={styles.copyButton}
+                                                        >
+                                                            <Icon
+                                                                name={copiedId === (v.id || index) ? "check" : "content-copy"}
+                                                                size={12}
+                                                                color="#fff"
+                                                            />
+                                                        </TouchableOpacity>
+                                                    )}
+                                                </View>
+                                                <Text style={styles.infoType}>
+                                                    {v.booking_type || 'ROOM'}
                                                 </Text>
-                                                <Text style={styles.consumerValue} numberOfLines={1}>
-                                                    {v.consumer_number || 'N/A'}
-                                                </Text>
-                                                {v.consumer_number && (
-                                                    <TouchableOpacity
-                                                        onPress={() => copyToClipboard(v.consumer_number, v.id || index)}
-                                                        style={styles.copyButton}
-                                                    >
-                                                        <Icon
-                                                            name={copiedId === (v.id || index) ? "check" : "content-copy"}
-                                                            size={12}
-                                                            color="#fff"
-                                                        />
-                                                    </TouchableOpacity>
-                                                )}
                                             </View>
-                                            <Text style={styles.infoType}>
-                                                {v.booking_type || 'ROOM'}
+
+                                            <Text style={styles.infoValue}>
+                                                {v.timer.text}
                                             </Text>
+
+                                            {v.booking_type === 'ROOM' ? (
+                                                (v.check_in || v.check_out) && (
+                                                    <Text style={styles.dateRangeText}>
+                                                        {formatDate(v.check_in)} - {formatDate(v.check_out)}
+                                                    </Text>
+                                                )
+                                            ) : (
+                                                v.booking_date && (
+                                                    <Text style={styles.dateRangeText}>
+                                                        Booking: {formatDate(v.booking_date)}
+                                                    </Text>
+                                                )
+                                            )}
                                         </View>
 
-                                        <Text style={styles.infoValue}>
-                                            {v.timer.text}
-                                        </Text>
-
-                                        {v.booking_type === 'ROOM' ? (
-                                            (v.check_in || v.check_out) && (
-                                                <Text style={styles.dateRangeText}>
-                                                    {formatDate(v.check_in)} - {formatDate(v.check_out)}
-                                                </Text>
-                                            )
-                                        ) : (
-                                            v.booking_date && (
-                                                <Text style={styles.dateRangeText}>
-                                                    Booking: {formatDate(v.booking_date)}
-                                                </Text>
-                                            )
-                                        )}
+                                        <TouchableOpacity
+                                            style={styles.viewButton}
+                                            onPress={() => handlePress(v)}
+                                        >
+                                            <Text style={styles.viewButtonText}>Pay Now</Text>
+                                        </TouchableOpacity>
                                     </View>
 
-                                    <TouchableOpacity
-                                        style={styles.viewButton}
-                                        onPress={() => handlePress(v)}
-                                    >
-                                        <Text style={styles.viewButtonText}>Pay Now</Text>
-                                    </TouchableOpacity>
+                                    {index < activeVouchers.length - 1 && (
+                                        <View style={styles.itemDivider} />
+                                    )}
                                 </View>
-
-                                {index < activeVouchers.length - 1 && (
-                                    <View style={styles.itemDivider} />
-                                )}
-                            </View>
-                        ))}
+                            ))}
+                        </ScrollView>
                     </Animated.View>
                 </Animated.View>
             )}
@@ -1343,6 +1346,7 @@ const styles = StyleSheet.create({
     infoRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
+        alignItems: 'center',
         marginBottom: 12,
     },
     infoBlock: {

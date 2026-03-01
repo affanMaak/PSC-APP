@@ -1544,8 +1544,8 @@ Thank you for choosing our photoshoot services!
                     style={styles.cancelVoucherGhostButton}
                     onPress={handleCancelBooking}
                   >
-                    <MaterialIcons name="close" size={14} color="#dc3545" />
-                    <Text style={styles.cancelVoucherGhostText}> Cancel Booking</Text>
+                    <MaterialIcons name="close" size={14} color="#666" />
+                    <Text style={styles.cancelVoucherGhostText}>Cancel Booking</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -1596,7 +1596,7 @@ Thank you for choosing our photoshoot services!
                   <TouchableOpacity
                     onPress={() => {
                       Clipboard.setString(invoiceData.consumerNumber);
-                      Alert.alert('Copied', 'Consumer number copied to clipboard');
+                      // Alert.alert('Copied', 'Consumer number copied to clipboard');
                     }}
                     style={styles.copyContainer}
                   >
@@ -1768,7 +1768,7 @@ Thank you for choosing our photoshoot services!
             ) : (
               <>
                 <MaterialIcons name="file-download" size={20} color="#fff" />
-                <Text style={styles.downloadButtonText}>Download Invoice</Text>
+                <Text style={styles.downloadButtonText}>Save to Gallery</Text>
               </>
             )}
           </TouchableOpacity>
@@ -1995,13 +1995,14 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#ffa39e',
-    backgroundColor: '#fff1f0',
+    borderColor: '#d9d9d9',
+    backgroundColor: 'transparent',
   },
   cancelVoucherGhostText: {
     fontSize: 13,
-    fontWeight: 'bold',
-    color: '#dc3545',
+    fontWeight: '500',
+    color: '#666',
+    marginLeft: 4,
   },
   timerText: {
     fontSize: 14,
@@ -2087,7 +2088,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#2e7d32',
+    backgroundColor: '#b48a64',
     padding: 15,
     borderRadius: 8,
     marginBottom: 15,

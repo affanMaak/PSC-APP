@@ -1173,8 +1173,8 @@ export default function HallInvoiceScreen({ navigation, route }) {
                         <Text style={styles.timerText}> Expires in: {timeLeft}</Text>
                       </View>
                       <TouchableOpacity style={styles.cancelVoucherGhostButton} onPress={handleCancelVoucher}>
-                        <Icon name="close" size={14} color="#dc3545" />
-                        <Text style={styles.cancelVoucherGhostText}> Cancel Voucher</Text>
+                        <Icon name="close" size={14} color="#666" />
+                        <Text style={styles.cancelVoucherGhostText}>Cancel Voucher</Text>
                       </TouchableOpacity>
                     </View>
                   )}
@@ -1334,8 +1334,8 @@ const styles = StyleSheet.create({
   timerWrapper: { alignItems: 'center', marginTop: 10 },
   timerContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff1f0', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 15, borderWidth: 1, borderColor: '#ffa39e' },
   timerText: { fontSize: 14, fontWeight: 'bold', color: '#dc3545' },
-  cancelVoucherGhostButton: { flexDirection: 'row', alignItems: 'center', marginTop: 10, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: '#ffa39e', backgroundColor: '#fff1f0' },
-  cancelVoucherGhostText: { fontSize: 13, fontWeight: 'bold', color: '#dc3545' },
+  cancelVoucherGhostButton: { flexDirection: 'row', alignItems: 'center', marginTop: 10, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: '#d9d9d9', backgroundColor: 'transparent' },
+  cancelVoucherGhostText: { fontSize: 13, fontWeight: '500', color: '#666', marginLeft: 4 },
   expiredText: { fontSize: 14, fontWeight: 'bold', color: '#dc3545', marginTop: 10 },
   dueDate: { color: '#dc3545', fontWeight: 'bold' },
   multiDateContainer: { marginTop: 10, marginBottom: 10 },

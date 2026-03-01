@@ -2570,7 +2570,7 @@ const BH = ({ navigation }) => {
               <Text style={styles.welcomeTitle}>Host Your Grand Celebration</Text>
               <Text style={styles.welcomeText}>
                 Elegant Halls provide the perfect setting for weddings,
-                corporate events, conferences, and special celebrations. Experience
+                , and special celebrations. Experience
                 luxury and sophistication
               </Text>
             </View>

@@ -2580,7 +2580,7 @@ export default function voucher({ navigation, route }) {
             <View style={styles.actionButtons}>
               {(['PAID', 'CONFIRMED'].includes(invoiceData?.status?.toUpperCase())) ? (
                 <>
-                  <TouchableOpacity
+                  {/* <TouchableOpacity
                     style={styles.shareButton}
                     onPress={handleShareInvoice}
                     disabled={shareLoading}
@@ -2589,7 +2589,7 @@ export default function voucher({ navigation, route }) {
                     <Text style={styles.shareButtonText}>
                       {shareLoading ? 'Sharing...' : 'Share'}
                     </Text>
-                  </TouchableOpacity>
+                  </TouchableOpacity> */}
 
                   <TouchableOpacity
                     style={styles.saveButton}
@@ -2604,7 +2604,7 @@ export default function voucher({ navigation, route }) {
                 </>
               ) : (
                 <TouchableOpacity
-                  style={[styles.saveButton, { backgroundColor: '#666' }]}
+                  style={[styles.saveButton, { marginLeft: 0 }]}
                   onPress={handleSaveToGallery}
                   disabled={saveLoading}
                 >
@@ -3114,6 +3114,7 @@ const styles = StyleSheet.create({
   actionButtons: {
     flexDirection: 'row',
     marginBottom: 15,
+    paddingHorizontal: 15,
     // gap: 10, // Removed gap for compatibility
   },
   secondaryButton: {
@@ -3155,7 +3156,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 12,
     borderRadius: 8,
-    backgroundColor: '#388e3c',
+    backgroundColor: '#b48a64',
     marginLeft: 10, // Added margin instead of gap
   },
   saveButtonText: {
