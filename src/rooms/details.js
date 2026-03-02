@@ -701,7 +701,7 @@ export default function details({ navigation, route }) {
         if (images.length === 0) {
             return (
                 <View style={styles.noImageContainer}>
-                    <Icon name="image" size={60} color="#ccc" />
+                    <Icon name="image" size={60} color="#ccc" style={{ marginTop: 30 }} />
                     <Text style={styles.noImageText}>No images available</Text>
                 </View>
             );
@@ -850,7 +850,7 @@ export default function details({ navigation, route }) {
     if (!isAuthenticated || !user) {
         return (
             <View style={styles.container}>
-                <StatusBar barStyle="light-content" backgroundColor="black" />
+                <StatusBar barStyle="dark-content" backgroundColor="white" />
                 <View style={styles.header}>
                     <TouchableOpacity onPress={() => navigation.goBack()}>
                         <Icon name="arrow-back" size={24} color="#000" />
@@ -877,7 +877,7 @@ export default function details({ navigation, route }) {
 
     return (
         <View style={styles.container}>
-            <StatusBar barStyle="light-content" backgroundColor="black" />
+            <StatusBar barStyle="dark-content" backgroundColor="white" />
 
             <ImageBackground
                 source={require("../../assets/notch.jpg")}
@@ -1612,7 +1612,7 @@ const styles = StyleSheet.create({
         borderRadius: 5,
     },
     noImageText: {
-        marginTop: 10,
+
         color: '#666',
         fontSize: 16,
     },
@@ -1827,7 +1827,7 @@ const styles = StyleSheet.create({
     },
     statusText: {
         fontSize: 12,
-        color: '#666',
+        color: 'black',
     },
     noRoomsContainer: {
         alignItems: 'center',
@@ -1854,35 +1854,63 @@ const styles = StyleSheet.create({
         bottom: 0,
         left: 0,
         right: 0,
-        padding: 20,
+        padding: 16,
+        paddingBottom: 28,
+        backgroundColor: '#FEF9F3',
+        borderTopWidth: 1,
+        borderTopColor: '#F1F5F9',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 12,
+        elevation: 8,
     },
     adminActions: {
         flexDirection: 'row',
-        gap: 10,
+        gap: 12,
     },
     actionButton: {
         flex: 1,
-        padding: 15,
-        borderRadius: 10,
+        padding: 16,
+        borderRadius: 14,
         alignItems: 'center',
+        justifyContent: 'center',
     },
     bookButton: {
         backgroundColor: '#b48a64',
+        shadowColor: '#b48a64',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.25,
+        shadowRadius: 6,
+        elevation: 4,
     },
     reserveButton: {
         backgroundColor: '#b48a64',
+        shadowColor: '#b48a64',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.25,
+        shadowRadius: 6,
+        elevation: 4,
     },
     unreserveButton: {
         backgroundColor: '#dc3545',
+        shadowColor: '#dc3545',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.25,
+        shadowRadius: 6,
+        elevation: 4,
     },
     buttonDisabled: {
         backgroundColor: '#ccc',
         opacity: 0.6,
+        shadowOpacity: 0,
+        elevation: 0,
     },
     actionButtonText: {
         color: '#fff',
         fontSize: 16,
-        fontWeight: 'bold',
+        fontWeight: '700',
+        letterSpacing: 0.3,
     },
     accessDeniedContainer: {
         flex: 1,

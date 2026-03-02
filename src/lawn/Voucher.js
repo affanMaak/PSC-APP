@@ -633,7 +633,7 @@
 
 //         // Prioritize passed data over API fetch
 //         let resolvedDetails = {};
-        
+
 //         // Use passed bookingDetails if available
 //         if (bookingDetails) {
 //           console.log('📦 Using passed bookingDetails:', JSON.stringify(bookingDetails));
@@ -651,7 +651,7 @@
 //         } else {
 //           console.log('⚠️ No bookingDetails passed, will attempt API fetch');
 //         }
-        
+
 //         // Also check if booking details exist in rawInvoiceData
 //         if (!resolvedDetails.lawnName && rawInvoiceData?.lawn) {
 //           resolvedDetails.lawnName = rawInvoiceData.lawn.name || rawInvoiceData.lawn.Name || rawInvoiceData.lawn.lawnName;
@@ -665,25 +665,25 @@
 //         if (!resolvedDetails.numberOfGuests && rawInvoiceData?.booking) {
 //           resolvedDetails.numberOfGuests = rawInvoiceData.booking.numberOfGuests;
 //         }
-        
+
 //         // Extract booking information from remarks if available
 //         if (!resolvedDetails.lawnName && rawInvoiceData?.voucher?.remarks) {
 //           const remarks = rawInvoiceData.voucher.remarks;
 //           console.log('🔍 Extracting lawn info from remarks:', remarks);
-          
+
 //           // Extract lawn name from remarks like "Full payment for Lawn booking: on 3/13/2026"
 //           const lawnMatch = remarks.match(/(Lawn|Lawn Service|Lawn Booking).*?booking/i);
 //           if (lawnMatch) {
 //             resolvedDetails.lawnName = lawnMatch[0].replace('booking', '').trim();
 //           }
-          
+
 //           // Extract date from remarks
 //           const dateMatch = remarks.match(/on\s+(\d{1,2}\/\d{1,2}\/\d{4}|\d{4}-\d{2}-\d{2})/i);
 //           if (dateMatch && !resolvedDetails.bookingDate) {
 //             resolvedDetails.bookingDate = dateMatch[1];
 //           }
 //         }
-        
+
 //         // Extract from other possible sources in rawInvoiceData
 //         if (!resolvedDetails.lawnName && rawInvoiceData?.bookingName) {
 //           resolvedDetails.lawnName = rawInvoiceData.bookingName;
@@ -700,20 +700,20 @@
 //         if (!resolvedDetails.numberOfGuests && rawInvoiceData?.guests) {
 //           resolvedDetails.numberOfGuests = rawInvoiceData.guests;
 //         }
-        
+
 //         // Use passed venue data
 //         const resolvedVenue = venue || {};
-        
+
 //         // Use passed member/guest details
 //         const resolvedMemberDetails = memberDetails || {};
 //         const resolvedGuestDetails = guestDetails || {};
-        
+
 //         console.log('📊 Final resolvedDetails before mapping:', JSON.stringify(resolvedDetails));
 //         console.log('📊 Raw invoice data:', JSON.stringify(rawInvoiceData));
 
 //         // Only fetch from API if critical data is missing
 //         const hasCriticalData = resolvedDetails.lawnName && resolvedDetails.bookingDate;
-        
+
 //         if (!hasCriticalData) {
 //           const bookingId = rawInvoiceData.voucher?.booking_id || rawInvoiceData.voucher?.id;
 //           if (bookingId) {
@@ -721,7 +721,7 @@
 //               console.log('🔍 Fetching additional data for bookingId:', bookingId);
 //               const res = await voucherAPI.getVoucherByType('LAWN', bookingId);
 //               const fetched = res?.data?.Data || res?.data || {};
-              
+
 //               // Merge with existing data, don't overwrite passed data
 //               resolvedDetails = {
 //                 ...resolvedDetails,
@@ -734,7 +734,7 @@
 //                 guestName: resolvedDetails.guestName || fetched.booking?.guestName || fetched.guestName,
 //                 guestContact: resolvedDetails.guestContact || fetched.booking?.guestContact || fetched.guestContact,
 //               };
-              
+
 //               console.log('✅ Fetched and merged data:', JSON.stringify(resolvedDetails));
 //             } catch (err) {
 //               console.warn('⚠️ Could not fetch lawn booking details:', err);
@@ -846,7 +846,7 @@
 //             const fetched = res?.data?.Data || res?.data || {};
 //             const booking = fetched.booking || fetched.Booking || {};
 //             const lawn = fetched.lawn || fetched.Lawn || {};
-            
+
 //             setInvoiceData(prev => ({
 //               ...prev,
 //               lawnName: prev?.lawnName || lawn.name || lawn.Name || booking.lawnName || fetched.lawnName,
@@ -1329,7 +1329,7 @@ export default function Voucher({ navigation, route }) {
 
         // Prioritize passed data over API fetch
         let resolvedDetails = {};
-        
+
         // Use passed bookingDetails if available
         if (bookingDetails) {
           console.log('📦 Using passed bookingDetails:', JSON.stringify(bookingDetails));
@@ -1347,7 +1347,7 @@ export default function Voucher({ navigation, route }) {
         } else {
           console.log('⚠️ No bookingDetails passed, will attempt API fetch');
         }
-        
+
         // Also check if booking details exist in rawInvoiceData
         if (!resolvedDetails.lawnName && rawInvoiceData?.lawn) {
           resolvedDetails.lawnName = rawInvoiceData.lawn.name || rawInvoiceData.lawn.Name || rawInvoiceData.lawn.lawnName;
@@ -1361,12 +1361,12 @@ export default function Voucher({ navigation, route }) {
         if (!resolvedDetails.numberOfGuests && rawInvoiceData?.booking) {
           resolvedDetails.numberOfGuests = rawInvoiceData.booking.numberOfGuests;
         }
-        
+
         // Extract booking information from remarks if available
         if (rawInvoiceData?.voucher?.remarks) {
           const remarks = rawInvoiceData.voucher.remarks;
           console.log('🔍 Extracting lawn info from remarks:', remarks);
-          
+
           // Extract lawn name from remarks like "Full payment for Lawn booking: on 3/13/2026"
           if (!resolvedDetails.lawnName) {
             const lawnMatch = remarks.match(/(Lawn|Lawn Service|Lawn Booking).*?booking/i);
@@ -1374,7 +1374,7 @@ export default function Voucher({ navigation, route }) {
               resolvedDetails.lawnName = lawnMatch[0].replace('booking', '').trim();
             }
           }
-          
+
           // Extract date from remarks
           if (!resolvedDetails.bookingDate) {
             const dateMatch = remarks.match(/on\s+(\d{1,2}\/\d{1,2}\/\d{4}|\d{4}-\d{2}-\d{2})/i);
@@ -1382,7 +1382,7 @@ export default function Voucher({ navigation, route }) {
               const extractedDate = dateMatch[1];
               // Handle different date formats properly
               let dateObj;
-              
+
               if (extractedDate.includes('/')) {
                 // Handle MM/DD/YYYY format
                 const parts = extractedDate.split('/');
@@ -1398,7 +1398,7 @@ export default function Voucher({ navigation, route }) {
                 // Handle YYYY-MM-DD format
                 dateObj = new Date(extractedDate);
               }
-              
+
               if (dateObj && !isNaN(dateObj.getTime())) {
                 // Convert to a readable format
                 const formattedDate = dateObj.toLocaleDateString('en-US', {
@@ -1412,7 +1412,7 @@ export default function Voucher({ navigation, route }) {
               }
             }
           }
-          
+
           // Extract time slot from remarks if present
           if (!resolvedDetails.eventTime) {
             const timeMatch = remarks.match(/(day|night|morning|evening|time:\s*[^,]+)/i);
@@ -1421,7 +1421,7 @@ export default function Voucher({ navigation, route }) {
             }
           }
         }
-        
+
         // Extract from other possible sources in rawInvoiceData
         if (!resolvedDetails.lawnName && rawInvoiceData?.bookingName) {
           resolvedDetails.lawnName = rawInvoiceData.bookingName;
@@ -1438,21 +1438,21 @@ export default function Voucher({ navigation, route }) {
         if (!resolvedDetails.numberOfGuests && rawInvoiceData?.guests) {
           resolvedDetails.numberOfGuests = rawInvoiceData.guests;
         }
-        
+
         // Use passed venue data
         const resolvedVenue = venue || {};
-        
+
         // Use passed member/guest details
         const resolvedMemberDetails = memberDetails || {};
         const resolvedGuestDetails = guestDetails || {};
 
         // Only fetch from API if critical data is missing
         const hasCriticalData = resolvedDetails.lawnName && resolvedDetails.bookingDate;
-        
+
         console.log('📊 hasCriticalData check:', hasCriticalData);
         console.log('📊 resolvedDetails:', JSON.stringify(resolvedDetails));
         console.log('📊 resolvedVenue:', JSON.stringify(resolvedVenue));
-        
+
         if (!hasCriticalData) {
           const bookingId = rawInvoiceData.voucher?.booking_id || rawInvoiceData.voucher?.id;
           if (bookingId) {
@@ -1460,7 +1460,7 @@ export default function Voucher({ navigation, route }) {
               console.log('🔍 Fetching additional data for bookingId:', bookingId);
               const res = await voucherAPI.getVoucherByType('LAWN', bookingId);
               const fetched = res?.data?.Data || res?.data || {};
-              
+
               // Merge with existing data, don't overwrite passed data
               resolvedDetails = {
                 ...resolvedDetails,
@@ -1473,7 +1473,7 @@ export default function Voucher({ navigation, route }) {
                 guestName: resolvedDetails.guestName || fetched.booking?.guestName || fetched.guestName,
                 guestContact: resolvedDetails.guestContact || fetched.booking?.guestContact || fetched.guestContact,
               };
-              
+
               console.log('✅ Fetched and merged data:', JSON.stringify(resolvedDetails));
             } catch (err) {
               console.warn('⚠️ Could not fetch lawn booking details:', err);
@@ -1580,7 +1580,7 @@ export default function Voucher({ navigation, route }) {
       if (!invoiceData?.lawnName || !invoiceData?.bookingDate) {
         const { getAuthToken, getBaseUrl } = require('../../config/apis');
         const base_url = getBaseUrl();
-        
+
         const bookingId = rawInvoiceData?.voucher?.booking_id || rawInvoiceData?.voucher?.id;
         if (bookingId) {
           try {
@@ -1600,17 +1600,17 @@ export default function Voucher({ navigation, route }) {
             } catch (specificErr) {
               console.log('⚠️ Specific booking API failed, falling back to voucher API');
             }
-            
+
             // If specific API didn't work, fall back to voucher API
             if (!res) {
               const { voucherAPI } = require('../../config/apis');
               res = await voucherAPI.getVoucherByType('LAWN', bookingId);
             }
-            
+
             const fetched = res?.data?.Data || res?.data || {};
             const booking = fetched.booking || fetched.Booking || {};
             const lawn = fetched.lawn || fetched.Lawn || {};
-            
+
             setInvoiceData(prev => ({
               ...prev,
               lawnName: prev?.lawnName || lawn.name || lawn.Name || booking.lawnName || fetched.lawnName,
@@ -1728,7 +1728,7 @@ export default function Voucher({ navigation, route }) {
 
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
-    
+
     // If it's already a properly formatted date string, return as is
     if (typeof dateString === 'string' && isNaN(Date.parse(dateString)) === false) {
       try {
@@ -1741,12 +1741,12 @@ export default function Voucher({ navigation, route }) {
         return dateString;
       }
     }
-    
+
     // If it's already a formatted date string like "Mar 14, 2026", return as is
     if (typeof dateString === 'string' && dateString.match(/^[A-Za-z]{3}\s\d{1,2},\s\d{4}$/)) {
       return dateString;
     }
-    
+
     // Handle MM/DD/YYYY format from remarks
     if (typeof dateString === 'string' && dateString.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
       const [month, day, year] = dateString.split('/');
@@ -1761,7 +1761,7 @@ export default function Voucher({ navigation, route }) {
         return dateString;
       }
     }
-    
+
     return dateString;
   };
 
@@ -2007,7 +2007,7 @@ const styles = StyleSheet.create({
   timerWrapper: { alignItems: 'center', marginTop: 10 },
   timerContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff1f0', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 15, borderWidth: 1, borderColor: '#ffa39e' },
   timerText: { fontSize: 14, fontWeight: 'bold', color: '#dc3545' },
-  cancelVoucherGhostButton: { flexDirection: 'row', alignItems: 'center', marginTop: 10, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: '#d9d9d9' },
+  cancelVoucherGhostButton: { flexDirection: 'row', alignItems: 'center', marginTop: 10, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: '#d9d9d9', backgroundColor: 'transparent' },
   cancelVoucherGhostText: { fontSize: 13, fontWeight: '500', color: '#666', marginLeft: 4 },
   expiredText: { fontSize: 14, fontWeight: 'bold', color: '#dc3545', marginTop: 10 },
   dueDate: { color: '#dc3545', fontWeight: 'bold' },

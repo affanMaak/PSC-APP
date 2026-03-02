@@ -107,11 +107,11 @@ const FeedbackScreen = ({ navigation }) => {
                 bgColor = '#F3F4F6'; // Gray background
                 textColor = '#374151'; // Gray text
         }
-        
+
         return (
-            <View style={[styles.badge, { backgroundColor: bgColor }]}> 
-                <Text style={[styles.badgeText, { color: textColor }]}> 
-                    {status || 'Unknown'} 
+            <View style={[styles.badge, { backgroundColor: bgColor }]}>
+                <Text style={[styles.badgeText, { color: textColor }]}>
+                    {status || 'Unknown'}
                 </Text>
             </View>
         );
@@ -145,7 +145,7 @@ const FeedbackScreen = ({ navigation }) => {
                         <Icon name="add" size={24} color="#FFF" />
                     </TouchableOpacity>
                 </View>
-                
+
                 {feedbacks.length === 0 ? (
                     <View style={styles.emptyContainer}>
                         <View style={styles.emptyIconContainer}>
@@ -179,19 +179,19 @@ const FeedbackScreen = ({ navigation }) => {
                                     </View>
                                     {getStatusBadge(item.status)}
                                 </View>
-                                
+
                                 <Text style={styles.feedbackSubject}>{typeof item.subject === 'string' ? item.subject : 'No subject'}</Text>
-                                
+
                                 <Text style={styles.feedbackMessage} numberOfLines={3}>
                                     {typeof item.message === 'string' ? item.message : 'No message'}
                                 </Text>
-                                
+
                                 <View style={styles.categoryContainer}>
                                     <Icon name="pricetags-outline" size={14} color="#666" />
                                     <Text style={styles.feedbackCategory}>
-                                        {typeof item.category === 'string' ? item.category : 
-                                         typeof item.category?.name === 'string' ? item.category.name : 
-                                         'N/A'}
+                                        {typeof item.category === 'string' ? item.category :
+                                            typeof item.category?.name === 'string' ? item.category.name :
+                                                'N/A'}
                                     </Text>
                                     {(typeof item.subCategory === 'string' || typeof item.subCategory?.name === 'string') && (
                                         <Text style={styles.feedbackSubCategory}>
@@ -199,38 +199,38 @@ const FeedbackScreen = ({ navigation }) => {
                                         </Text>
                                     )}
                                 </View>
-                                
+
                                 {/* Admin Remarks Section */}
-                                {((item.remarks && (typeof item.remarks === 'string' || Array.isArray(item.remarks))) || 
-                                  (item.adminRemarks && typeof item.adminRemarks === 'string') || 
-                                  (item.remark && typeof item.remark === 'string')) && (
-                                    <View style={styles.remarksContainer}>
-                                        <View style={styles.remarksHeader}>
-                                            <Icon name="information-circle" size={16} color="#4A90E2" />
-                                            <Text style={styles.remarksTitle}>Admin Response</Text>
+                                {((item.remarks && (typeof item.remarks === 'string' || Array.isArray(item.remarks))) ||
+                                    (item.adminRemarks && typeof item.adminRemarks === 'string') ||
+                                    (item.remark && typeof item.remark === 'string')) && (
+                                        <View style={styles.remarksContainer}>
+                                            <View style={styles.remarksHeader}>
+                                                <Icon name="information-circle" size={16} color="#4A90E2" />
+                                                <Text style={styles.remarksTitle}>Admin Response</Text>
+                                            </View>
+                                            <Text style={styles.remarksText}>
+                                                {typeof item.remarks === 'string' ? item.remarks :
+                                                    typeof item.adminRemarks === 'string' ? item.adminRemarks :
+                                                        typeof item.remark === 'string' ? item.remark :
+                                                            Array.isArray(item.remarks) ?
+                                                                item.remarks.map(r =>
+                                                                    typeof r === 'string' ? r :
+                                                                        r.remark || r.text || r.message || JSON.stringify(r)
+                                                                ).filter(Boolean).join('\n\n') :
+                                                                ''}
+                                            </Text>
+                                            {item.adminName && typeof item.adminName === 'string' && (
+                                                <Text style={styles.adminName}>— {item.adminName}</Text>
+                                            )}
                                         </View>
-                                        <Text style={styles.remarksText}>
-                                            {typeof item.remarks === 'string' ? item.remarks : 
-                                             typeof item.adminRemarks === 'string' ? item.adminRemarks : 
-                                             typeof item.remark === 'string' ? item.remark : 
-                                             Array.isArray(item.remarks) ? 
-                                               item.remarks.map(r => 
-                                                 typeof r === 'string' ? r : 
-                                                 r.remark || r.text || r.message || JSON.stringify(r)
-                                               ).filter(Boolean).join('\n\n') : 
-                                             ''}
-                                        </Text>
-                                        {item.adminName && typeof item.adminName === 'string' && (
-                                            <Text style={styles.adminName}>— {item.adminName}</Text>
-                                        )}
-                                    </View>
-                                )}
+                                    )}
                             </View>
                         )}
                         refreshControl={
-                            <RefreshControl 
-                                refreshing={refreshing} 
-                                onRefresh={onRefresh} 
+                            <RefreshControl
+                                refreshing={refreshing}
+                                onRefresh={onRefresh}
                                 colors={[THEME_COLOR]}
                                 tintColor={THEME_COLOR}
                             />
@@ -283,7 +283,7 @@ const FeedbackScreen = ({ navigation }) => {
 
             // Refresh the feedback list after successful submission
             await fetchFeedbacks();
-            
+
             // Reset the form
             setForm({
                 subject: '',
@@ -292,7 +292,7 @@ const FeedbackScreen = ({ navigation }) => {
                 otherSubCategory: '',
                 message: '',
             });
-            
+
             Alert.alert(
                 'Success',
                 'Thank you for your feedback! We will review it shortly.',
