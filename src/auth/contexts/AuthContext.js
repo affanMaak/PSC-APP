@@ -3,6 +3,7 @@ import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { jwtDecode } from 'jwt-decode';
 import eventBus from '../../../services/eventBus';
+import { resetNavigation } from '../../../services/NavigationService';
 
 const AuthContext = createContext();
 
@@ -80,11 +81,32 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const handleForceLogout = (data) => {
       console.log('🚨 AuthContext: Force Logout Received', data);
-      logout();
+      
       Alert.alert(
         'Session Expired',
         data?.message || 'You have been logged in on another device. Please login again to continue.',
-        [{ text: 'OK' }]
+        [
+          {
+            text: 'OK',
+            onPress: async () => {
+              // Step 1: Clear all authentication storage
+              await AsyncStorage.multiRemove([
+                'access_token',
+                'refresh_token',
+                'user_info'
+              ]);
+              console.log('✅ Auth storage cleared');
+              
+              // Step 2: Reset local state
+              setUser(null);
+              setTokens({ access_token: null, refresh_token: null });
+              setIsAuthenticated(false);
+              
+              // Step 3: Hard reset navigation to LoginScr (no back button)
+              resetNavigation('LoginScr');
+            }
+          }
+        ]
       );
     };
 
@@ -92,7 +114,7 @@ export const AuthProvider = ({ children }) => {
     return () => {
       eventBus.off('FORCE_LOGOUT', handleForceLogout);
     };
-  }, [logout]);
+  }, []);
 
   const clearAuthStorage = async () => {
     try {

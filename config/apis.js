@@ -4,6 +4,7 @@ import { Platform, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import messaging from '@react-native-firebase/messaging';
 import eventBus from '../services/eventBus';
+import { resetNavigation } from '../services/NavigationService';
 
 export const getBaseUrl = () => {
   if (Platform.OS === 'android') {
@@ -65,10 +66,27 @@ api.interceptors.response.use(
     if (error.response?.status === 403 && error.response?.data?.error === 'SESSION_EXPIRED') {
       console.error('🚨 Session Expired: Logged in on another device');
 
-      // Notify the AuthContext to logout
+      // Option 1: Use eventBus (recommended - triggers Alert via AuthContext)
       eventBus.emit('FORCE_LOGOUT', {
         message: error.response?.data?.message || 'You have been logged in on another device.'
       });
+
+      // Option 2: Direct navigation reset (alternative approach)
+      // Uncomment the lines below if you want to skip the alert and go straight to login
+      /*
+      await AsyncStorage.multiRemove([
+        'access_token',
+        'refresh_token',
+        'user_info'
+      ]);
+      
+      setTimeout(() => {
+        resetNavigation('LoginScr', { 
+          sessionExpired: true,
+          expiredMessage: error.response?.data?.message 
+        });
+      }, 100); // Small delay to ensure storage is cleared
+      */
 
       return new Promise(() => { }); // Stop the promise chain
     }
