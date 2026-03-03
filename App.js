@@ -16,6 +16,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 // Deep Linking Configuration
 import linking from './config/linking';
 
+// Navigation Service
+import { setNavigator } from './services/NavigationService';
 
 // Notification Handler
 import {
@@ -529,6 +531,10 @@ function AppContent() {
   // Handle navigation ready callback
   const onNavigationReady = () => {
     console.log('🧭 [Navigation] Container is ready');
+    
+    // Register navigation ref in NavigationService
+    setNavigator(navigationRef);
+    
     // Handle any pending navigation from notification
     if (pendingNotification.current) {
       handleNotificationNavigation(pendingNotification.current, navigationRef);
