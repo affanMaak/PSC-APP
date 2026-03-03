@@ -750,6 +750,35 @@ export const getAffiliatedClubRequests = async (from, to, clubId) => {
     throw error;
   }
 };
+
+export const getContactUs = async () => {
+  try {
+    console.log('📞 Fetching contact us data...');
+    const response = await api.get(`${base_url}/content/contact-us`);
+    console.log('✅ Contact us response:', JSON.stringify(response.data, null, 2));
+    
+    // Handle different response formats
+    if (!response.data) {
+      console.warn('⚠️ Empty response from contact-us API');
+      return null;
+    }
+    
+    // If the response has a data wrapper (common in many APIs)
+    if (response.data.data && typeof response.data.data === 'object') {
+      console.log('📦 Found data wrapper, using inner data');
+      return response.data.data;
+    }
+    
+    return response.data;
+  } catch (error) {
+    console.error('❌ Error fetching contact info:', error);
+    console.error('Error details:', error.response?.data);
+    throw {
+      message: error.response?.data?.message || "Error fetching contact info",
+      status: error.response?.status || 500
+    };
+  }
+};
 export const createAffiliatedClubRequest = async (requestData) => {
   try {
     // The web portal backend expects: affiliatedClubId, membershipNo, requestedDate
