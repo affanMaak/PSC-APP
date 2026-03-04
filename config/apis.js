@@ -18,6 +18,23 @@ export const getBaseUrl = () => {
 const base_url = getBaseUrl();
 console.log('Using base URL:', base_url);
 
+// Token write lock to prevent race conditions during login/logout
+let isTokenBeingWritten = false;
+const MAX_LOCK_WAIT_TIME = 2000; // 2 seconds max wait
+
+const waitForTokenWrite = async () => {
+  if (!isTokenBeingWritten) return;
+  
+  const startTime = Date.now();
+  while (isTokenBeingWritten) {
+    if (Date.now() - startTime > MAX_LOCK_WAIT_TIME) {
+      console.warn('⚠️ Token write lock timeout - proceeding anyway');
+      break;
+    }
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+};
+
 const api = axios.create({
   baseURL: base_url,
   timeout: 10000,
@@ -25,21 +42,30 @@ const api = axios.create({
     'Content-Type': 'application/json',
   },
   withCredentials: true,
-
 });
 
 api.interceptors.request.use(
   async (config) => {
     try {
+      // Wait for any pending token writes to complete (prevents race conditions)
+      await waitForTokenWrite();
+      
       const token = await AsyncStorage.getItem('access_token');
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
+      } else {
+        // Don't log for auth endpoints to reduce noise
+        const isAuthEndpoint = config.url.includes('/auth/') || config.url.includes('/login');
+        if (!isAuthEndpoint) {
+          console.log('ℹ️ No access token found for API request to:', config.url);
+        }
       }
 
       // Add FCM Token check for Single Device Session
       // Skip for auth endpoints to avoid issues during login
       const isAuthEndpoint = config.url.includes('/auth/') || config.url.includes('/login');
-      if (!isAuthEndpoint) {
+      if (!isAuthEndpoint && token) {
+        // Only add FCM token if we have a valid auth token
         try {
           const fcmToken = await messaging().getToken();
           if (fcmToken) {
@@ -51,45 +77,78 @@ api.interceptors.request.use(
       }
 
     } catch (error) {
-      console.error('Error in request interceptor:', error);
+      console.error('❌ Error in request interceptor:', error);
     }
     return config;
   },
   (error) => Promise.reject(error)
 );
 
+// Flag to prevent multiple logout triggers during token handover
+let isLoggingOut = false;
+
 // Response Interceptor for Session Expiration
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    console.log("Error in response interceptor:", error);
+    const originalRequest = error.config;
+    
+    console.log("Error in response interceptor:", {
+      status: error.response?.status,
+      data: error.response?.data,
+      url: originalRequest?.url
+    });
+
+    // Handle SESSION_EXPIRED (403) - True unauthorized from Force Logout
     if (error.response?.status === 403 && error.response?.data?.error === 'SESSION_EXPIRED') {
+      // Prevent duplicate logout calls
+      if (isLoggingOut) {
+        console.log('⚠️ Logout already in progress, skipping duplicate trigger');
+        return Promise.reject(error);
+      }
+      
+      isLoggingOut = true;
       console.error('🚨 Session Expired: Logged in on another device');
 
-      // Option 1: Use eventBus (recommended - triggers Alert via AuthContext)
-      eventBus.emit('FORCE_LOGOUT', {
-        message: error.response?.data?.message || 'You have been logged in on another device.'
-      });
-
-      // Option 2: Direct navigation reset (alternative approach)
-      // Uncomment the lines below if you want to skip the alert and go straight to login
-      /*
-      await AsyncStorage.multiRemove([
-        'access_token',
-        'refresh_token',
-        'user_info'
-      ]);
-      
-      setTimeout(() => {
-        resetNavigation('LoginScr', { 
-          sessionExpired: true,
-          expiredMessage: error.response?.data?.message 
+      try {
+        // Option 1: Use eventBus (recommended - triggers Alert via AuthContext)
+        eventBus.emit('FORCE_LOGOUT', {
+          message: error.response?.data?.message || 'You have been logged in on another device.'
         });
-      }, 100); // Small delay to ensure storage is cleared
-      */
+      } catch (emitError) {
+        console.error('❌ Failed to emit FORCE_LOGOUT event:', emitError);
+      }
 
       return new Promise(() => { }); // Stop the promise chain
     }
+
+    // Handle 401 Unauthorized - Could be transient or permanent
+    if (error.response?.status === 401) {
+      // Check if this is a retry attempt
+      if (!originalRequest._retry) {
+        originalRequest._retry = true;
+        
+        // Verify current token state before deciding to logout
+        try {
+          const currentToken = await AsyncStorage.getItem('access_token');
+          
+          // If token exists and matches the failed request, it's a true 401
+          // If token is different or missing, it was a transient handover issue
+          if (currentToken) {
+            // Token still exists - this might be a real auth failure
+            // Don't logout immediately, let the error propagate
+            console.log('⚠️ 401 received but token still exists - possible transient error');
+          } else {
+            // No token - user already logged out, don't trigger again
+            console.log('ℹ️ 401 received but no token exists - skipping logout');
+            return Promise.reject(error);
+          }
+        } catch (storageError) {
+          console.error('❌ Error checking token during 401 handling:', storageError);
+        }
+      }
+    }
+
     return Promise.reject(error);
   }
 );
@@ -97,12 +156,24 @@ api.interceptors.response.use(
 // Token management functions
 export const storeAuthData = async (tokens, userData) => {
   try {
+    // Set write lock to prevent race conditions
+    isTokenBeingWritten = true;
+    
     await AsyncStorage.setItem('access_token', tokens.access_token);
     await AsyncStorage.setItem('refresh_token', tokens.refresh_token);
     await AsyncStorage.setItem('user_data', JSON.stringify(userData));
+    
     console.log('✅ Auth data stored');
+    
+    // Release lock after a small delay to ensure writes complete
+    setTimeout(() => {
+      isTokenBeingWritten = false;
+      console.log('🔓 Token write lock released');
+    }, 100);
+    
   } catch (error) {
-    console.error('Error storing auth data:', error);
+    console.error('❌ Error storing auth data:', error);
+    isTokenBeingWritten = false; // Always release lock on error
   }
 };
 

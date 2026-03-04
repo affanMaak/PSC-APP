@@ -1143,6 +1143,221 @@ const InvoiceScreen = ({ route, navigation }) => {
         }
       }
 
+      /**
+       * STRICT PRIORITY MAPPING LOGIC
+       * Priority 1: Direct Config (dateConfigurations with .time property)
+       * Priority 2: JSON Parsing (bookingDetails with valid selectedDates array)
+       * Priority 3: Regex Fallback (parse voucher.remarks field)
+       */
+      
+      let parsedSelectedDates = null;
+      let parsedDateConfigs = null;
+      let mappingStrategy = 'none';
+      
+      console.log('🔍 [Mapping Strategy] Starting strict priority mapping...', {
+        hasDirectConfig: !!(resolvedBookingData?.selectedDates && resolvedBookingData?.dateConfigurations),
+        hasBookingDetails: !!resolvedBookingData?.bookingDetails,
+        hasRemarks: !!rawInvoiceData.voucher?.remarks
+      });
+      
+      // ════════════════════════════════════════════════════════════
+      // PRIORITY 1: Direct Config (dateConfigurations has keys + time)
+      // ════════════════════════════════════════════════════════════
+      if (
+        resolvedBookingData?.selectedDates && 
+        Array.isArray(resolvedBookingData.selectedDates) && 
+        resolvedBookingData.selectedDates.length > 0 &&
+        resolvedBookingData?.dateConfigurations &&
+        typeof resolvedBookingData.dateConfigurations === 'object'
+      ) {
+        // Validate that at least one date has a time property
+        const hasValidTime = resolvedBookingData.selectedDates.some(date => {
+          const config = resolvedBookingData.dateConfigurations[date];
+          return config && (config.time || config.startTime || config.timeSlot);
+        });
+        
+        if (hasValidTime) {
+          parsedSelectedDates = resolvedBookingData.selectedDates;
+          parsedDateConfigs = resolvedBookingData.dateConfigurations;
+          mappingStrategy = 'direct_config';
+          console.log('✅ [Priority 1] Using DIRECT CONFIG from navigation params');
+          console.log('📊 [Priority 1] Details:', {
+            datesCount: parsedSelectedDates.length,
+            configsCount: Object.keys(parsedDateConfigs).length,
+            sampleDate: parsedSelectedDates[0],
+            sampleConfig: parsedDateConfigs[parsedSelectedDates[0]]
+          });
+        }
+      }
+      
+      // ════════════════════════════════════════════════════════════
+      // PRIORITY 2: JSON Parsing (bookingDetails with valid array)
+      // ════════════════════════════════════════════════════════════
+      if (!parsedSelectedDates && resolvedBookingData?.bookingDetails) {
+        try {
+          console.log('🔍 [Priority 2] Attempting to parse bookingDetails JSON...');
+          
+          const details = typeof resolvedBookingData.bookingDetails === 'string' 
+            ? JSON.parse(resolvedBookingData.bookingDetails) 
+            : resolvedBookingData.bookingDetails;
+          
+          // CRITICAL: Must be non-empty array
+          if (Array.isArray(details) && details.length > 0) {
+            // Validate that each item has required fields
+            const validItems = details.filter(d => d.date && (d.timeSlot || d.time));
+            
+            if (validItems.length > 0) {
+              parsedSelectedDates = validItems.map(d => d.date);
+              parsedDateConfigs = {};
+              
+              validItems.forEach(d => {
+                if (d.date && d.timeSlot) {
+                  // Extract time from timeSlot (format: "YYYY-MM-DDTHH:mm:ss")
+                  const timePart = d.timeSlot.split('T')[1];
+                  parsedDateConfigs[d.date] = {
+                    time: timePart ? `${timePart.substring(0, 5)}:00` : null
+                  };
+                } else if (d.date && d.time) {
+                  parsedDateConfigs[d.date] = { time: d.time };
+                }
+              });
+              
+              mappingStrategy = 'bookingDetails_json';
+              console.log('✅ [Priority 2] Successfully parsed bookingDetails JSON');
+              console.log('📊 [Priority 2] Details:', {
+                totalItems: details.length,
+                validItems: validItems.length,
+                dates: parsedSelectedDates
+              });
+            } else {
+              console.warn('⚠️ [Priority 2] bookingDetails array is empty or invalid - will fall back to Priority 3');
+            }
+          } else {
+            console.warn('⚠️ [Priority 2] bookingDetails is not an array or is empty - will fall back to Priority 3');
+          }
+        } catch (err) {
+          console.error('❌ [Priority 2] Failed to parse bookingDetails:', err.message);
+          console.warn('⚠️ [Priority 2] Will attempt Priority 3 (remarks parsing)');
+        }
+      }
+      
+      // ════════════════════════════════════════════════════════════
+      // PRIORITY 3: Regex Fallback (CRITICAL - parse voucher.remarks)
+      // ════════════════════════════════════════════════════════════
+      if (!parsedSelectedDates && rawInvoiceData.voucher?.remarks) {
+        try {
+          console.log('🔍 [Priority 3] CRITICAL FALLBACK: Parsing remarks field...');
+          console.log('📝 [Priority 3] Remarks content:', rawInvoiceData.voucher.remarks);
+          
+          const remarks = rawInvoiceData.voucher.remarks;
+          
+          // Pattern 1: "Photoshoot booking: Photoshoot on 3/4/2026" or "on 03/04/2026"
+          const pattern1 = /on\s+(\d{1,2}\/\d{1,2}\/\d{4})/i;
+          
+          // Pattern 2: ISO date format "2026-03-04"
+          const pattern2 = /(\d{4}-\d{2}-\d{2})/;
+          
+          // Pattern 3: US format "3/4/2026" without "on" prefix
+          const pattern3 = /(\d{1,2}\/\d{1,2}\/\d{4})/;
+          
+          let extractedDate = null;
+          let matchedPattern = null;
+          
+          // Try Pattern 1 first (most specific)
+          let match = remarks.match(pattern1);
+          if (match && match[1]) {
+            matchedPattern = 'Pattern 1 (on MM/DD/YYYY)';
+            const parts = match[1].split('/');
+            const month = parts[0].padStart(2, '0');
+            const day = parts[1].padStart(2, '0');
+            const year = parts[2];
+            extractedDate = `${year}-${month}-${day}`;
+          }
+          
+          // Try Pattern 2 (ISO format)
+          if (!extractedDate) {
+            match = remarks.match(pattern2);
+            if (match && match[1]) {
+              matchedPattern = 'Pattern 2 (ISO YYYY-MM-DD)';
+              extractedDate = match[1];
+            }
+          }
+          
+          // Try Pattern 3 (US format without "on")
+          if (!extractedDate) {
+            match = remarks.match(pattern3);
+            if (match && match[1]) {
+              matchedPattern = 'Pattern 3 (MM/DD/YYYY)';
+              const parts = match[1].split('/');
+              const month = parts[0].padStart(2, '0');
+              const day = parts[1].padStart(2, '0');
+              const year = parts[2];
+              extractedDate = `${year}-${month}-${day}`;
+            }
+          }
+          
+          // SUCCESS: Date extracted from remarks
+          if (extractedDate) {
+            console.log(`✅ [Priority 3] Extracted date using ${matchedPattern}:`, extractedDate);
+            
+            // Reconstruct time from voucher.issued_at or use current time
+            let reconstructedTime = null;
+            let timeSource = null;
+            
+            if (rawInvoiceData.voucher?.issued_at) {
+              // Use issued_at timestamp as fallback time
+              reconstructedTime = rawInvoiceData.voucher.issued_at;
+              timeSource = 'voucher.issued_at';
+              console.log('🕐 [Priority 3] Using voucher.issued_at for time:', reconstructedTime);
+            } else if (rawInvoiceData.voucher?.expiresAt) {
+              // Fallback to expiresAt
+              reconstructedTime = rawInvoiceData.voucher.expiresAt;
+              timeSource = 'voucher.expiresAt';
+              console.log('🕐 [Priority 3] Using voucher.expiresAt for time:', reconstructedTime);
+            } else {
+              // Last resort: current time
+              reconstructedTime = new Date().toISOString();
+              timeSource = 'current_time';
+              console.log('🕐 [Priority 3] Using current time as last resort:', reconstructedTime);
+            }
+            
+            // Build the final structures
+            parsedSelectedDates = [extractedDate];
+            parsedDateConfigs = {
+              [extractedDate]: {
+                time: reconstructedTime
+              }
+            };
+            mappingStrategy = 'remarks_regex';
+            
+            console.log('✅ [Priority 3] SUCCESS: Reconstructed data structure from remarks');
+            console.log('📊 [Priority 3] Final structure:', {
+              selectedDates: parsedSelectedDates,
+              dateConfigurations: {
+                [extractedDate]: {
+                  time: reconstructedTime,
+                  timeType: typeof reconstructedTime,
+                  timeSource: timeSource
+                }
+              },
+              hasTimeValue: true
+            });
+          } else {
+            console.error('❌ [Priority 3] FAILED: Could not extract date from remarks');
+            console.error('❌ [Priority 3] Tried patterns:', ['Pattern 1', 'Pattern 2', 'Pattern 3']);
+          }
+        } catch (err) {
+          console.error('❌ [Priority 3] Critical error parsing remarks:', err);
+          console.error('❌ [Priority 3] Stack:', err.stack);
+        }
+      }
+      
+      // Log final mapping result
+      if (!parsedSelectedDates) {
+        console.error('❌ [MAPPING FAILED] All three priorities failed!');
+        console.error('❌ [MAPPING FAILED] No structured data available from any source');
+      }
+
       const mappedDetails = {
         invoiceNo: rawInvoiceData.voucher?.invoice_no || rawInvoiceData.voucher?.voucher_no || rawInvoiceData.voucher?.id || 'N/A',
         invoiceNumber: rawInvoiceData.voucher?.invoice_no || rawInvoiceData.voucher?.voucher_no || rawInvoiceData.voucher?.id,
@@ -1154,15 +1369,71 @@ const InvoiceScreen = ({ route, navigation }) => {
         membershipNo: rawInvoiceData.membership?.no || rawInvoiceData.voucher?.membership_no || memberInfo?.membership_no || 'N/A',
         memberName: rawInvoiceData.membership?.name || rawInvoiceData.voucher?.member?.Name || rawInvoiceData.voucher?.member_name || memberInfo?.member_name || 'N/A',
         numberOfGuests: rawInvoiceData.voucher?.number_of_guests || resolvedBookingData?.numberOfGuests,
-        // Photoshoot specific
+        // Photoshoot specific - USING PARSED VALUES FROM STRICT PRIORITY LOGIC
         packageDescription: resolvedPhotoshoot?.description || 'Photoshoot Package',
-        selectedDates: resolvedBookingData?.selectedDates,
-        dateConfigurations: resolvedBookingData?.dateConfigurations,
+        selectedDates: parsedSelectedDates,
+        dateConfigurations: parsedDateConfigs,
         bookingDate: resolvedBookingData?.bookingDate,
         timeSlot: resolvedBookingData?.timeSlot,
         pricingType: resolvedBookingData?.pricingType,
         remarks: rawInvoiceData.voucher?.remarks,
+        _mappingStrategy: mappingStrategy // Internal tracking
       };
+      
+      // CRITICAL VALIDATION: Ensure hasTimeValue will be true
+      const firstDate = mappedDetails.selectedDates?.[0];
+      const firstConfig = firstDate ? mappedDetails.dateConfigurations?.[firstDate] : null;
+      const timeValue = firstConfig?.time;
+      
+      console.log('\n═══════════════════════════════════════════════════════════');
+      console.log('📋 [MAPPING FINALIZATION] Complete validation report:');
+      console.log('═══════════════════════════════════════════════════════════');
+      console.log('🎯 Strategy used:', mappingStrategy);
+      console.log('📅 selectedDates:', mappedDetails.selectedDates);
+      console.log('⚙️ dateConfigurations keys:', parsedDateConfigs ? Object.keys(parsedDateConfigs) : 'NONE');
+      
+      if (firstDate && firstConfig) {
+        console.log('✅ First date config found:', {
+          date: firstDate,
+          time: firstConfig.time,
+          timeType: typeof firstConfig.time,
+          timeSource: firstConfig.time instanceof Date ? 'Date object' : typeof firstConfig.time
+        });
+      } else {
+        console.error('❌ NO CONFIG FOUND for first date!');
+      }
+      
+      console.log('⏰ timeValue:', timeValue);
+      console.log('⏰ timeValueType:', typeof timeValue);
+      console.log('✅ hasTimeValue:', !!timeValue);
+      console.log('═══════════════════════════════════════════════════════════\n');
+      
+      // Final safety check
+      if (!timeValue) {
+        console.error('❌❌❌ [CRITICAL] hasTimeValue is FALSE - UI will show N/A! ❌❌❌');
+        console.error('🔍 Debugging checklist:');
+        console.error('  1. ✓ Priority 1 (Direct Config):', !!(resolvedBookingData?.selectedDates && resolvedBookingData?.dateConfigurations));
+        console.error('  2. ✓ Priority 2 (JSON Parsing):', !!(resolvedBookingData?.bookingDetails && resolvedBookingData.bookingDetails.length > 0));
+        console.error('  3. ✓ Priority 3 (Remarks Regex):', !!rawInvoiceData.voucher?.remarks);
+        console.error('  4. Time reconstruction attempted:', mappingStrategy === 'remarks_regex');
+        
+        // Emergency fallback: Try one more time with issued_at
+        if (rawInvoiceData.voucher?.issued_at && mappedDetails.selectedDates?.[0]) {
+          console.warn('⚠️ [Emergency] Attempting last-resort time injection from issued_at...');
+          if (!mappedDetails.dateConfigurations) {
+            mappedDetails.dateConfigurations = {};
+          }
+          const emergencyDate = mappedDetails.selectedDates[0];
+          mappedDetails.dateConfigurations[emergencyDate] = {
+            time: rawInvoiceData.voucher.issued_at
+          };
+          console.warn('✅ [Emergency] Injected time from issued_at:', rawInvoiceData.voucher.issued_at);
+          console.warn('✅ [Emergency] hasTimeValue is now:', !!mappedDetails.dateConfigurations[emergencyDate].time);
+        }
+      } else {
+        console.log('✅✅✅ [SUCCESS] hasTimeValue is TRUE - formatTime will run! ✅✅✅');
+      }
+      
       setInvoiceData(mappedDetails);
       setLoading(false);
     } else {
@@ -1305,11 +1576,23 @@ const InvoiceScreen = ({ route, navigation }) => {
       setShareLoading(true);
       if (!invoiceData) return;
 
-      const slotsText = invoiceData.selectedDates
-        ? invoiceData.selectedDates.map(date =>
-          `• ${formatDate(date)} at ${formatTime(invoiceData.dateConfigurations?.[date]?.time)}`
-        ).join('\n')
-        : `• ${formatDate(invoiceData.bookingDate)} at ${formatTime(invoiceData.timeSlot)}`;
+      const slotsText = (() => {
+        // Case 1: Multiple dates with configurations
+        if (invoiceData.selectedDates && Array.isArray(invoiceData.selectedDates)) {
+          return invoiceData.selectedDates.map((date, index) => {
+            const timeValue = invoiceData.dateConfigurations?.[date]?.time;
+            return `• ${formatDate(date)} at ${timeValue ? formatTime(timeValue) : 'N/A'}`;
+          }).join('\n');
+        }
+        
+        // Case 2: Single booking date with time slot
+        if (invoiceData.bookingDate || invoiceData.timeSlot) {
+          return `• ${formatDate(invoiceData.bookingDate)} at ${formatTime(invoiceData.timeSlot)}`;
+        }
+        
+        // Case 3: No data
+        return '• No slots selected';
+      })();
 
       const message = `
 📸 PHOTOSHOOT BOOKING INVOICE
@@ -1404,29 +1687,63 @@ Thank you for choosing our photoshoot services!
 
   const formatTime = (timeString) => {
     if (!timeString) return 'N/A';
+    
     try {
-      let timePart = timeString;
+      let hours, minutes;
+      
+      // Handle Date objects (most common case from dateConfigurations)
       if (timeString instanceof Date) {
-        const hour = timeString.getHours();
-        const minutes = timeString.getMinutes();
-        const ampm = hour >= 12 ? 'PM' : 'AM';
-        const hour12 = hour % 12 || 12;
-        return `${hour12}:${minutes.toString().padStart(2, '0')} ${ampm}`;
+        hours = timeString.getHours();
+        minutes = timeString.getMinutes();
+        console.log('🕐 formatTime [Date]:', { hours, minutes, original: timeString });
       }
+      // Handle ISO strings or time strings
+      else if (typeof timeString === 'string') {
+        let timePart = timeString;
+        
+        // Extract time portion from ISO string (e.g., "2024-01-15T14:30:00" -> "14:30")
+        if (timeString.includes('T')) {
+          timePart = timeString.split('T')[1];
+          if (!timePart) return 'N/A'; // No time portion found
+          timePart = timePart.slice(0, 5); // Get HH:MM
+        } else {
+          // Assume it's already a time string, extract first 5 chars (HH:MM)
+          timePart = timeString.slice(0, 5);
+        }
 
-      if (typeof timeString === 'string') {
-        timePart = timeString.includes('T')
-          ? timeString.split('T')[1].slice(0, 5)
-          : timeString.slice(0, 5);
-
-        const [hours, minutes] = timePart.split(':');
-        const hour = parseInt(hours, 10);
-        const ampm = hour >= 12 ? 'PM' : 'AM';
-        const hour12 = hour % 12 || 12;
-        return `${hour12}:${minutes} ${ampm}`;
+        // Validate and parse time components
+        const parts = timePart.split(':');
+        hours = parseInt(parts[0], 10);
+        minutes = parseInt(parts[1], 10);
+        
+        // Validate parsed values
+        if (isNaN(hours) || isNaN(minutes)) {
+          console.warn('⚠️ Invalid time format:', timeString);
+          return 'N/A';
+        }
+        
+        console.log('🕐 formatTime [String]:', { hours, minutes, original: timeString });
       }
-      return 'N/A';
+      // For any other type, try to convert
+      else {
+        console.warn('⚠️ Unexpected time format, attempting conversion:', typeof timeString, timeString);
+        const dateObj = new Date(timeString);
+        if (isNaN(dateObj.getTime())) {
+          return 'N/A';
+        }
+        hours = dateObj.getHours();
+        minutes = dateObj.getMinutes();
+      }
+      
+      // Format the time in 12-hour format
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      const hour12 = hours % 12 || 12;
+      const formattedTime = `${hour12}:${minutes.toString().padStart(2, '0')} ${ampm}`;
+      console.log('✅ formatTime result:', formattedTime);
+      return formattedTime;
+      
     } catch (error) {
+      console.error('❌ formatTime error:', error);
       return 'N/A';
     }
   };
@@ -1671,27 +1988,116 @@ Thank you for choosing our photoshoot services!
               <View style={styles.divider} />
               <Text style={[styles.detailLabel, { marginBottom: 10, fontWeight: 'bold' }]}>Selected Slots:</Text>
 
-              {invoiceData.selectedDates ? (
-                invoiceData.selectedDates.map(date => (
-                  <View key={date} style={styles.slotRow}>
+              {(() => {
+                // Comprehensive debug logging
+                console.log('🔍 [Selected Slots Render] Starting render logic...');
+                console.log('📅 [Selected Slots] selectedDates:', invoiceData.selectedDates);
+                console.log('⚙️ [Selected Slots] dateConfigurations:', invoiceData.dateConfigurations);
+
+                // Helper function to extract time from various data structures
+                const extractTimeFromConfig = (config, dateKey) => {
+                  if (!config) {
+                    console.warn(`⚠️ [Extract] No config object for ${dateKey}`);
+                    return null;
+                  }
+                  
+                  console.log(`🔎 [Extract] Checking config for ${dateKey}:`, JSON.stringify(config));
+                  
+                  // Case A: Direct time property (most common)
+                  if (config.time) {
+                    console.log(`✅ [Extract] Found direct .time for ${dateKey}:`, config.time, 'Type:', typeof config.time);
+                    return config.time;
+                  }
+                  
+                  // Case B: slots as array
+                  if (Array.isArray(config.slots)) {
+                    const timeVal = config.slots[0]?.time || config.slots[0];
+                    console.log(`✅ [Extract] Found .slots array for ${dateKey}:`, timeVal);
+                    return timeVal;
+                  }
+                  
+                  // Case C: slots as object
+                  if (typeof config.slots === 'object' && config.slots !== null) {
+                    const timeVal = config.slots.time || config.slots.startTime || config.slots.slot;
+                    console.log(`✅ [Extract] Found .slots object for ${dateKey}:`, timeVal);
+                    return timeVal;
+                  }
+                  
+                  // Case D: Check for startTime/endTime directly in config
+                  if (config.startTime) {
+                    console.log(`✅ [Extract] Found .startTime for ${dateKey}:`, config.startTime);
+                    return config.startTime;
+                  }
+                  
+                  // Case E: Check for timeSlot (ISO string)
+                  if (config.timeSlot) {
+                    console.log(`✅ [Extract] Found .timeSlot for ${dateKey}:`, config.timeSlot);
+                    return config.timeSlot;
+                  }
+                  
+                  console.warn(`⚠️ [Extract] No time value found in config for ${dateKey}`);
+                  console.warn('⚠️ [Extract] Available keys:', Object.keys(config));
+                  return null;
+                };
+
+                // Case 1: Multiple dates with configurations
+                if (invoiceData.selectedDates && Array.isArray(invoiceData.selectedDates) && invoiceData.selectedDates.length > 0) {
+                  console.log('📋 [Selected Slots] Rendering multiple dates:', invoiceData.selectedDates.length);
+                  
+                  return invoiceData.selectedDates.map((date, index) => {
+                    const config = invoiceData.dateConfigurations?.[date];
+                    console.log(`\n🔎 [Slot ${index + 1}] Processing date: ${date}`);
+                    console.log(`🔎 [Slot ${index + 1}] Configuration object:`, JSON.stringify(config));
+                    
+                    const timeValue = extractTimeFromConfig(config, date);
+                    console.log(`🕐 [Slot ${index + 1}] Extracted timeValue:`, timeValue);
+                    console.log(`🕐 [Slot ${index + 1}] formatTime result:`, timeValue ? formatTime(timeValue) : 'N/A');
+                    
+                    return (
+                      <View key={`${date}-${index}`} style={styles.slotRow}>
+                        <View style={styles.slotDateBox}>
+                          <Text style={styles.detailLabelSmall}>{formatDate(date)}</Text>
+                        </View>
+                        <View style={styles.slotTimeBox}>
+                          <Text style={styles.detailValueSmall}>
+                            {timeValue ? formatTime(timeValue) : 'N/A'}
+                          </Text>
+                        </View>
+                      </View>
+                    );
+                  });
+                }
+                
+                // Case 2: Single booking date with time slot
+                if (invoiceData.bookingDate || invoiceData.timeSlot) {
+                  console.log('📋 [Selected Slots] Rendering single date fallback');
+                  return (
+                    <View style={styles.slotRow}>
+                      <View style={styles.slotDateBox}>
+                        <Text style={styles.detailLabelSmall}>{formatDate(invoiceData.bookingDate)}</Text>
+                      </View>
+                      <View style={styles.slotTimeBox}>
+                        <Text style={styles.detailValueSmall}>
+                          {formatTime(invoiceData.timeSlot)}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                }
+                
+                // Case 3: No data available
+                console.log('⚠️ [Selected Slots] No data available, showing N/A');
+                return (
+                  <View style={styles.slotRow}>
                     <View style={styles.slotDateBox}>
-                      <Text style={styles.detailLabelSmall}>{formatDate(date)}</Text>
+                      <Text style={styles.detailLabelSmall}>No slots selected</Text>
                     </View>
                     <View style={styles.slotTimeBox}>
-                      <Text style={styles.detailValueSmall}>{formatTime(invoiceData.dateConfigurations?.[date]?.time)}</Text>
+                      <Text style={styles.detailValueSmall}>N/A</Text>
                     </View>
                   </View>
-                ))
-              ) : (
-                <View style={styles.slotRow}>
-                  <View style={styles.slotDateBox}>
-                    <Text style={styles.detailLabelSmall}>{formatDate(invoiceData.bookingDate)}</Text>
-                  </View>
-                  <View style={styles.slotTimeBox}>
-                    <Text style={styles.detailValueSmall}>{formatTime(invoiceData.timeSlot)}</Text>
-                  </View>
-                </View>
-              )}
+                );
+              })()}
             </View>
 
             {/* Payment Details */}

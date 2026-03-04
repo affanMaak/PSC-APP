@@ -79,8 +79,14 @@ export const AuthProvider = ({ children }) => {
 
   // Single Device Session: Listen for Force Logout
   useEffect(() => {
-    const handleForceLogout = (data) => {
+    const handleForceLogout = async (data) => {
       console.log('🚨 AuthContext: Force Logout Received', data);
+      
+      // Prevent duplicate logout calls
+      if (!isAuthenticated) {
+        console.log('⚠️ Already logged out, skipping duplicate force logout');
+        return;
+      }
       
       Alert.alert(
         'Session Expired',
@@ -97,12 +103,15 @@ export const AuthProvider = ({ children }) => {
               ]);
               console.log('✅ Auth storage cleared');
               
-              // Step 2: Reset local state
+              // Step 2: Reset local state immediately
               setUser(null);
               setTokens({ access_token: null, refresh_token: null });
               setIsAuthenticated(false);
               
-              // Step 3: Hard reset navigation to LoginScr (no back button)
+              // Step 3: Small delay to ensure storage is cleared before navigation
+              await new Promise(resolve => setTimeout(resolve, 50));
+              
+              // Step 4: Hard reset navigation to LoginScr (no back button)
               resetNavigation('LoginScr');
             }
           }
@@ -114,7 +123,7 @@ export const AuthProvider = ({ children }) => {
     return () => {
       eventBus.off('FORCE_LOGOUT', handleForceLogout);
     };
-  }, []);
+  }, [isAuthenticated]);
 
   const clearAuthStorage = async () => {
     try {
