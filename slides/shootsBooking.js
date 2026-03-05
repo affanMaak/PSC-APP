@@ -2053,6 +2053,22 @@ const shootsBooking = ({ route, navigation }) => {
       if (result.success) {
         console.log('✅ Invoice generated successfully:', result.data);
 
+        // Serialize dateConfigurations to avoid React Navigation serialization warnings
+        // Convert Date objects to ISO strings for safe navigation param passing
+        const serializedDateConfigurations = {};
+        Object.keys(dateConfigurations).forEach(date => {
+          const timeValue = dateConfigurations[date].time;
+          serializedDateConfigurations[date] = {
+            time: timeValue instanceof Date ? timeValue.toISOString() : timeValue
+          };
+        });
+
+        console.log('📦 Serializing for navigation:', {
+          originalTime: dateConfigurations[sortedDates[0]]?.time,
+          serializedTime: serializedDateConfigurations[sortedDates[0]]?.time,
+          type: typeof serializedDateConfigurations[sortedDates[0]]?.time
+        });
+
         // Prepare navigation params
         const navigationParams = {
           invoiceData: result.data.Data || result.data,
@@ -2062,7 +2078,7 @@ const shootsBooking = ({ route, navigation }) => {
             totalPrice: totalPriceValue,
             photoshootDescription: photoshoot.description,
             selectedDates: sortedDates,
-            dateConfigurations: dateConfigurations
+            dateConfigurations: serializedDateConfigurations
           },
           photoshoot: photoshoot,
           memberInfo: memberInfo,

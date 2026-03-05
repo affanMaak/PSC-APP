@@ -1827,7 +1827,7 @@ export default function Voucher({ navigation, route }) {
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconWrapper}>
             <Icon name="arrow-back" size={28} color="#000" />
           </TouchableOpacity>
-          <Text style={styles.notchTitle}>Lawn Voucher</Text>
+          <Text style={styles.notchTitle}>Lawn Invoice</Text>
           <View style={styles.iconWrapper} />
         </View>
       </ImageBackground>
@@ -1917,7 +1917,7 @@ export default function Voucher({ navigation, route }) {
                       {/* <View style={styles.detailRow}><Text style={styles.detailLabel}>Time Slot:</Text><Text style={styles.detailValue}>{formatTimeSlot(invoiceData.eventTime)}</Text></View> */}
                     </>
                   )}
-                  <View style={styles.detailRow}><Text style={styles.detailLabel}>Guests:</Text><Text style={styles.detailValue}>{invoiceData.numberOfGuests} Persons</Text></View>
+                  {/* <View style={styles.detailRow}><Text style={styles.detailLabel}>Guests:</Text><Text style={styles.detailValue}>{invoiceData.numberOfGuests} Persons</Text></View> */}
                 </View>
 
                 {/* Payment Breakdown */}

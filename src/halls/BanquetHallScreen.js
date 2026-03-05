@@ -2569,8 +2569,7 @@ const BH = ({ navigation }) => {
             <View style={styles.welcomeSection}>
               <Text style={styles.welcomeTitle}>Host Your Grand Celebration</Text>
               <Text style={styles.welcomeText}>
-                Elegant Halls provide the perfect setting for weddings,
-                , and special celebrations. Experience
+                Elegant Halls provide the perfect setting for weddings, and special celebrations. Experience
                 luxury and sophistication
               </Text>
             </View>
