@@ -14,6 +14,7 @@ import {
   Alert,
   Modal,
   Image,
+  Clipboard,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -74,6 +75,12 @@ const Bills = ({ navigation }) => {
   const [userRole, setUserRole] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
 
+  // Balance Payment states
+  const [amountToPay, setAmountToPay] = useState('');
+  const [isGeneratingVoucher, setIsGeneratingVoucher] = useState(false);
+  const [generatedVoucher, setGeneratedVoucher] = useState(null);
+  const [showVoucherModal, setShowVoucherModal] = useState(false);
+
   // Payment apps for bank dropdown (for 1 Bill payment)
   const paymentApps = [
     { name: 'Easypaisa' },
@@ -96,6 +103,94 @@ const Bills = ({ navigation }) => {
   const handleBankSelect = (bank) => {
     setSelectedBank(bank.name);
     setShowBankDropdown(false);
+  };
+
+  // Handle Generate Balance Voucher
+  const handleGenerateBalanceVoucher = async () => {
+    try {
+      // Validate amount
+      if (!amountToPay || amountToPay.trim() === '') {
+        Alert.alert('Error', 'Please enter an amount to pay');
+        return;
+      }
+
+      const paymentAmount = Number(amountToPay);
+      
+      if (isNaN(paymentAmount) || paymentAmount <= 0) {
+        Alert.alert('Error', 'Please enter a valid amount');
+        return;
+      }
+
+      if (paymentAmount > memberData.Balance) {
+        Alert.alert('Error', `Amount exceeds your balance of Rs ${memberData.Balance.toLocaleString()}`);
+        return;
+      }
+
+      setIsGeneratingVoucher(true);
+
+      const token = await getAuthToken();
+      const membershipNo = membershipNumber;
+
+      console.log('🔵 Generating balance voucher:', { amountToPay: paymentAmount, membership_no: membershipNo });
+
+      const response = await fetch(
+        `${API_BASE_URL}/payment/generate/invoice/balance`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            amountToPay: String(paymentAmount),
+            membership_no: membershipNo,
+          }),
+        }
+      );
+
+      const responseData = await response.json();
+
+      if (response.ok) {
+        console.log('✅ Voucher generated successfully:', responseData);
+        
+        // Store the voucher data
+        setGeneratedVoucher(responseData.voucher || responseData);
+        setShowVoucherModal(true);
+        
+        // Clear the input
+        setAmountToPay('');
+        
+        Alert.alert('Success', 'Payment code generated successfully!');
+      } else {
+        console.error('❌ Voucher generation failed:', responseData);
+        
+        // Handle specific error cases
+        const errorMessage = responseData.message || responseData.error || 'Failed to generate payment code';
+        
+        if (errorMessage.includes('Member not found')) {
+          Alert.alert('Error', 'Member not found. Please contact support.');
+        } else if (errorMessage.includes('Amount exceeds')) {
+          Alert.alert('Error', 'Amount exceeds your balance. Please enter a lower amount.');
+        } else if (errorMessage.includes('Invalid amount')) {
+          Alert.alert('Error', 'Invalid amount entered. Please try again.');
+        } else {
+          Alert.alert('Error', errorMessage);
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error generating voucher:', error);
+      Alert.alert('Error', 'Failed to generate payment code. Please try again.');
+    } finally {
+      setIsGeneratingVoucher(false);
+    }
+  };
+
+  // Copy consumer number to clipboard
+  const copyConsumerNumber = () => {
+    if (generatedVoucher?.consumer_number) {
+      Clipboard.setString(String(generatedVoucher.consumer_number));
+      Alert.alert('Copied!', 'Consumer number copied to clipboard');
+    }
   };
 
   // Check user role and initialize
@@ -452,6 +547,154 @@ const Bills = ({ navigation }) => {
           )}
         </View>
 
+          {!isAdmin && memberData && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Custom Payment</Text>
+            
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Enter Amount to Pay (Rs)</Text>
+              <TextInput
+                style={styles.input}
+                value={amountToPay}
+                onChangeText={setAmountToPay}
+                placeholder="e.g., 5000"
+                placeholderTextColor="#999"
+                keyboardType="numeric"
+                editable={!isGeneratingVoucher}
+              />
+            </View>
+
+            <View style={styles.balanceInfo}>
+              <Text style={styles.balanceInfoText}>
+                Your Current Balance: <Text style={styles.balanceAmount}>Rs {memberData.Balance?.toLocaleString() || 0}</Text>
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={[
+                styles.generateButton,
+                (!amountToPay || Number(amountToPay) <= 0 || Number(amountToPay) > memberData.Balance) && styles.disabledButton
+              ]}
+              onPress={handleGenerateBalanceVoucher}
+              disabled={isGeneratingVoucher || !amountToPay || Number(amountToPay) <= 0 || Number(amountToPay) > memberData.Balance}
+            >
+              {isGeneratingVoucher ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.generateButtonText}>Generate Payment Code</Text>
+              )}
+            </TouchableOpacity>
+
+            <Text style={styles.generateNote}>
+              Enter the amount you wish to pay. The amount cannot exceed your current balance.
+            </Text>
+          </View>
+        )}
+
+        {/* Voucher Success Modal */}
+        {!isAdmin && (
+          <Modal
+            visible={showVoucherModal}
+            transparent={true}
+            animationType="slide"
+            onRequestClose={() => setShowVoucherModal(false)}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.voucherModalContent}>
+                <View style={styles.successHeader}>
+                  <Icon name="check-circle" size={60} color="#4CAF50" />
+                  <Text style={styles.successTitle}>Payment Code Generated!</Text>
+                </View>
+
+                {generatedVoucher && (
+                  <View style={styles.voucherDetails}>
+                    <View style={styles.voucherRow}>
+                      <Text style={styles.voucherLabel}>Consumer Number:</Text>
+                      <View style={styles.consumerNumberContainer}>
+                        <Text style={styles.consumerNumber}>
+                          {generatedVoucher.consumer_number}
+                        </Text>
+                        <TouchableOpacity
+                          style={styles.copyButton}
+                          onPress={copyConsumerNumber}
+                        >
+                          <Icon name="content-copy" size={20} color="#C9A962" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+
+                    {generatedVoucher.due_date && (
+                      <View style={styles.voucherRow}>
+                        <Text style={styles.voucherLabel}>Due Date:</Text>
+                        <Text style={styles.voucherValue}>
+                          {new Date(generatedVoucher.due_date).toLocaleDateString('en-PK', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric'
+                          })}
+                        </Text>
+                      </View>
+                    )}
+
+                    {generatedVoucher.amount && (
+                      <View style={styles.voucherRow}>
+                        <Text style={styles.voucherLabel}>Amount:</Text>
+                        <Text style={styles.voucherValue}>
+                          Rs {Number(generatedVoucher.amount).toLocaleString()}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                )}
+
+                <View style={styles.instructionsContainer}>
+                  <Text style={styles.instructionsTitle}>How to Use This Code:</Text>
+                  
+                  <View style={styles.instructionStep}>
+                    <Text style={styles.stepNumber}>1</Text>
+                    <Text style={styles.instructionText}>Open your banking mobile app (HBL, Meezan, UBL, etc.)</Text>
+                  </View>
+
+                  <View style={styles.instructionStep}>
+                    <Text style={styles.stepNumber}>2</Text>
+                    <Text style={styles.instructionText}>Select <Text style={styles.highlightText}>Kuickpay</Text> payment option</Text>
+                  </View>
+
+                  <View style={styles.instructionStep}>
+                    <Text style={styles.stepNumber}>3</Text>
+                    <Text style={styles.instructionText}>Enter or paste the consumer number shown above</Text>
+                  </View>
+
+                  <View style={styles.instructionStep}>
+                    <Text style={styles.stepNumber}>4</Text>
+                    <Text style={styles.instructionText}>Verify the amount and confirm payment</Text>
+                  </View>
+
+                  <View style={styles.instructionStep}>
+                    <Text style={styles.stepNumber}>5</Text>
+                    <Text style={styles.instructionText}>You will receive a confirmation message</Text>
+                  </View>
+                </View>
+
+                <View style={styles.warningBox}>
+                  <Icon name="information" size={20} color="#FF9800" />
+                  <Text style={styles.warningText}>
+                    Payment will be reflected in the Club system on the next working day.
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  style={styles.closeModalButton}
+                  onPress={() => setShowVoucherModal(false)}
+                >
+                  <Text style={styles.closeModalButtonText}>Close</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Modal>
+        )}
+
+
         {/* Payment Section - Only for Members */}
         {!isAdmin && memberData && (
           <>
@@ -560,6 +803,7 @@ const Bills = ({ navigation }) => {
           </>
         )}
 
+    
         {/* Admin Message - Only for admin when member data is loaded */}
         {/* {isAdmin && memberData && (
           <View style={styles.section}>
@@ -1151,6 +1395,182 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   closeButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  // Balance Payment Styles
+  balanceInfo: {
+    backgroundColor: '#F0F8F4',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#4CAF50',
+  },
+  balanceInfoText: {
+    fontSize: 14,
+    color: '#333',
+    textAlign: 'center',
+  },
+  balanceAmount: {
+    fontWeight: 'bold',
+    color: '#00A651',
+    fontSize: 16,
+  },
+  generateButton: {
+    backgroundColor: '#00A651',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  disabledButton: {
+    backgroundColor: '#CCCCCC',
+  },
+  generateButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  generateNote: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 8,
+    fontStyle: 'italic',
+  },
+  // Voucher Modal Styles
+  voucherModalContent: {
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    width: '90%',
+    maxHeight: '80%',
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  successHeader: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  successTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#333',
+    marginTop: 12,
+  },
+  voucherDetails: {
+    backgroundColor: '#FFF9E6',
+    borderLeftWidth: 4,
+    borderLeftColor: '#C9A962',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 20,
+  },
+  voucherRow: {
+    marginBottom: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0E8E0',
+  },
+  voucherLabel: {
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 6,
+    fontWeight: '600',
+  },
+  voucherValue: {
+    fontSize: 16,
+    color: '#333',
+    fontWeight: '700',
+  },
+  consumerNumberContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#FFF',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  consumerNumber: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    flex: 1,
+  },
+  copyButton: {
+    padding: 8,
+    marginLeft: 8,
+  },
+  instructionsContainer: {
+    backgroundColor: '#F5F5F5',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  instructionsTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 12,
+  },
+  instructionStep: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  stepNumber: {
+    backgroundColor: '#C9A962',
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: 'bold',
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    textAlign: 'center',
+    lineHeight: 24,
+    marginRight: 10,
+    flexShrink: 0,
+  },
+  instructionText: {
+    fontSize: 13,
+    color: '#555',
+    lineHeight: 20,
+    flex: 1,
+    paddingTop: 2,
+  },
+  highlightText: {
+    fontWeight: 'bold',
+    color: '#C9A962',
+  },
+  warningBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF3CD',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    gap: 10,
+  },
+  warningText: {
+    fontSize: 13,
+    color: '#856404',
+    flex: 1,
+    lineHeight: 18,
+  },
+  closeModalButton: {
+    backgroundColor: '#C9A962',
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center',
+  },
+  closeModalButtonText: {
     color: '#FFF',
     fontSize: 16,
     fontWeight: '600',

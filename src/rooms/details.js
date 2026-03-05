@@ -281,8 +281,77 @@ export default function details({ navigation, route }) {
         }
     };
 
+    const isRoomReserved = (room) => {
+        try {
+            const today = new Date();
+            
+            // Check for active bookings (BOOKED status)
+            if (room.bookings && Array.isArray(room.bookings)) {
+                for (const bookingWrapper of room.bookings) {
+                    if (!bookingWrapper) continue;
+                    
+                    // Skip cancelled bookings
+                    const booking = bookingWrapper.booking || bookingWrapper;
+                    const isCancelled = 
+                        booking.paymentStatus === 'CANCELLED' ||
+                        booking.status === 'CANCELLED' ||
+                        booking.bookingStatus === 'CANCELLED';
+                    
+                    if (isCancelled) continue;
+                    
+                    const checkIn = booking.checkIn || booking.bookingDate;
+                    const checkOut = booking.checkOut || booking.endDate || booking.bookingDate;
+                    
+                    if (checkIn && checkOut) {
+                        const checkInDate = new Date(checkIn);
+                        const checkOutDate = new Date(checkOut);
+                        
+                        if (today >= checkInDate && today <= checkOutDate) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            
+            // Check for reservations (RESERVED status)
+            if (room.reservations && Array.isArray(room.reservations)) {
+                for (const reservation of room.reservations) {
+                    if (!reservation) continue;
+                    
+                    const reservedFrom = reservation.reservedFrom;
+                    const reservedTo = reservation.reservedTo;
+                    
+                    if (reservedFrom && reservedTo) {
+                        const fromDate = new Date(reservedFrom);
+                        const toDate = new Date(reservedTo);
+                        
+                        if (today >= fromDate && today <= toDate) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            
+            return false;
+        } catch (error) {
+            console.error('Error checking room reservation status:', error);
+            return false;
+        }
+    };
+
     const handleRoomSelect = (room) => {
         console.log('🛏️ Room selected:', room.roomNumber);
+        
+        // Check if room is reserved or booked
+        if (isRoomReserved(room)) {
+            Alert.alert(
+                'Room Not Available',
+                'This room is already reserved or booked and cannot be selected.',
+                [{ text: 'OK' }]
+            );
+            return;
+        }
+        
         if (isAdminUser()) {
             if (selectedRooms.find(r => r.id === room.id)) {
                 setSelectedRooms(selectedRooms.filter(r => r.id !== room.id));
@@ -732,36 +801,53 @@ export default function details({ navigation, route }) {
         const isSelected = isAdminUser()
             ? selectedRooms.find(r => r.id === item.id)
             : selectedRoom?.id === item.id;
+        
+        const isReserved = isRoomReserved(item);
 
         return (
             <TouchableOpacity
                 style={[
                     styles.roomItem,
                     isSelected && styles.roomItemSelected,
+                    isReserved && styles.roomItemReserved,
                 ]}
                 onPress={() => handleRoomSelect(item)}
+                disabled={isReserved}
+                activeOpacity={isReserved ? 0.5 : 0.7}
             >
                 <View style={styles.roomInfo}>
-                    <Text style={styles.roomNumber}>Room {item.roomNumber}</Text>
-                    <Text style={styles.roomDescription}>
+                    <Text style={[
+                        styles.roomNumber,
+                        isReserved && styles.roomNumberReserved,
+                    ]}>
+                        Room {item.roomNumber}
+                        {isReserved && ' (Reserved)'}
+                    </Text>
+                    <Text style={[
+                        styles.roomDescription,
+                        isReserved && styles.roomDescriptionReserved,
+                    ]}>
                         {item.description || 'Comfortable and well-equipped room'}
                     </Text>
                     <View style={styles.statusContainer}>
                         <View
                             style={[
                                 styles.statusIndicator,
-                                item.isActive ? styles.active : styles.inactive,
+                                isReserved ? styles.reserved : (item.isActive ? styles.active : styles.inactive),
                             ]}
                         />
-                        <Text style={styles.statusText}>
-                            {item.isActive ? 'Available' : 'Unavailable'}
+                        <Text style={[
+                            styles.statusText,
+                            isReserved && styles.statusTextReserved,
+                        ]}>
+                            {isReserved ? 'Reserved' : (item.isActive ? 'Available' : 'Unavailable')}
                         </Text>
                     </View>
                 </View>
                 <Icon
-                    name={isSelected ? 'check-circle' : 'radio-button-unchecked'}
+                    name={isReserved ? 'lock' : (isSelected ? 'check-circle' : 'radio-button-unchecked')}
                     size={24}
-                    color="#b48a64"
+                    color={isReserved ? '#999' : '#b48a64'}
                 />
             </TouchableOpacity>
         );
@@ -1795,6 +1881,10 @@ const styles = StyleSheet.create({
         borderColor: '#b48a64',
         backgroundColor: '#fdf6f0',
     },
+    roomItemReserved: {
+        opacity: 0.6,
+        backgroundColor: '#f5f5f5',
+    },
     roomInfo: {
         flex: 1,
     },
@@ -1804,10 +1894,17 @@ const styles = StyleSheet.create({
         color: '#333',
         marginBottom: 4,
     },
+    roomNumberReserved: {
+        color: '#999',
+        fontWeight: '600',
+    },
     roomDescription: {
         fontSize: 14,
         color: '#666',
         marginBottom: 8,
+    },
+    roomDescriptionReserved: {
+        color: '#999',
     },
     statusContainer: {
         flexDirection: 'row',
@@ -1825,9 +1922,16 @@ const styles = StyleSheet.create({
     inactive: {
         backgroundColor: '#dc3545',
     },
+    reserved: {
+        backgroundColor: '#F59E0B',
+    },
     statusText: {
         fontSize: 12,
         color: 'black',
+    },
+    statusTextReserved: {
+        color: '#F59E0B',
+        fontWeight: '600',
     },
     noRoomsContainer: {
         alignItems: 'center',
