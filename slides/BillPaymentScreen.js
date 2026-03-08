@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,13 +12,18 @@ import {
   ImageBackground,
   ActivityIndicator,
   Alert,
-  Modal,
   Image,
   Clipboard,
+  BackHandler,
+  Animated,
+  Dimensions,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getBaseUrl } from '../config/apis'; // If you have this, otherwise use your API_BASE_URL
+import { getBaseUrl, paymentAPI } from '../config/apis';
+import ViewShot, { captureRef } from 'react-native-view-shot';
+import { CameraRoll } from '@react-native-camera-roll/camera-roll';
+import { permissionService } from '../src/services/PermissionService';
 
 const API_BASE_URL = getBaseUrl ? getBaseUrl() : 'https://admin.peshawarservicesclub.com/api';
 
@@ -79,7 +84,7 @@ const Bills = ({ navigation }) => {
   const [amountToPay, setAmountToPay] = useState('');
   const [isGeneratingVoucher, setIsGeneratingVoucher] = useState(false);
   const [generatedVoucher, setGeneratedVoucher] = useState(null);
-  const [showVoucherModal, setShowVoucherModal] = useState(false);
+  // showVoucherModal removed — we navigate to BillPaymentReceipt instead
 
   // Payment apps for bank dropdown (for 1 Bill payment)
   const paymentApps = [
@@ -115,7 +120,7 @@ const Bills = ({ navigation }) => {
       }
 
       const paymentAmount = Number(amountToPay);
-      
+
       if (isNaN(paymentAmount) || paymentAmount <= 0) {
         Alert.alert('Error', 'Please enter a valid amount');
         return;
@@ -152,21 +157,25 @@ const Bills = ({ navigation }) => {
 
       if (response.ok) {
         console.log('✅ Voucher generated successfully:', responseData);
-        
-        // Store the voucher data
-        setGeneratedVoucher(responseData.voucher || responseData);
-        setShowVoucherModal(true);
-        
+
+        const voucherData = responseData.voucher || responseData;
+        setGeneratedVoucher(voucherData);
+
         // Clear the input
         setAmountToPay('');
-        
-        Alert.alert('Success', 'Payment code generated successfully!');
+
+        // Navigate to the receipt screen
+        navigation.navigate('BillPaymentReceipt', {
+          voucher: voucherData,
+          memberName: membershipName,
+          membershipNumber: membershipNumber,
+        });
       } else {
         console.error('❌ Voucher generation failed:', responseData);
-        
+
         // Handle specific error cases
         const errorMessage = responseData.message || responseData.error || 'Failed to generate payment code';
-        
+
         if (errorMessage.includes('Member not found')) {
           Alert.alert('Error', 'Member not found. Please contact support.');
         } else if (errorMessage.includes('Amount exceeds')) {
@@ -547,10 +556,10 @@ const Bills = ({ navigation }) => {
           )}
         </View>
 
-          {!isAdmin && memberData && (
+        {!isAdmin && memberData && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Custom Payment</Text>
-            
+
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Enter Amount to Pay (Rs)</Text>
               <TextInput
@@ -581,7 +590,7 @@ const Bills = ({ navigation }) => {
               {isGeneratingVoucher ? (
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
-                <Text style={styles.generateButtonText}>Generate Payment Code</Text>
+                <Text style={styles.generateButtonText}>Generate Consumer Number</Text>
               )}
             </TouchableOpacity>
 
@@ -591,108 +600,7 @@ const Bills = ({ navigation }) => {
           </View>
         )}
 
-        {/* Voucher Success Modal */}
-        {!isAdmin && (
-          <Modal
-            visible={showVoucherModal}
-            transparent={true}
-            animationType="slide"
-            onRequestClose={() => setShowVoucherModal(false)}
-          >
-            <View style={styles.modalOverlay}>
-              <View style={styles.voucherModalContent}>
-                <View style={styles.successHeader}>
-                  <Icon name="check-circle" size={60} color="#4CAF50" />
-                  <Text style={styles.successTitle}>Payment Code Generated!</Text>
-                </View>
-
-                {generatedVoucher && (
-                  <View style={styles.voucherDetails}>
-                    <View style={styles.voucherRow}>
-                      <Text style={styles.voucherLabel}>Consumer Number:</Text>
-                      <View style={styles.consumerNumberContainer}>
-                        <Text style={styles.consumerNumber}>
-                          {generatedVoucher.consumer_number}
-                        </Text>
-                        <TouchableOpacity
-                          style={styles.copyButton}
-                          onPress={copyConsumerNumber}
-                        >
-                          <Icon name="content-copy" size={20} color="#C9A962" />
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-
-                    {generatedVoucher.due_date && (
-                      <View style={styles.voucherRow}>
-                        <Text style={styles.voucherLabel}>Due Date:</Text>
-                        <Text style={styles.voucherValue}>
-                          {new Date(generatedVoucher.due_date).toLocaleDateString('en-PK', {
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric'
-                          })}
-                        </Text>
-                      </View>
-                    )}
-
-                    {generatedVoucher.amount && (
-                      <View style={styles.voucherRow}>
-                        <Text style={styles.voucherLabel}>Amount:</Text>
-                        <Text style={styles.voucherValue}>
-                          Rs {Number(generatedVoucher.amount).toLocaleString()}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                )}
-
-                <View style={styles.instructionsContainer}>
-                  <Text style={styles.instructionsTitle}>How to Use This Code:</Text>
-                  
-                  <View style={styles.instructionStep}>
-                    <Text style={styles.stepNumber}>1</Text>
-                    <Text style={styles.instructionText}>Open your banking mobile app (HBL, Meezan, UBL, etc.)</Text>
-                  </View>
-
-                  <View style={styles.instructionStep}>
-                    <Text style={styles.stepNumber}>2</Text>
-                    <Text style={styles.instructionText}>Select <Text style={styles.highlightText}>Kuickpay</Text> payment option</Text>
-                  </View>
-
-                  <View style={styles.instructionStep}>
-                    <Text style={styles.stepNumber}>3</Text>
-                    <Text style={styles.instructionText}>Enter or paste the consumer number shown above</Text>
-                  </View>
-
-                  <View style={styles.instructionStep}>
-                    <Text style={styles.stepNumber}>4</Text>
-                    <Text style={styles.instructionText}>Verify the amount and confirm payment</Text>
-                  </View>
-
-                  <View style={styles.instructionStep}>
-                    <Text style={styles.stepNumber}>5</Text>
-                    <Text style={styles.instructionText}>You will receive a confirmation message</Text>
-                  </View>
-                </View>
-
-                <View style={styles.warningBox}>
-                  <Icon name="information" size={20} color="#FF9800" />
-                  <Text style={styles.warningText}>
-                    Payment will be reflected in the Club system on the next working day.
-                  </Text>
-                </View>
-
-                <TouchableOpacity
-                  style={styles.closeModalButton}
-                  onPress={() => setShowVoucherModal(false)}
-                >
-                  <Text style={styles.closeModalButtonText}>Close</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </Modal>
-        )}
+        {/* Modal removed — receipt is now a separate screen */}
 
 
         {/* Payment Section - Only for Members */}
@@ -701,7 +609,7 @@ const Bills = ({ navigation }) => {
             {/* BILL PAYMENT VIA MOBILE APP & OTHER PAYMENT MODES */}
             <View style={styles.section}>
               <Text style={styles.proceduresTitle}>BILL PAYMENT VIA MOBILE APP & OTHER PAYMENT MODES</Text>
-              
+
               <Text style={styles.procedureItem}>
                 This guide explains the step-by-step procedure for bill payment through the mobile application of Peshawar Services Club, along with alternative payment options available for members.
               </Text>
@@ -709,7 +617,7 @@ const Bills = ({ navigation }) => {
               <Text style={styles.procedureItemHighlight}>
                 1. Mobile App Payment Procedure (via Kuick Pay)
               </Text>
-              
+
               <Text style={styles.procedureItem}>
                 Please note that payment through the mobile app is processed using Kuick Pay services via your personal bank application. Members may pay in advance, partially, or the exact billed amount.
               </Text>
@@ -803,7 +711,7 @@ const Bills = ({ navigation }) => {
           </>
         )}
 
-    
+
         {/* Admin Message - Only for admin when member data is loaded */}
         {/* {isAdmin && memberData && (
           <View style={styles.section}>
@@ -1415,11 +1323,11 @@ const styles = StyleSheet.create({
   },
   balanceAmount: {
     fontWeight: 'bold',
-    color: '#00A651',
+    color: 'black',
     fontSize: 16,
   },
   generateButton: {
-    backgroundColor: '#00A651',
+    backgroundColor: '#b48a64',
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
@@ -1585,4 +1493,757 @@ const styles = StyleSheet.create({
   },
 });
 
+// =============================================================================
+// BillPaymentReceipt Screen
+// =============================================================================
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+const BillPaymentReceipt = ({ navigation, route }) => {
+  const { voucher, memberName, membershipNumber: memNo } = route.params || {};
+
+  // Timer: 1 hour = 3600 seconds
+  const TIMER_DURATION = 3600;
+  const [secondsLeft, setSecondsLeft] = useState(TIMER_DURATION);
+  const [isExpired, setIsExpired] = useState(false);
+  const [isPaid, setIsPaid] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [downloadLoading, setDownloadLoading] = useState(false);
+
+  // Refs
+  const viewShotRef = useRef(null);
+
+  // Animated values
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(40)).current;
+  const scaleAnim = useRef(new Animated.Value(0.6)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  // Generation time – captured once when the screen mounts
+  const generationTime = useRef(new Date()).current;
+
+  // ── Entrance animation ──
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        friction: 4,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
+  // ── Pulse animation for timer when < 5 min ──
+  useEffect(() => {
+    if (secondsLeft <= 300 && secondsLeft > 0) {
+      const pulse = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, { toValue: 1.08, duration: 500, useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
+        ])
+      );
+      pulse.start();
+      return () => pulse.stop();
+    }
+  }, [secondsLeft <= 300]);
+
+  // ── Poll backend for payment status every 10 seconds ──
+  useEffect(() => {
+    if (isPaid || isExpired) return;
+    const consumerNumber = voucher?.consumer_number;
+    if (!consumerNumber) return;
+
+    const checkPaymentStatus = async () => {
+      try {
+        const token = await AsyncStorage.getItem('access_token');
+        if (!token) return;
+
+        // Try /payment/member/vouchers first (returns all vouchers for this member)
+        const vouchersRes = await fetch(
+          `${API_BASE_URL}/payment/member/vouchers?membershipNo=${memNo}`,
+          { headers: { 'Authorization': `Bearer ${token}` } }
+        );
+
+        if (vouchersRes.ok) {
+          const vouchersData = await vouchersRes.json();
+          // vouchersData could be an array or { data: [...] }
+          const list = Array.isArray(vouchersData)
+            ? vouchersData
+            : (vouchersData?.data || vouchersData?.vouchers || []);
+
+          const match = list.find(v =>
+            String(v.consumer_number || v.consumerNumber || v.consumer_no) ===
+            String(consumerNumber)
+          );
+
+          if (match) {
+            const paidStatuses = ['PAID', 'paid', 'CONFIRMED', 'confirmed', 'SUCCESS', 'success'];
+            const voucherStatus = match.status || match.paymentStatus || match.payment_status || '';
+            if (paidStatuses.includes(voucherStatus)) {
+              console.log('✅ Payment confirmed via voucher polling!');
+              setIsPaid(true);
+              return;
+            }
+          }
+        }
+
+        // Fallback: check bill-payment-history
+        const histRes = await fetch(
+          `${API_BASE_URL}/payment/bill-payment-history/${memNo}`,
+          { headers: { 'Authorization': `Bearer ${token}` } }
+        );
+
+        if (histRes.ok) {
+          const histData = await histRes.json();
+          const histList = Array.isArray(histData)
+            ? histData
+            : (histData?.data || histData?.bills || []);
+
+          const histMatch = histList.find(b =>
+            String(b.consumer_number || b.consumerNo || b.invoice_number) ===
+            String(consumerNumber)
+          );
+
+          if (histMatch) {
+            console.log('✅ Payment confirmed via bill history!');
+            setIsPaid(true);
+          }
+        }
+      } catch (err) {
+        console.log('⚠️ Payment status poll error:', err.message);
+      }
+    };
+
+    // Check immediately on mount
+    checkPaymentStatus();
+
+    // Then poll every 10 seconds
+    const pollInterval = setInterval(checkPaymentStatus, 10000);
+
+    return () => clearInterval(pollInterval);
+  }, [isPaid, isExpired, voucher?.consumer_number, memNo]);
+
+  // ── Countdown timer ──
+  useEffect(() => {
+    if (isExpired || isPaid) return;
+    const interval = setInterval(() => {
+      setSecondsLeft(prev => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          setIsExpired(true);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isExpired, isPaid]);
+
+  // ── Navigation guard ──
+  useEffect(() => {
+    const onBackPress = () => {
+      if (isPaid) {
+        // Payment done — go back to start freely
+        navigation.reset({ index: 0, routes: [{ name: 'start' }] });
+        return true;
+      }
+      showLeaveAlert();
+      return true; // prevent default
+    };
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+
+    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+      if (isPaid) return; // allow leaving after payment
+      e.preventDefault();
+      showLeaveAlert(() => navigation.dispatch(e.data.action));
+    });
+
+    return () => {
+      backHandler.remove();
+      unsubscribe();
+    };
+  }, [navigation, isPaid]);
+
+  const showLeaveAlert = (onConfirm) => {
+    Alert.alert(
+      'Leave Payment?',
+      'Leaving this screen will cancel your active consumer session. Do you wish to proceed?',
+      [
+        { text: 'Stay', style: 'cancel' },
+        {
+          text: 'Leave',
+          style: 'destructive',
+          onPress: () => {
+            if (onConfirm) {
+              onConfirm();
+            } else {
+              navigation.goBack();
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // ── Copy handler ──
+  const handleCopy = () => {
+    if (isExpired || isPaid) return;
+    if (voucher?.consumer_number) {
+      Clipboard.setString(String(voucher.consumer_number));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  // ── Cancel handler ──
+  const handleCancel = () => {
+    Alert.alert(
+      'Cancel Payment',
+      'Are you sure you want to cancel this bill payment? This action cannot be undone.',
+      [
+        { text: 'No', style: 'cancel' },
+        {
+          text: 'Yes, Cancel',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setIsCancelling(true);
+              const voucherId = voucher?.id || voucher?.voucherId || voucher?.invoice_id;
+              if (!voucherId) {
+                Alert.alert('Error', 'Voucher ID not found.');
+                return;
+              }
+              await paymentAPI.cancelBalanceVoucher(voucherId);
+              Alert.alert('Cancelled', 'Your bill payment has been cancelled.', [
+                {
+                  text: 'OK',
+                  onPress: () => navigation.goBack(),
+                },
+              ]);
+            } catch (error) {
+              const msg = error?.response?.data?.message || error?.message || 'Failed to cancel payment.';
+              Alert.alert('Error', msg);
+            } finally {
+              setIsCancelling(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // ── Download handler ──
+  const handleDownloadReceipt = async () => {
+    try {
+      setDownloadLoading(true);
+
+      const hasPermission = await permissionService.requestPhotoLibraryPermission();
+      if (!hasPermission) {
+        permissionService.handlePermissionDenied();
+        return;
+      }
+
+      if (viewShotRef.current) {
+        const uri = await captureRef(viewShotRef, {
+          format: 'png',
+          quality: 1.0,
+        });
+
+        await CameraRoll.save(uri, { type: 'photo' });
+        Alert.alert('Success', 'Receipt saved to gallery successfully!');
+      } else {
+        Alert.alert('Error', 'Capture reference not found.');
+      }
+    } catch (error) {
+      console.error('Error saving receipt:', error);
+      Alert.alert('Error', 'Failed to save receipt. Please try again.');
+    } finally {
+      setDownloadLoading(false);
+    }
+  };
+
+  // ── Helpers ──
+  const formatTime = (secs) => {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  };
+
+  const formattedDate = generationTime.toLocaleDateString('en-PK', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+  const formattedTime = generationTime.toLocaleTimeString('en-PK', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+
+  // Determine status
+  const getStatus = () => {
+    if (isExpired) return 'expired';
+    if (isPaid) return 'paid';
+    return 'pending';
+  };
+
+  const status = getStatus();
+
+  const statusConfig = {
+    pending: {
+      icon: 'clock-outline',
+      color: '#FF9800',
+      bgColor: '#FFF3E0',
+      title: 'Payment Pending',
+      subtitle: 'Please complete your payment via Kuickpay.',
+    },
+    paid: {
+      icon: 'check-circle',
+      color: '#4CAF50',
+      bgColor: '#E8F5E9',
+      title: 'Payment Success!',
+      subtitle: 'Your payment was successful.',
+    },
+    expired: {
+      icon: 'clock-alert-outline',
+      color: '#F44336',
+      bgColor: '#FFEBEE',
+      title: 'Session Expired',
+      subtitle: 'Your consumer number has expired.',
+    },
+  };
+
+  const cfg = statusConfig[status];
+
+  return (
+    <View style={receiptStyles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="#F9EFE6" />
+
+      <ViewShot ref={viewShotRef} options={{ format: 'png', quality: 1.0 }} style={{ flex: 1, backgroundColor: '#F9EFE6' }}>
+        <View style={receiptStyles.scrollContent}>
+          {/* ── Status Icon ── */}
+          <Animated.View
+            style={[
+              receiptStyles.iconWrapper,
+              {
+                backgroundColor: cfg.bgColor,
+                transform: [{ scale: scaleAnim }],
+              },
+            ]}
+          >
+            <Icon name={cfg.icon} size={40} color={cfg.color} />
+          </Animated.View>
+
+          {/* ── Title ── */}
+          <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+            <Text style={[receiptStyles.title, { color: cfg.color }]}>{cfg.title}</Text>
+            <Text style={receiptStyles.subtitle}>{cfg.subtitle}</Text>
+            {/* Cancel Button — only when pending */}
+            {status === 'pending' && (
+              <TouchableOpacity
+                style={receiptStyles.cancelBtn}
+                onPress={handleCancel}
+                disabled={isCancelling}
+                activeOpacity={0.7}
+              >
+                {isCancelling ? (
+                  <ActivityIndicator size="small" color="#F44336" />
+                ) : (
+                  <>
+                    <Icon name="close-circle-outline" size={16} color="#F44336" />
+                    <Text style={receiptStyles.cancelBtnText}>Cancel Bill Payment</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
+          </Animated.View>
+          {!isPaid && (
+            <Animated.View
+              style={[
+                receiptStyles.timerBanner,
+                isExpired && receiptStyles.timerBannerExpired,
+                { transform: [{ scale: secondsLeft <= 300 && !isExpired ? pulseAnim : 1 }] },
+              ]}
+            >
+              <Icon
+                name={isExpired ? 'timer-off-outline' : 'timer-outline'}
+                size={24}
+                color={isExpired ? '#F44336' : '#FF9800'}
+              />
+              <View style={receiptStyles.timerTextWrap}>
+                <Text style={receiptStyles.timerTitle}>
+                  {isExpired ? 'Session Expired' : 'Time Remaining'}
+                </Text>
+                <Text
+                  style={[
+                    receiptStyles.timerValue,
+                    isExpired && { color: '#F44336' },
+                    secondsLeft <= 300 && !isExpired && { color: '#F44336' },
+                  ]}
+                >
+                  {isExpired ? '00:00' : formatTime(secondsLeft)}
+                </Text>
+              </View>
+            </Animated.View>
+          )}
+          {/* ── Receipt Card ── */}
+          <Animated.View
+            style={[
+              receiptStyles.card,
+              { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+            ]}
+          >
+            {/* Consumer Number */}
+            <Text style={receiptStyles.cardLabel}>Consumer Number</Text>
+            <View style={receiptStyles.consumerRow}>
+              <Text style={receiptStyles.consumerText}>
+                {voucher?.consumer_number || '—'}
+              </Text>
+              <TouchableOpacity
+                onPress={handleCopy}
+                disabled={isExpired || isPaid}
+                style={[
+                  receiptStyles.copyBtn,
+                  (isExpired || isPaid) && { opacity: 0.35 },
+                ]}
+                activeOpacity={0.6}
+              >
+                <Icon
+                  name={copied ? 'check-circle' : 'content-copy'}
+                  size={20}
+                  color={copied ? '#4CAF50' : '#C9A962'}
+                />
+              </TouchableOpacity>
+            </View>
+            {copied && (
+              <Text style={receiptStyles.copiedLabel}>Copied to clipboard!</Text>
+            )}
+
+            {/* Divider */}
+            <View style={receiptStyles.divider} />
+
+            {/* Amount */}
+            <View style={receiptStyles.row}>
+              <Text style={receiptStyles.rowLabel}>Amount</Text>
+              <Text style={receiptStyles.rowValueBold}>
+                Rs {voucher?.amount ? Number(voucher.amount).toLocaleString() : '0'}
+              </Text>
+            </View>
+
+            {/* Status */}
+            <View style={receiptStyles.row}>
+              <Text style={receiptStyles.rowLabel}>Status</Text>
+              <View style={[receiptStyles.statusBadge, { backgroundColor: cfg.bgColor }]}>
+                <Text style={[receiptStyles.statusBadgeText, { color: cfg.color }]}>
+                  {status === 'pending' ? 'Pending' : status === 'paid' ? 'Success' : 'Expired'}
+                </Text>
+              </View>
+            </View>
+
+            <View style={receiptStyles.dividerLight} />
+
+            {/* Member Name */}
+            <View style={receiptStyles.row}>
+              <Text style={receiptStyles.rowLabel}>Member Name</Text>
+              <Text style={receiptStyles.rowValue}>{memberName || '—'}</Text>
+            </View>
+
+            {/* Membership Number */}
+            <View style={receiptStyles.row}>
+              <Text style={receiptStyles.rowLabel}>Membership No.</Text>
+              <Text style={receiptStyles.rowValue}>{memNo || '—'}</Text>
+            </View>
+
+            {/* Payment Method */}
+            <View style={receiptStyles.row}>
+              <Text style={receiptStyles.rowLabel}>Payment Method</Text>
+              <Text style={receiptStyles.rowValue}>Kuickpay</Text>
+            </View>
+
+            {/* Generation Time */}
+            <View style={receiptStyles.row}>
+              <Text style={receiptStyles.rowLabel}>Generated</Text>
+              <Text style={receiptStyles.rowValue}>
+                {formattedDate}, {formattedTime}
+              </Text>
+            </View>
+          </Animated.View>
+
+          {/* ── Timer Banner ── */}
+
+
+          {/* ── Spacer pushes buttons to bottom ── */}
+          <View style={{ flex: 1 }} />
+
+          {/* ── Action Buttons ── */}
+          <View style={receiptStyles.actions}>
+            {/* Download Receipt */}
+            <TouchableOpacity
+              style={receiptStyles.outlineBtn}
+              onPress={handleDownloadReceipt}
+              disabled={downloadLoading}
+              activeOpacity={0.7}
+            >
+              {downloadLoading ? (
+                <ActivityIndicator size="small" color="#C9A962" />
+              ) : (
+                <>
+                  <Icon name="download-outline" size={18} color="#C9A962" />
+                  <Text style={receiptStyles.outlineBtnText}>Download Receipt</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            {/* Back to Home - Only visible when paid */}
+            {isPaid && (
+              <TouchableOpacity
+                style={receiptStyles.solidBtn}
+                onPress={() => {
+                  navigation.reset({
+                    index: 0,
+                    routes: [{ name: 'start' }],
+                  });
+                }}
+                activeOpacity={0.7}
+              >
+                <Icon name="home-outline" size={18} color="#fff" />
+                <Text style={receiptStyles.solidBtnText}>Back to Home</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </ViewShot>
+    </View>
+  );
+};
+
+// ── Receipt Styles ──
+const receiptStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#F9EFE6',
+  },
+  scrollContent: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 50 : 36,
+    paddingBottom: 16,
+    alignItems: 'center',
+  },
+  iconWrapper: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: '800',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  subtitle: {
+    fontSize: 13,
+    color: '#777',
+    textAlign: 'center',
+    marginBottom: 14,
+  },
+  // Card
+  card: {
+    width: '100%',
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.07,
+    shadowRadius: 8,
+    elevation: 4,
+    marginBottom: 12,
+  },
+  cardLabel: {
+    fontSize: 15,
+    color: '#888',
+    marginBottom: 6,
+    fontWeight: '600',
+  },
+  consumerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF9E6',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderWidth: 1.5,
+    borderColor: '#E8DDD0',
+  },
+  consumerText: {
+    flex: 1,
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#222',
+    letterSpacing: 0.3,
+  },
+  copyBtn: {
+    padding: 4,
+    marginLeft: 6,
+  },
+  copiedLabel: {
+    fontSize: 11,
+    color: '#4CAF50',
+    marginTop: 4,
+    fontWeight: '600',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#EEE',
+    marginVertical: 10,
+  },
+  dividerLight: {
+    height: 1,
+    backgroundColor: '#F5F0EA',
+    marginVertical: 8,
+  },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  rowLabel: {
+    fontSize: 14,
+    color: '#888',
+  },
+  rowValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    textAlign: 'right',
+    flexShrink: 1,
+    marginLeft: 12,
+  },
+  rowValueBold: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#222',
+  },
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 20,
+  },
+  statusBadgeText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  // Timer
+  timerBanner: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFF3E0',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#FFE0B2',
+  },
+  timerBannerExpired: {
+    backgroundColor: '#FFEBEE',
+    borderColor: '#FFCDD2',
+  },
+  timerTextWrap: {
+    marginLeft: 12,
+  },
+  timerTitle: {
+    fontSize: 12,
+    color: '#777',
+    fontWeight: '600',
+  },
+  timerValue: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#FF9800',
+    letterSpacing: 1,
+  },
+  // Buttons
+  actions: {
+    width: '100%',
+    gap: 10,
+  },
+  outlineBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#C9A962',
+    borderRadius: 12,
+    paddingVertical: 12,
+    gap: 8,
+    backgroundColor: '#FFF',
+  },
+  outlineBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#C9A962',
+  },
+  solidBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#b48a64',
+    borderRadius: 12,
+    paddingVertical: 12,
+    gap: 8,
+    shadowColor: '#b48a64',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  solidBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFF',
+  },
+  cancelBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: '#F4433620',
+    backgroundColor: '#FFF',
+    marginBottom: 10,
+  },
+  cancelBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#F44336',
+  },
+});
+
+export { BillPaymentReceipt };
 export default Bills;

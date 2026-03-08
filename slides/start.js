@@ -845,8 +845,16 @@ export default function start({ navigation }) {
       if (user?.role !== "ADMIN" && user?.role !== "SUPER_ADMIN") {
         const response = await getUnseenNotificationsCount();
 
-        if (response && typeof response === 'number') {
-          setUnseenCount(response);
+        if (response !== null && response !== undefined) {
+          // Handle both plain number response and object response { count: N }
+          if (typeof response === 'number') {
+            setUnseenCount(response);
+          } else if (typeof response === 'object' && response !== null) {
+            const count = response.count ?? response.unseenCount ?? response.data ?? 0;
+            setUnseenCount(typeof count === 'number' ? count : 0);
+          } else {
+            setUnseenCount(0);
+          }
         }
       }
     } catch (error) {
