@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import {
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { getUserNotifications, updateNotiStatus } from "../config/apis";
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect } from '@react-navigation/native';
 import AnnouncementRenderer from '../src/components/AnnouncementRenderer';
 
 const { height } = Dimensions.get('window');
@@ -51,9 +52,14 @@ export default function Announcements({ navigation }) {
 
 
 
-  useEffect(() => {
-    fetchAnnouncements();
-  }, []);
+  // Fetch announcements every time the screen gains focus
+  // (useEffect with [] only runs once on mount, but React Navigation
+  // keeps screens mounted, so new notifications wouldn't appear)
+  useFocusEffect(
+    useCallback(() => {
+      fetchAnnouncements();
+    }, [])
+  );
 
   const openModal = async (item) => {
     setSelectedAnnouncement(item);
@@ -198,7 +204,7 @@ export default function Announcements({ navigation }) {
 
                       <View style={styles.messageBubble}>
                         {/* Rich Text Renderer for HTML content */}
-                        <AnnouncementRenderer 
+                        <AnnouncementRenderer
                           htmlContent={
                             selectedAnnouncement.description ||
                             selectedAnnouncement.content ||

@@ -2284,6 +2284,7 @@ import DropDownPicker from 'react-native-dropdown-picker';
 import { getUserData, banquetAPI } from '../../config/apis';
 import { useAuth } from '../auth/contexts/AuthContext';
 import { useVoucher } from '../auth/contexts/VoucherContext';
+import TermsAndConditions from '../components/TermsAndConditions';
 
 const eventTypeOptions = [
   { label: 'Wedding Reception', value: 'wedding' },
@@ -2321,6 +2322,24 @@ const BHBooking = ({ route, navigation }) => {
   const [guestContact, setGuestContact] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Validate guest name - only alphabets and max 50 characters
+  const handleGuestNameChange = (text) => {
+    // Remove any non-alphabetic characters (allow spaces for full names)
+    const sanitizedText = text.replace(/[^a-zA-Z\s]/g, '');
+    // Limit to 50 characters
+    const limitedText = sanitizedText.slice(0, 50);
+    setGuestName(limitedText);
+  };
+
+  // Validate guest contact - Pakistani format (03XXXXXXXXX or 92XXXXXXXXXX)
+  const handleGuestContactChange = (text) => {
+    // Remove any non-digit characters
+    const digitsOnly = text.replace(/[^0-9]/g, '');
+    // Limit to 12 digits (for 92 format) but prefer 11 for 03 format
+    const limitedText = digitsOnly.slice(0, 12);
+    setGuestContact(limitedText);
+  };
+
   // Admin Reservation States
   const [isAdmin, setIsAdmin] = useState(false);
   const [reserveFrom, setReserveFrom] = useState('');
@@ -2338,6 +2357,10 @@ const BHBooking = ({ route, navigation }) => {
   // Reservation Data
   const [reservedDates, setReservedDates] = useState({});
   const [isFetchingReservations, setIsFetchingReservations] = useState(false);
+
+  // Terms & Conditions state
+  const [termsAgreed, setTermsAgreed] = useState(false);
+  const [showTermsError, setShowTermsError] = useState(false);
 
   // Extract membership number from user object
   const extractMembershipNo = () => {
@@ -2564,6 +2587,14 @@ const BHBooking = ({ route, navigation }) => {
 
   // Member/Guest Booking function
   const handleGenerateInvoice = async () => {
+    // Terms & Conditions validation
+    if (!termsAgreed) {
+      setShowTermsError(true);
+      setShowBookingModal(false);
+      Alert.alert('Terms & Conditions', 'You must agree to the Terms & Conditions before booking.');
+      return;
+    }
+
     // Validation
     const sortedDates = Object.keys(dateConfigurations).sort();
     if (sortedDates.length === 0) {
@@ -2585,8 +2616,10 @@ const BHBooking = ({ route, navigation }) => {
         Alert.alert('Error', 'Please enter guest name');
         return;
       }
-      if (!guestContact.trim() || guestContact.length < 10) {
-        Alert.alert('Error', 'Please enter a valid phone number');
+      // Validate Pakistani mobile number format (03xxxxxxxxx or 92xxxxxxxxxx)
+      const phoneRegex = /^(03\d{9}|92\d{10})$/;
+      if (!phoneRegex.test(guestContact.trim())) {
+        Alert.alert('Invalid Mobile Number', 'Please enter a valid mobile number (e.g., 03001234567 or 923001234567).');
         return;
       }
     }
@@ -2950,9 +2983,10 @@ const BHBooking = ({ route, navigation }) => {
                   style={styles.guestInput}
                   placeholder="Guest Full Name *"
                   value={guestName}
-                  onChangeText={setGuestName}
+                  onChangeText={handleGuestNameChange}
                   placeholderTextColor="#999"
                   autoCapitalize="words"
+                  maxLength={50}
                 />
               </View>
             </View>
@@ -2964,10 +2998,10 @@ const BHBooking = ({ route, navigation }) => {
                   style={styles.guestInput}
                   placeholder="Guest Contact Number *"
                   value={guestContact}
-                  onChangeText={setGuestContact}
+                  onChangeText={handleGuestContactChange}
                   keyboardType="phone-pad"
                   placeholderTextColor="#999"
-                  maxLength={15}
+                  maxLength={12}
                 />
               </View>
             </View>
@@ -3224,6 +3258,17 @@ const BHBooking = ({ route, navigation }) => {
             <Text style={{ fontWeight: 'bold' }}>03419777711</Text>.
           </Text>
         </View>
+
+        {/* Terms & Conditions */}
+        <TermsAndConditions
+          bookingType="HALL"
+          agreed={termsAgreed}
+          onToggle={() => {
+            setTermsAgreed(!termsAgreed);
+            if (showTermsError) setShowTermsError(false);
+          }}
+          showError={showTermsError}
+        />
 
         {/* Book Now Button */}
         <TouchableOpacity

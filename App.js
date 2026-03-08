@@ -1,4 +1,5 @@
-//App.js                                                                                                                                                                                                             import 'react-native-gesture-handler';
+//App.js
+import 'react-native-gesture-handler';
 import React, { useEffect } from 'react';
 import { enableScreens } from 'react-native-screens';
 import { View, Button, Alert, LogBox, Image, StyleSheet, Text, TouchableOpacity, StatusBar, Linking } from 'react-native';
@@ -59,6 +60,7 @@ import SportsScreen from './src/sports/SportsScreen.js';
 import SportDetailsScreen from './src/sports/SportDetailsScreen.js';
 import ClubArenaScreen from './slides/ClubArenaScreen';
 import BillPaymentScreen from './slides/BillPaymentScreen';
+import { BillPaymentReceipt } from './slides/BillPaymentScreen';
 import LoginScr from './src/auth/LoginScr';
 import HallDetailsScreen from './src/halls/HallDetailsScreen';
 import HallReservation from './src/halls/HallReservation';
@@ -104,6 +106,7 @@ import MemberBookingsScreen from './src/view/MemberBookingsScreen';
 import BookingDetailsScreen from './src/view/BookingDetailsScreen';
 import AdminBookingsScreen from './src/view/AdminBookingsScreen';
 import feedbacks from './slides/feedbacks';
+import BillPaymentHistory from './slides/BillPaymentHistory';
 
 // ===== Navigation Setup =====
 enableScreens();
@@ -303,6 +306,16 @@ function MemberDrawer() {
           headerShown: false,
           drawerIcon: ({ color, size }) => (
             <Icon name="calendar-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Drawer.Screen
+        name="Bill Payment History"
+        component={BillPaymentHistory}
+        options={{
+          headerShown: false,
+          drawerIcon: ({ color, size }) => (
+            <MaterialIcons name="receipt" size={size} color={color} />
           ),
         }}
       />
@@ -531,10 +544,10 @@ function AppContent() {
   // Handle navigation ready callback
   const onNavigationReady = () => {
     console.log('🧭 [Navigation] Container is ready');
-    
+
     // Register navigation ref in NavigationService
     setNavigator(navigationRef);
-    
+
     // Handle any pending navigation from notification
     if (pendingNotification.current) {
       handleNotificationNavigation(pendingNotification.current, navigationRef);
@@ -624,6 +637,7 @@ function AppContent() {
         <Stack.Screen name="SportDetailsScreen" component={SportDetailsScreen} options={{ headerShown: false }} />
         <Stack.Screen name="Swimming" component={Swimming} options={{ headerShown: false }} />
         <Stack.Screen name="BillPaymentScreen" component={BillPaymentScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="BillPaymentReceipt" component={BillPaymentReceipt} options={{ headerShown: false }} />
         <Stack.Screen name="ClubArenaScreen" component={ClubArenaScreen} options={{ headerShown: false }} />
         <Stack.Screen name="contact" component={contact} />
         <Stack.Screen name="events" component={events} options={{ headerShown: false }} />
@@ -663,6 +677,7 @@ function AppContent() {
         <Stack.Screen name="ReservationsScreen" component={ReservationsScreen} options={{ headerShown: false }} />
         <Stack.Screen name="Feedback" component={feedbacks} options={{ headerShown: false }} />
         <Stack.Screen name="RoomBookingScreen" component={RoomBookingScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="BillPaymentHistory" component={BillPaymentHistory} options={{ headerShown: false }} />
       </Stack.Navigator>
       <BookingSummaryBar />
     </NavigationContainer>

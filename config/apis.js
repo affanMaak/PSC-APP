@@ -24,7 +24,7 @@ const MAX_LOCK_WAIT_TIME = 2000; // 2 seconds max wait
 
 const waitForTokenWrite = async () => {
   if (!isTokenBeingWritten) return;
-  
+
   const startTime = Date.now();
   while (isTokenBeingWritten) {
     if (Date.now() - startTime > MAX_LOCK_WAIT_TIME) {
@@ -49,7 +49,7 @@ api.interceptors.request.use(
     try {
       // Wait for any pending token writes to complete (prevents race conditions)
       await waitForTokenWrite();
-      
+
       const token = await AsyncStorage.getItem('access_token');
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
@@ -92,7 +92,7 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
-    
+
     console.log("Error in response interceptor:", {
       status: error.response?.status,
       data: error.response?.data,
@@ -106,7 +106,7 @@ api.interceptors.response.use(
         console.log('⚠️ Logout already in progress, skipping duplicate trigger');
         return Promise.reject(error);
       }
-      
+
       isLoggingOut = true;
       console.error('🚨 Session Expired: Logged in on another device');
 
@@ -127,11 +127,11 @@ api.interceptors.response.use(
       // Check if this is a retry attempt
       if (!originalRequest._retry) {
         originalRequest._retry = true;
-        
+
         // Verify current token state before deciding to logout
         try {
           const currentToken = await AsyncStorage.getItem('access_token');
-          
+
           // If token exists and matches the failed request, it's a true 401
           // If token is different or missing, it was a transient handover issue
           if (currentToken) {
@@ -158,19 +158,19 @@ export const storeAuthData = async (tokens, userData) => {
   try {
     // Set write lock to prevent race conditions
     isTokenBeingWritten = true;
-    
+
     await AsyncStorage.setItem('access_token', tokens.access_token);
     await AsyncStorage.setItem('refresh_token', tokens.refresh_token);
     await AsyncStorage.setItem('user_data', JSON.stringify(userData));
-    
+
     console.log('✅ Auth data stored');
-    
+
     // Release lock after a small delay to ensure writes complete
     setTimeout(() => {
       isTokenBeingWritten = false;
       console.log('🔓 Token write lock released');
     }, 100);
-    
+
   } catch (error) {
     console.error('❌ Error storing auth data:', error);
     isTokenBeingWritten = false; // Always release lock on error
@@ -260,6 +260,22 @@ export const updateNotiStatus = async (notiID) => {
   } catch (error) {
     console.error('Error updating notification status:', error);
     return null;
+  }
+};
+
+export const getBillPaymentHistory = async (membershipNo, from, to) => {
+  try {
+    const params = {};
+    if (from) params.from = from;
+    if (to) params.to = to;
+
+    const response = await api.get(`/payment/bill-payment-history/${membershipNo}`, {
+      params,
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error getting bill payment history:', error);
+    throw error;
   }
 };
 
@@ -410,6 +426,18 @@ export const paymentAPI = {
       return response.data;
     } catch (error) {
       console.error('❌ Error verifying payment:', error);
+      throw error;
+    }
+  },
+
+  // Cancel balance voucher
+  cancelBalanceVoucher: async (voucherId) => {
+    try {
+      console.log('🔴 Cancelling balance voucher:', voucherId);
+      const response = await api.post(`/payment/balance/cancel/${voucherId}`);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Error cancelling balance voucher:', error);
       throw error;
     }
   },
@@ -827,19 +855,19 @@ export const getContactUs = async () => {
     console.log('📞 Fetching contact us data...');
     const response = await api.get(`${base_url}/content/contact-us`);
     console.log('✅ Contact us response:', JSON.stringify(response.data, null, 2));
-    
+
     // Handle different response formats
     if (!response.data) {
       console.warn('⚠️ Empty response from contact-us API');
       return null;
     }
-    
+
     // If the response has a data wrapper (common in many APIs)
     if (response.data.data && typeof response.data.data === 'object') {
       console.log('📦 Found data wrapper, using inner data');
       return response.data.data;
     }
-    
+
     return response.data;
   } catch (error) {
     console.error('❌ Error fetching contact info:', error);
@@ -1902,4 +1930,3 @@ export const feedbackAPI = {
 
 
 export { base_url, api };
-
