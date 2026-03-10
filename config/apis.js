@@ -263,6 +263,98 @@ export const updateNotiStatus = async (notiID) => {
   }
 };
 
+
+export const getMonthlyBill = async (membershipNo, month, year) => {
+  try {
+  const token= await getAuthToken();
+  console.log('📋 Fetching monthly bill for member:', membershipNo, 'month:', month, 'year:', year);
+    
+  const response = await api.get(`/accounts/get-monthly-bill`, {
+    params: {
+      membershipNo,
+      month,
+      year
+      },
+    headers: {
+      Authorization: `Bearer ${token}`,
+      }
+    });
+    
+  console.log('✅ Monthly bill received:', response.data);
+  return response.data;
+  } catch (error) {
+  console.error('❌ Error fetching monthly bill:', error);
+    throw error;
+  }
+};
+
+export const listMonthlyBills = async (month, year) => {
+  try {
+  const token= await getAuthToken();
+ if (!token) {
+      throw new Error('Authentication token not found');
+    }
+    
+  console.log('📋 Fetching all monthly bills for month:', month, 'year:', year);
+    
+    // Construct full URL for debugging
+  const fullUrl = `${base_url}/accounts/list-bills`;
+  console.log('🔗 Request URL:', fullUrl);
+    
+  const response = await api.get(`/accounts/list-bills`, {
+  params: {
+    month,
+    year
+      },
+  headers: {
+    Authorization: `Bearer ${token}`,
+      },
+  withCredentials: true
+    });
+    
+  console.log('✅ Monthly bills list received:', response.data);
+ return response.data;
+  } catch (error) {
+if (error.response?.status === 404) {
+  console.error('❌ 404 Error - Full URL:', error.config?.url || error.config?.baseURL + error.config?.url);
+  console.error('❌ 404 Error - Params:', error.config?.params);
+    }
+  console.error('❌ Error fetching monthly bills list:', error);
+    throw error;
+  }
+};
+
+export const getLatestBill = async (membershipNo) => {
+  try {
+  const token= await getAuthToken();
+  console.log('📋 Fetching latest bill for member:', membershipNo);
+    
+    // Get current month and year
+  const currentDate = new Date();
+  const month= currentDate.getMonth() + 1; // JavaScript months are 0-indexed
+  const year = currentDate.getFullYear();
+    
+    // Reuse getMonthlyBill with current period
+  const response = await api.get(`/accounts/get-monthly-bill`, {
+    params: {
+      membershipNo,
+      month,
+      year
+      },
+    headers: {
+      Authorization: `Bearer ${token}`,
+      }
+    });
+    
+  console.log('✅ Latest bill received:', response.data);
+  return response.data;
+  } catch (error) {
+  console.error('❌ Error fetching latest bill:', error);
+    throw error;
+  }
+};
+
+
 export const getBillPaymentHistory = async (membershipNo, from, to) => {
   try {
     const params = {};
