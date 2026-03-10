@@ -105,6 +105,7 @@ import ClubRulesScreen from './src/events/ClubRulesScreen';
 import MemberBookingsScreen from './src/view/MemberBookingsScreen';
 import BookingDetailsScreen from './src/view/BookingDetailsScreen';
 import AdminBookingsScreen from './src/view/AdminBookingsScreen';
+import ViewProfileScreen from './src/view/ViewProfileScreen';
 import feedbacks from './slides/feedbacks';
 import BillPaymentHistory from './slides/BillPaymentHistory';
 
@@ -259,6 +260,16 @@ function MemberDrawer() {
           ),
         }}
       />
+         {/* <Drawer.Screen
+        name="View Profile"
+        component={ViewProfileScreen}
+        options={{
+          headerShown: false,
+          drawerIcon: ({ color, size }) => (
+            <MaterialIcons name="view-profile" size={size} color={color} />
+          ),
+        }}
+      /> */}
       <Drawer.Screen
         name="Feedback"
         component={feedbacks}
@@ -673,6 +684,7 @@ function AppContent() {
         <Stack.Screen name="MemberBookingsScreen" component={MemberBookingsScreen} options={{ headerShown: false }} />
         <Stack.Screen name="BookingDetailsScreen" component={BookingDetailsScreen} options={{ headerShown: false }} />
         <Stack.Screen name="AdminBookingsScreen" component={AdminBookingsScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="ViewProfileScreen" component={ViewProfileScreen} options={{ headerShown: false }} />
         <Stack.Screen name="Announcements" component={Announcements} options={{ headerShown: false }} />
         <Stack.Screen name="ReservationsScreen" component={ReservationsScreen} options={{ headerShown: false }} />
         <Stack.Screen name="Feedback" component={feedbacks} options={{ headerShown: false }} />
