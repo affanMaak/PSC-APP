@@ -11,6 +11,8 @@ import {
   RefreshControl,
   Modal,
   ScrollView,
+  StatusBar,
+  ImageBackground,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -20,12 +22,14 @@ import { listMonthlyBills, getBaseUrl } from '../config/apis';
 const THEME = {
   primary: '#543A14',
   secondary: '#8B5A2B',
-  gold: '#b48a64',
-  background: '#000',
-  card: '#1E1E1E',
-  text: '#FFF0DC',
-  textSecondary: '#BBB',
-  border: '#d4c9b8'
+  gold: '#B48A64',
+  background: '#F5F1E9',
+  card: '#FFFFFF',
+  inputBackground: '#F2E8DF',
+  text: '#543A14',
+  textSecondary: '#999',
+  border: '#E8DDD0',
+  downloadButton: '#F5E6D3',
 };
 
 const MonthlyBillHistory = ({ navigation }) => {
@@ -267,34 +271,38 @@ const MonthlyBillHistory = ({ navigation }) => {
   };
 
   const renderBillItem = ({ item }) => (
-    <View style={[styles.billCard, { backgroundColor: theme.card, borderColor: theme.gold }]}>
+    <View style={styles.billCard}>
       <View style={styles.billHeader}>
-        <Icon name="file-pdf-box" size={28} color={theme.gold} />
+        <View style={styles.billIconContainer}>
+          <Icon name="file-pdf-box" size={32} color={THEME.gold} />
+        </View>
         <View style={styles.billInfo}>
-          <Text style={[styles.billFilename, { color: theme.text }]} numberOfLines={1}>
-            {item.filename || `Bill_${item.month || ''}_${item.year || ''}.pdf`}
+          <Text style={styles.billFilename} numberOfLines={1}>
+            {item.filename || `Bill_${selectedMonth}_${selectedYear}.pdf`}
           </Text>
-          <Text style={[styles.billPeriod, { color: theme.textSecondary }]}>
+          <Text style={styles.billPeriod}>
             {monthNames[parseInt(selectedMonth) - 1]} {selectedYear}
           </Text>
         </View>
       </View>
-      
+
       <View style={styles.billActions}>
         <TouchableOpacity
-         style={[styles.actionButton, styles.viewButton, { backgroundColor: theme.primary, borderColor: theme.gold }]}
+         style={styles.viewButton}
           onPress={() => handleViewBill(item)}
+          activeOpacity={0.7}
         >
-          <Icon name="eye-outline" size={20} color={theme.gold} />
-          <Text style={[styles.actionButtonText, { color: theme.text }]}>View</Text>
+          <Icon name="eye-outline" size={20} color={THEME.gold} />
+          <Text style={styles.viewButtonText}>VIEW</Text>
         </TouchableOpacity>
-        
+
         <TouchableOpacity
-         style={[styles.actionButton, styles.downloadButton, { borderColor: theme.gold }]}
+         style={styles.downloadButton}
           onPress={() => handleDownloadBill(item)}
+          activeOpacity={0.7}
         >
-          <Icon name="download" size={20} color={theme.gold} />
-          <Text style={[styles.downloadButtonText, { color: theme.gold }]}>Download</Text>
+          <Icon name="download-outline" size={20} color="#FFF" />
+          <Text style={styles.downloadButtonText}>DOWNLOAD</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -302,98 +310,115 @@ const MonthlyBillHistory = ({ navigation }) => {
 
   const renderEmptyComponent = () => (
     <View style={styles.emptyContainer}>
-      <Icon name="file-remove-outline" size={80} color={theme.textSecondary} />
-      <Text style={[styles.emptyTitle, { color: theme.text }]}>No Bills Found</Text>
-      <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
-        There are no bills found for {monthNames[parseInt(selectedMonth) - 1] || ''} {selectedYear || ''}
-        {membershipNo ? ` for membership ${membershipNo}` : ''}.
+      <Icon name="file-remove-outline" size={64} color="#999" />
+      <Text style={styles.emptyTitle}>No Bills Found</Text>
+      <Text style={styles.emptyText}>
+        No monthly bills available for the selected filters.
       </Text>
     </View>
   );
 
  if (loading && !refreshing) {
    return (
-      <View style={[styles.loadingContainer, { backgroundColor: theme.background }]}>
-        <ActivityIndicator size="large" color={theme.gold} />
-        <Text style={[styles.loadingText, { color: theme.text }]}>Loading Bills...</Text>
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={THEME.gold} />
+        <Text style={styles.loadingText}>Loading Bills...</Text>
       </View>
     );
   }
 
  return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={[styles.title, { color: theme.text }]}>Monthly Bills</Text>
-        <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
-          View and download your monthly bills
-        </Text>
-      </View>
+    <View style={[styles.container, { backgroundColor: THEME.background }]}>
+      <StatusBar barStyle="dark-content" backgroundColor={THEME.background} />
 
-      {/* Filter Section */}
-      <View style={[styles.filterSection, { backgroundColor: theme.card, borderColor: theme.border }]}>
-        <View style={styles.filterHeader}>
-          <Icon name="filter" size={20} color={theme.gold} />
-          <Text style={[styles.filterTitle, { color: theme.text }]}>Filter Period</Text>
+      {/* Notch Header */}
+      <ImageBackground
+        source={require('../assets/notch.jpg')}
+        style={styles.notch}
+        imageStyle={styles.notchImage}
+      >
+        <View style={styles.notchContent}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Icon name="arrow-left" size={24} color="#000" />
+          </TouchableOpacity>
+
+          <Text style={styles.headerText}>Monthly Bills</Text>
+
+          <TouchableOpacity
+            style={styles.refreshButton}
+            onPress={fetchBills}
+          >
+            <Icon name="refresh" size={24} color="#000" />
+          </TouchableOpacity>
         </View>
+      </ImageBackground>
+
+      {/* Filter Card */}
+      <View style={styles.filterCard}>
+        <Text style={styles.cardTitle}>Filter Bills</Text>
 
         <View style={styles.filterRow}>
           {/* Month Selector */}
           <View style={styles.filterField}>
-            <Text style={[styles.filterLabel, { color: theme.textSecondary }]}>Month</Text>
+            <Text style={styles.filterLabel}>Month</Text>
             <TouchableOpacity
-             style={[styles.dropdown, { borderColor: theme.border }]}
+             style={styles.dropdown}
               onPress={() => {
                 setShowMonthDropdown(!showMonthDropdown);
                 setShowYearDropdown(false);
               }}
+              activeOpacity={0.7}
             >
-              <Text style={[styles.dropdownText, { color: theme.text }]}>
+              <Text style={styles.dropdownText}>
                 {monthNames[parseInt(selectedMonth) - 1]}
               </Text>
-              <Icon name="chevron-down" size={20} color={theme.gold} />
+              <Icon name="chevron-down" size={20} color={THEME.gold} />
             </TouchableOpacity>
           </View>
 
           {/* Year Selector */}
           <View style={styles.filterField}>
-            <Text style={[styles.filterLabel, { color: theme.textSecondary }]}>Year</Text>
+            <Text style={styles.filterLabel}>Year</Text>
             <TouchableOpacity
-             style={[styles.dropdown, { borderColor: theme.border }]}
+             style={styles.dropdown}
               onPress={() => {
                 setShowYearDropdown(!showYearDropdown);
                 setShowMonthDropdown(false);
               }}
+              activeOpacity={0.7}
             >
-              <Text style={[styles.dropdownText, { color: theme.text }]}>
-                {selectedYear}
-              </Text>
-              <Icon name="chevron-down" size={20} color={theme.gold} />
+              <Text style={styles.dropdownText}>{selectedYear}</Text>
+              <Icon name="chevron-down" size={20} color={THEME.gold} />
             </TouchableOpacity>
           </View>
         </View>
 
         {/* Membership Info */}
-        <View style={styles.membershipInfo}>
-          <Icon name="account" size={16} color={theme.gold} />
-          <Text style={[styles.membershipText, { color: theme.textSecondary }]}>
-            Membership: {membershipNo || 'Loading...'}
-          </Text>
-        </View>
+        {membershipNo && (
+          <View style={styles.membershipInfo}>
+            <Icon name="account-outline" size={16} color="#666" />
+            <Text style={styles.membershipText}>
+              Membership: {membershipNo}
+            </Text>
+          </View>
+        )}
       </View>
 
       {/* Bills List */}
       {error ? (
-        <View style={[styles.errorContainer, { backgroundColor: theme.card }]}>
+        <View style={styles.errorContainer}>
           <Icon name="alert-circle-outline" size={50} color="#ff6b6b" />
-          <Text style={[styles.errorText, { color: theme.text }]}>
+          <Text style={styles.errorText}>
             {error}
           </Text>
           <TouchableOpacity
-           style={[styles.retryButton, { backgroundColor: theme.primary }]}
+           style={styles.retryButton}
             onPress={fetchBills}
           >
-            <Text style={[styles.retryButtonText, { color: theme.text }]}>Retry</Text>
+            <Text style={styles.retryButtonText}>Retry</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -406,8 +431,8 @@ const MonthlyBillHistory = ({ navigation }) => {
             <RefreshControl
              refreshing={refreshing}
               onRefresh={onRefresh}
-             tintColor={theme.gold}
-             colors={[theme.gold]}
+             tintColor={THEME.gold}
+             colors={[THEME.gold]}
             />
           }
           ListEmptyComponent={renderEmptyComponent}
@@ -426,21 +451,21 @@ const MonthlyBillHistory = ({ navigation }) => {
           activeOpacity={1}
           onPress={() => setShowMonthDropdown(false)}
         >
-          <View style={[styles.modalContent, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <View style={styles.modalContent}>
             <ScrollView>
               {monthNames.map((month, index) => (
                 <TouchableOpacity
                   key={month}
                  style={[
                    styles.monthOption,
-                    selectedMonth === (index + 1).toString().padStart(2, '0') && { backgroundColor: theme.primary}
+                    selectedMonth === (index + 1).toString().padStart(2, '0') && styles.selectedMonthOption
                   ]}
                   onPress={() => {
                     setSelectedMonth((index + 1).toString().padStart(2, '0'));
                     setShowMonthDropdown(false);
                   }}
                 >
-                  <Text style={[styles.monthOptionText, { color: theme.text }]}>
+                  <Text style={styles.monthOptionText}>
                     {month}
                   </Text>
                 </TouchableOpacity>
@@ -490,185 +515,277 @@ const MonthlyBillHistory = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#F5F1E9',
   },
-  loadingContainer: {
-    flex: 1,
+  contentWrapper: {
+    paddingVertical: 20,
+  },
+  scrollView: {
+    backgroundColor: '#F5F1E9',
+  },
+
+  // Notch Header Styles (matching BillPaymentsScreen)
+  notch: {
+    paddingTop: 50,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+    borderBottomEndRadius: 30,
+    borderBottomStartRadius: 30,
+    overflow: 'hidden',
+    minHeight: 120,
+  },
+  notchImage: {
+    resizeMode: 'cover',
+  },
+  notchContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  backButton: {
+    width: 40,
+    height: 40,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-  },
-  header: {
-   padding: 20,
-   paddingTop: 60,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: 14,
-    textAlign: 'center',
-    marginTop: 8,
-  },
-  filterSection: {
-    margin: 16,
-   padding: 16,
-   borderRadius: 12,
-   borderWidth: 1,
-  },
-  filterHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  filterTitle: {
-    fontSize: 16,
+  headerText: {
+    fontSize: 22,
     fontWeight: '600',
-    marginLeft: 8,
+    color: '#000',
+    textAlign: 'center',
+    flex: 1,
+  },
+  refreshButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  // Filter Card Styles
+  filterCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 15,
+    padding: 20,
+    marginBottom: 20,
+    marginHorizontal: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  cardTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#543A14',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 15,
   },
   filterRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    gap: 10,
   },
   filterField: {
     flex: 1,
-    marginHorizontal: 4,
   },
   filterLabel: {
-    fontSize: 12,
-    marginBottom: 6,
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#999',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 8,
   },
   dropdown: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-   padding: 12,
-   borderWidth: 1,
-   borderRadius: 8,
+    backgroundColor: '#F2E8DF',
+    padding: 15,
+    borderRadius: 10,
   },
   dropdownText: {
     fontSize: 14,
+    color: '#333',
+    fontWeight: '600',
   },
   membershipInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 12,
-   paddingTop: 12,
-   borderTopWidth: 1,
-   borderTopColor: '#2c2c2c',
+    marginTop: 15,
+    paddingTop: 15,
+    borderTopWidth: 1,
+    borderTopColor: '#E8DDD0',
   },
   membershipText: {
     fontSize: 12,
+    color: '#666',
     marginLeft: 8,
   },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
+
+  // Dropdown Modal Styles
+  dropdownModal: {
+    backgroundColor: '#FFF',
+    borderRadius: 10,
+    padding: 10,
+    marginHorizontal: 15,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    maxHeight: 250,
+  },
+  dropdownOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-   padding: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 15,
   },
-  errorText: {
-    fontSize: 16,
-    textAlign: 'center',
-    marginTop: 16,
-    marginBottom: 20,
+  dropdownOptionText: {
+    fontSize: 14,
+    color: '#333',
   },
- retryButton: {
-   paddingHorizontal: 24,
-   paddingVertical: 12,
-   borderRadius: 24,
-   borderWidth: 1,
-   borderColor: '#d4c9b8',
-  },
- retryButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  listContent: {
-   padding: 16,
-   paddingBottom: 100,
-  },
+
+  // Bill Card Styles
   billCard: {
-   padding: 16,
-   borderRadius: 12,
-   borderWidth: 1,
-    marginBottom: 12,
+    backgroundColor: '#FFF',
+    borderRadius: 15,
+    padding: 20,
+    marginBottom: 15,
+    marginHorizontal: 15,
+    borderWidth: 1,
+    borderColor: '#E8DDD0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   billHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 15,
+  },
+  billIconContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#F2E8DF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 15,
   },
   billInfo: {
     flex: 1,
-    marginLeft: 12,
   },
   billFilename: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
+    color: '#543A14',
+    letterSpacing: 0.5,
+    marginBottom: 4,
   },
   billPeriod: {
     fontSize: 12,
-    marginTop: 4,
-  },
-  viewButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-   padding: 12,
-   borderRadius: 8,
-   borderWidth: 1,
-    backgroundColor: '#543A14',
-  },
-  viewButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
-   color: '#FFF0DC',
+    color: '#999',
   },
   billActions: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
+    gap: 10,
   },
-  actionButton: {
+  viewButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-   padding: 12,
-   borderRadius: 8,
-   borderWidth: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#B48A64',
+    backgroundColor: 'transparent',
+    gap: 8,
+  },
+  viewButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#B48A64',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   downloadButton: {
-    backgroundColor: 'transparent',
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    backgroundColor: '#F5E6D3',
+    borderWidth: 2,
+    borderColor: '#B48A64',
+    gap: 8,
   },
   downloadButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#B48A64',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+
+  // List & Empty State Styles
+  listContent: {
+    padding: 8,
+    paddingBottom: 40,
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-   paddingVertical: 80,
+    paddingVertical: 80,
+    backgroundColor: '#FFF',
+    borderRadius: 15,
+    marginHorizontal: 15,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#E8DDD0',
   },
   emptyTitle: {
     fontSize: 20,
-    fontWeight: '600',
+    fontWeight: '700',
+    color: '#543A14',
     marginTop: 16,
+    letterSpacing: 0.5,
   },
   emptyText: {
     fontSize: 14,
+    color: '#999',
     textAlign: 'center',
     marginTop: 8,
-   paddingHorizontal: 32,
+    paddingHorizontal: 32,
+    lineHeight: 20,
   },
+
+  // Loading State
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 80,
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#666',
+  },
+
+  // Modal & Dropdown Options
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
@@ -676,27 +793,40 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalContent: {
-   width: '85%',
+    width: '85%',
     maxHeight: '60%',
-   borderRadius: 12,
-   borderWidth: 1,
+    borderRadius: 12,
+    backgroundColor: '#FFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
     overflow: 'hidden',
   },
   monthOption: {
-   padding: 16,
-   borderBottomWidth: 1,
-   borderBottomColor: '#2c2c2c',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
   },
   yearOption: {
-   padding: 16,
-   borderBottomWidth: 1,
-   borderBottomColor: '#2c2c2c',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  selectedMonthOption: {
+    backgroundColor: '#F2E8DF',
+  },
+  selectedYearOption: {
+    backgroundColor: '#F2E8DF',
   },
   monthOptionText: {
     fontSize: 16,
+    color: '#333',
   },
   yearOptionText: {
     fontSize: 16,
+    color: '#333',
   },
 });
 
