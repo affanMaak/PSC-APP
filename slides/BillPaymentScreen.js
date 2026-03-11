@@ -17,10 +17,13 @@ import {
   BackHandler,
   Animated,
   Dimensions,
+  Modal,
+  FlatList,
+  RefreshControl,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getBaseUrl, paymentAPI } from '../config/apis';
+import { getBaseUrl, paymentAPI, listMonthlyBills } from '../config/apis';
 import ViewShot, { captureRef } from 'react-native-view-shot';
 import { CameraRoll } from '@react-native-camera-roll/camera-roll';
 import { permissionService } from '../src/services/PermissionService';
@@ -79,6 +82,18 @@ const Bills = ({ navigation }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [userRole, setUserRole] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
+
+  // Monthly Bill History states
+  const [activeTab, setActiveTab] = useState('pay');
+  const [historyBills, setHistoryBills] = useState([]);
+  const [selectedMonth, setSelectedMonth] = useState('03');
+  const [selectedYear, setSelectedYear] = useState('2026');
+  const [showMonthDropdown, setShowMonthDropdown] = useState(false);
+  const [showYearDropdown, setShowYearDropdown] = useState(false);
+  const [allBills, setAllBills] = useState([]);
+
+  // Current year for dropdown
+  const currentYear = new Date().getFullYear();
 
   // Balance Payment states
   const [amountToPay, setAmountToPay] = useState('');
@@ -199,6 +214,160 @@ const Bills = ({ navigation }) => {
     if (generatedVoucher?.consumer_number) {
       Clipboard.setString(String(generatedVoucher.consumer_number));
       Alert.alert('Copied!', 'Consumer number copied to clipboard');
+    }
+  };
+
+  // Monthly Bill History functions
+  const fetchBills = async () => {
+    if (!membershipNumber) return;
+    
+    try {
+      setLoading(true);
+      console.log(`📋 Fetching all bills for month: ${selectedMonth}, year: ${selectedYear}`);
+      
+      // Fetch ALL bills for the selected month/year
+      const billsData = await listMonthlyBills(selectedMonth, selectedYear);
+      console.log('📦 All bills received:', billsData);
+      
+      // Store all bills
+      const billsArray = Array.isArray(billsData) ? billsData : [billsData].filter(Boolean);
+      setAllBills(billsArray);
+      
+      // CLIENT-SIDE FILTERING: Filter bills for current user only using DATA-DRIVEN INTEGER COMPARISON
+      // 1. Sanitize the user's ID to a clean string
+      const targetId = String(membershipNumber).replace(/[^0-9]/g, '');
+      
+      console.log(`🔍 User Membership Number: ${membershipNumber} → Target ID: ${targetId}`);
+      
+      const myBills = billsArray.filter(bill => {
+        // 2. Use the dedicated membershipNo field from the API if it exists
+        // If not, fall back to extracting it from the filename strictly
+        const billMemberId = bill.membershipNo 
+          ? String(bill.membershipNo).replace(/[^0-9]/g, '')
+          : (bill.filename || "").split('_')[0].replace(/[^0-9]/g, '');
+
+        // 3. EXACT INTEGER COMPARISON
+        // This ensures '3' NEVER matches '803'
+        const isMatch = parseInt(billMemberId, 10) === parseInt(targetId, 10);
+
+        console.log(`Comparing: Bill ID (${billMemberId}) with User ID (${targetId}) -> Match: ${isMatch}`);
+        
+        return isMatch;
+      });
+      
+      console.log(`✅ Filtered to ${myBills.length} bills for member ${membershipNumber}`);
+      setHistoryBills(myBills);
+      
+    } catch (err) {
+      console.error('❌ Error fetching bills:', err);
+      Alert.alert('Error', err.message || 'Failed to fetch bills');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleViewBill = async (bill) => {
+    try {
+      console.log('📄 Opening bill:', bill);
+      
+      // Construct full URL from relative path
+      let fullUrl = bill.url;
+      if (!fullUrl) {
+        Alert.alert('Error', 'Bill URL not available');
+        return;
+      }
+      
+      // Ensure URL starts with http/https - ROBUST URL HANDLING
+      if (fullUrl.startsWith('/')) {
+        // Remove/api from base URL and append the relative path
+        const baseUrl = getBaseUrl().replace('/api', '');
+        fullUrl = `${baseUrl}${fullUrl}`;
+      } else if (!fullUrl.startsWith('http')) {
+        fullUrl = `https://admin.peshawarservicesclub.com${fullUrl}`;
+      }
+      
+      console.log('🔗 Full bill URL:', fullUrl);
+      
+      const supported = await Linking.canOpenURL(fullUrl);
+      if (supported) {
+        await Linking.openURL(fullUrl);
+      } else {
+        // Fallback: Try opening anyway
+        try {
+          await Linking.openURL(fullUrl);
+        } catch (fallbackErr) {
+          Alert.alert(
+            'Cannot Open PDF',
+            'Unable to open the PDF. Please try downloading instead.',
+            [{ text: 'OK' }]
+          );
+          console.error('❌ Fallback also failed:', fallbackErr);
+        }
+      }
+    } catch (err) {
+      console.error('❌ Error opening bill:', err);
+      Alert.alert(
+        'Error', 
+        'Failed to open bill PDF. Please try downloading instead.'
+      );
+    }
+  };
+
+  const handleDownloadBill = async (bill) => {
+    try {
+      console.log('📥 Downloading bill:', bill);
+      
+      // Construct full URL from relative path
+      let fullUrl = bill.url;
+      if (!fullUrl) {
+        Alert.alert('Error', 'Bill URL not available');
+        return;
+      }
+      
+      // Ensure URL starts with http/https - ROBUST URL HANDLING
+      if (fullUrl.startsWith('/')) {
+        // Remove/api from base URL and append the relative path
+        const baseUrl = getBaseUrl().replace('/api', '');
+        fullUrl = `${baseUrl}${fullUrl}`;
+      } else if (!fullUrl.startsWith('http')) {
+        fullUrl = `https://admin.peshawarservicesclub.com${fullUrl}`;
+      }
+      
+      console.log('🔗 Full bill URL for download:', fullUrl);
+      
+      // For React Native without RNFS/ expo-sharing, use this approach
+      // This opens the PDF which user can then save from browser
+      const supported = await Linking.canOpenURL(fullUrl);
+      if (supported) {
+        await Linking.openURL(fullUrl);
+        setTimeout(() => {
+          Alert.alert(
+            'Download Started',
+            'The PDF has been opened in your browser. You can save it from there by:\n\n1. Tapping the share/download icon\n2. Selecting "Save to Files" or "Download"',
+            [{ text: 'OK' }]
+          );
+        }, 500);
+      } else {
+        // Try opening anyway as fallback
+        try {
+          await Linking.openURL(fullUrl);
+          setTimeout(() => {
+            Alert.alert(
+              'Download Started',
+              'The PDF has been opened in your browser. You can save it from there.',
+              [{ text: 'OK' }]
+            );
+          }, 500);
+        } catch (fallbackErr) {
+          Alert.alert('Error', `Cannot open URL: ${fullUrl}`);
+        }
+      }
+    } catch (err) {
+      console.error('❌ Error downloading bill:', err);
+      Alert.alert(
+        'Error', 
+        'Failed to download bill. Please try again later.'
+      );
     }
   };
 
@@ -391,6 +560,13 @@ const Bills = ({ navigation }) => {
     initializeApp();
   }, []);
 
+  // Fetch bills when month/year changes
+  useEffect(() => {
+    if (membershipNumber && activeTab === 'history') {
+      fetchBills();
+    }
+  }, [selectedMonth, selectedYear, membershipNumber, activeTab]);
+
   const getStatusBadge = (status) => {
     switch (status) {
       case 'PAID':
@@ -407,6 +583,61 @@ const Bills = ({ navigation }) => {
         return <Text style={styles.statusBadge}>{status}</Text>;
     }
   };
+
+  // Month names for display
+  const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+
+  // Generate year options (current year ± 2)
+  const yearOptions = [currentYear - 2, currentYear - 1, currentYear, currentYear + 1, currentYear + 2];
+
+  // Render bill item for FlatList
+  const renderBillItem = ({ item }) => (
+    <View style={styles.billCard}>
+      <View style={styles.billHeader}>
+        <Icon name="file-pdf-box" size={28} color="#b48a64" />
+        <View style={styles.billInfo}>
+          <Text style={styles.billFilename} numberOfLines={1}>
+            {item.filename || `Bill_${selectedMonth}_${selectedYear}.pdf`}
+          </Text>
+          <Text style={styles.billPeriod}>
+            {monthNames[parseInt(selectedMonth) - 1]} {selectedYear}
+          </Text>
+        </View>
+      </View>
+      
+      <View style={styles.billActions}>
+        <TouchableOpacity
+          style={[styles.actionButton, styles.viewButton]}
+          onPress={() => handleViewBill(item)}
+        >
+          <Icon name="eye-outline" size={20} color="#fff" />
+          <Text style={styles.actionButtonText}>View</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={[styles.actionButton, styles.downloadButton]}
+          onPress={() => handleDownloadBill(item)}
+        >
+          <Icon name="download" size={20} color="#b48a64" />
+          <Text style={styles.downloadButtonText}>Download</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  const renderEmptyComponent = () => (
+    <View style={styles.emptyContainer}>
+      <Icon name="file-remove-outline" size={80} color="#999" />
+      <Text style={styles.emptyTitle}>No Bills Found</Text>
+      <Text style={styles.emptyText}>
+        There are no bills found for {monthNames[parseInt(selectedMonth) - 1] || ''} {selectedYear || ''}
+        {membershipNumber ? ` for membership ${membershipNumber}` : ''}.
+      </Text>
+    </View>
+  );
 
   if (loading) {
     return (
@@ -446,7 +677,9 @@ const Bills = ({ navigation }) => {
         </View>
       </ImageBackground>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        {/* Content Container with Beige Background */}
+        <View style={styles.contentWrapper}>
         {/* Role Badge */}
         {/* <View style={styles.roleBadgeContainer}>
           <Text style={[styles.roleBadge, isAdmin ? styles.adminBadge : styles.memberBadge]}>
@@ -481,55 +714,59 @@ const Bills = ({ navigation }) => {
           </View>
         )}
 
-        {/* User Information Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>
+        {/* User Information Section - Enhanced Member Info Card */}
+        <View style={styles.memberInfoCard}>
+          <Text style={styles.cardTitle}>
             {isAdmin ? 'Member Information' : 'Your Information'}
           </Text>
 
           {(!isAdmin || (isAdmin && memberData)) ? (
             <>
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Membership Number</Text>
-                <TextInput
-                  style={styles.input}
-                  value={membershipNumber}
-                  editable={false}
-                  selectTextOnFocus={false}
-                />
+              <View style={styles.infoRow}>
+                <View style={styles.infoLabelContainer}>
+                  <Text style={styles.infoLabel}>Membership Number</Text>
+                </View>
+                <View style={styles.infoValueContainer}>
+                  <TextInput
+                    style={styles.infoInput}
+                    value={membershipNumber}
+                    editable={false}
+                    selectTextOnFocus={false}
+                  />
+                </View>
               </View>
 
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Member Name</Text>
-                <TextInput
-                  style={styles.input}
-                  value={membershipName}
-                  editable={false}
-                  selectTextOnFocus={false}
-                />
+              <View style={styles.infoRow}>
+                <View style={styles.infoLabelContainer}>
+                  <Text style={styles.infoLabel}>Member Name</Text>
+                </View>
+                <View style={styles.infoValueContainer}>
+                  <TextInput
+                    style={styles.infoInput}
+                    value={membershipName}
+                    editable={false}
+                    selectTextOnFocus={false}
+                  />
+                </View>
               </View>
 
               {memberData && (
-                <View style={styles.memberDetailsContainer}>
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Dues</Text>
-                    <Text style={[
-                      styles.detailValue,
-                      memberData.Balance < 0 && styles.negativeBalance
-                    ]}>
-                      Rs {memberData.Balance?.toLocaleString() || 0}
-                    </Text>
-                  </View>
-
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Account Status</Text>
+                <View style={styles.balanceCard}>
+                  <View style={styles.balanceHeader}>
+                    <Text style={styles.balanceLabel}>Current Balance</Text>
                     {getStatusBadge(memberData.Status)}
                   </View>
-
+                  <Text style={[
+                    styles.balanceAmountDisplay,
+                    memberData.Balance < 0 && styles.negativeBalanceDisplay
+                  ]}>
+                    Rs {memberData.Balance?.toLocaleString() || 0}
+                  </Text>
+                  
                   {memberData.totalBookings !== undefined && (
-                    <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>Total Bookings</Text>
-                      <Text style={styles.detailValue}>{memberData.totalBookings || 0}</Text>
+                    <View style={styles.bookingsRow}>
+                      <Text style={styles.bookingsLabel}>Total Bookings:</Text>
+                      <Text style={styles.bookingsValue}>{memberData.totalBookings || 0}</Text>
                     </View>
                   )}
                 </View>
@@ -556,32 +793,27 @@ const Bills = ({ navigation }) => {
           )}
         </View>
 
+        {/* Custom Payment Section - Enhanced Layout */}
         {!isAdmin && memberData && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Custom Payment</Text>
+          <View style={styles.paymentCard}>
+            <Text style={styles.cardTitle}>Custom Payment</Text>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Enter Amount to Pay (Rs)</Text>
+            <View style={styles.paymentInputGroup}>
+              <Text style={styles.paymentLabel}>Amount to Pay (Rs)</Text>
               <TextInput
-                style={styles.input}
+                style={styles.paymentInput}
                 value={amountToPay}
                 onChangeText={setAmountToPay}
-                placeholder="e.g., 5000"
+                placeholder="Enter amount (e.g., 5000)"
                 placeholderTextColor="#999"
                 keyboardType="numeric"
                 editable={!isGeneratingVoucher}
               />
             </View>
 
-            <View style={styles.balanceInfo}>
-              <Text style={styles.balanceInfoText}>
-                Your Current Balance: <Text style={styles.balanceAmount}>Rs {memberData.Balance?.toLocaleString() || 0}</Text>
-              </Text>
-            </View>
-
             <TouchableOpacity
               style={[
-                styles.generateButton,
+                styles.generateVoucherButton,
                 (!amountToPay || Number(amountToPay) <= 0 || Number(amountToPay) > memberData.Balance) && styles.disabledButton
               ]}
               onPress={handleGenerateBalanceVoucher}
@@ -590,21 +822,35 @@ const Bills = ({ navigation }) => {
               {isGeneratingVoucher ? (
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
-                <Text style={styles.generateButtonText}>Generate Consumer Number</Text>
+                <Text style={styles.generateVoucherButtonText}>Generate Consumer Number</Text>
               )}
             </TouchableOpacity>
 
-            <Text style={styles.generateNote}>
-              Enter the amount you wish to pay. The amount cannot exceed your current balance.
+            <Text style={styles.paymentNote}>
+              Amount cannot exceed your current balance
             </Text>
           </View>
         )}
 
-        {/* Modal removed — receipt is now a separate screen */}
-
-
-        {/* Payment Section - Only for Members */}
+        {/* View Monthly Bills Button */}
         {!isAdmin && memberData && (
+          <View style={styles.viewBillsButtonContainer}>
+            <TouchableOpacity
+              style={styles.viewBillsButton}
+              onPress={() => navigation.navigate('MonthlyBillHistory', { 
+                membershipNumber: membershipNumber,
+                membershipName: membershipName 
+              })}
+              activeOpacity={0.7}
+            >
+              <Icon name="file-document-outline" size={24} color="#FFF" style={styles.viewBillsIcon} />
+              <Text style={styles.viewBillsButtonText}>View Monthly Bills</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Tab 1: Pay Current Bill */}
+        {activeTab === 'pay' && !isAdmin && memberData && (
           <>
             {/* BILL PAYMENT VIA MOBILE APP & OTHER PAYMENT MODES */}
             <View style={styles.section}>
@@ -711,6 +957,149 @@ const Bills = ({ navigation }) => {
           </>
         )}
 
+        {/* Tab 2: Monthly History */}
+        {activeTab === 'history' && !isAdmin && memberData && (
+          <View style={styles.section}>
+            {/* Filter Section */}
+            <View style={styles.filterSection}>
+              <View style={styles.filterHeader}>
+                <Icon name="filter" size={20} color="#b48a64" />
+                <Text style={styles.filterTitle}>Filter Period</Text>
+              </View>
+
+              <View style={styles.filterRow}>
+                {/* Month Selector */}
+                <View style={styles.filterField}>
+                  <Text style={styles.filterLabel}>Month</Text>
+                  <TouchableOpacity
+                    style={styles.dropdown}
+                    onPress={() => {
+                      setShowMonthDropdown(!showMonthDropdown);
+                      setShowYearDropdown(false);
+                    }}
+                  >
+                    <Text style={styles.dropdownText}>
+                      {monthNames[parseInt(selectedMonth) - 1]}
+                    </Text>
+                    <Icon name="chevron-down" size={20} color="#b48a64" />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Year Selector */}
+                <View style={styles.filterField}>
+                  <Text style={styles.filterLabel}>Year</Text>
+                  <TouchableOpacity
+                    style={styles.dropdown}
+                    onPress={() => {
+                      setShowYearDropdown(!showYearDropdown);
+                      setShowMonthDropdown(false);
+                    }}
+                  >
+                    <Text style={styles.dropdownText}>
+                      {selectedYear}
+                    </Text>
+                    <Icon name="chevron-down" size={20} color="#b48a64" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Membership Info */}
+              <View style={styles.membershipInfo}>
+                <Icon name="account" size={16} color="#b48a64" />
+                <Text style={styles.membershipText}>
+                  Membership: {membershipNumber || 'Loading...'}
+                </Text>
+              </View>
+            </View>
+
+            {/* Bills List */}
+            {loading ? (
+              <View style={styles.loadingBillContainer}>
+                <ActivityIndicator size="large" color="#b48a64" />
+                <Text style={styles.loadingBillText}>Loading Bills...</Text>
+              </View>
+            ) : (
+              <FlatList
+                data={historyBills}
+                renderItem={renderBillItem}
+                keyExtractor={(item, index) => item.id || item.filename || index.toString()}
+                contentContainerStyle={styles.listContent}
+                ListEmptyComponent={renderEmptyComponent}
+              />
+            )}
+          </View>
+        )}
+
+        {/* Month Dropdown Modal */}
+        <Modal
+          visible={showMonthDropdown}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowMonthDropdown(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setShowMonthDropdown(false)}
+          >
+            <View style={styles.modalContent}>
+              <ScrollView>
+                {monthNames.map((month, index) => (
+                  <TouchableOpacity
+                    key={month}
+                    style={[
+                      styles.monthOption,
+                      selectedMonth === (index + 1).toString().padStart(2, '0') && styles.selectedMonthOption
+                    ]}
+                    onPress={() => {
+                      setSelectedMonth((index + 1).toString().padStart(2, '0'));
+                      setShowMonthDropdown(false);
+                    }}
+                  >
+                    <Text style={styles.monthOptionText}>
+                      {month}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          </TouchableOpacity>
+        </Modal>
+
+        {/* Year Dropdown Modal */}
+        <Modal
+          visible={showYearDropdown}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowYearDropdown(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setShowYearDropdown(false)}
+          >
+            <View style={styles.modalContent}>
+              {yearOptions.map((year) => (
+                <TouchableOpacity
+                  key={year}
+                  style={[
+                    styles.yearOption,
+                    selectedYear === year.toString() && styles.selectedYearOption
+                  ]}
+                  onPress={() => {
+                    setSelectedYear(year.toString());
+                    setShowYearDropdown(false);
+                  }}
+                >
+                  <Text style={styles.yearOptionText}>
+                    {year}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </TouchableOpacity>
+        </Modal>
+
 
         {/* Admin Message - Only for admin when member data is loaded */}
         {/* {isAdmin && memberData && (
@@ -720,6 +1109,7 @@ const Bills = ({ navigation }) => {
             </Text>
           </View>
         )} */}
+        </View>
       </ScrollView>
     </View>
   );
@@ -739,7 +1129,13 @@ const handleBankSelect = (bank) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9EFE6',
+    backgroundColor: '#F5F1E9',
+  },
+  contentWrapper: {
+    paddingVertical: 20,
+  },
+  scrollView: {
+    backgroundColor: '#F5F1E9',
   },
   loadingContainer: {
     flex: 1,
@@ -833,12 +1229,25 @@ const styles = StyleSheet.create({
     backgroundColor: '#4CAF50',
     color: '#fff',
   },
-  // Section Styles
+  // Professional Card Style
+  card: {
+    backgroundColor: '#FFF',
+    borderRadius: 15,
+    padding: 20,
+    marginBottom: 20,
+    marginHorizontal: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
   section: {
     backgroundColor: '#FFF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+    borderRadius: 15,
+    padding: 20,
+    marginBottom: 20,
+    marginHorizontal: 15,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -846,10 +1255,12 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 16,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#543A14',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 15,
   },
   sectionSubtitle: {
     fontSize: 16,
@@ -905,40 +1316,120 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 8,
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#999',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 5,
   },
   input: {
-    backgroundColor: '#F5F5F5',
-    borderRadius: 8,
-    padding: 12,
+    backgroundColor: '#F2E8DF',
+    borderRadius: 10,
+    padding: 15,
     fontSize: 16,
     color: '#333',
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
   },
-  // Member Details Styles
-  memberDetailsContainer: {
-    backgroundColor: '#FFF9F0',
-    borderRadius: 10,
-    padding: 16,
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: '#E8DDD0',
+  // Enhanced Member Info Card Styles
+  memberInfoCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 15,
+    padding: 20,
+    marginBottom: 20,
+    marginHorizontal: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 4,
   },
-  detailRow: {
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#543A14',
+    marginBottom: 20,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
-    paddingBottom: 12,
+    marginBottom: 15,
+    paddingBottom: 15,
     borderBottomWidth: 1,
     borderBottomColor: '#F0E8E0',
   },
-  detailLabel: {
+  infoLabelContainer: {
+    flex: 1,
+  },
+  infoLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 5,
+  },
+  infoValueContainer: {
+    flex: 1.5,
+  },
+  infoInput: {
+    backgroundColor: '#F2E8DF',
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 15,
+    color: '#333',
+    textAlign: 'right',
+  },
+  balanceCard: {
+    backgroundColor: '#F9EFE6',
+    borderRadius: 12,
+    padding: 20,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: '#E8DDD0',
+  },
+  balanceHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  balanceLabel: {
     fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+  },
+  balanceAmountDisplay: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#B48A64',
+    letterSpacing: 0.5,
+    marginBottom: 10,
+  },
+  negativeBalanceDisplay: {
+    color: '#E74C3C',
+  },
+  bookingsRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#E8DDD0',
+  },
+  bookingsLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#666',
+    marginRight: 8,
+  },
+  bookingsValue: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#333',
+  },
+  detailLabel: {
+    fontSize: 13,
     color: '#666',
   },
   detailValue: {
@@ -947,48 +1438,45 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   negativeBalance: {
-    color: '#f44336',
+    color: '#E74C3C',
   },
-  // Status Badge Styles
   statusBadge: {
-    fontSize: 12,
-    fontWeight: '600',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
+    backgroundColor: '#4C7A57',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
     borderRadius: 20,
-    backgroundColor: '#e0e0e0',
-    color: '#333',
-    overflow: 'hidden',
+  },
+  statusBadgeText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
   },
   statusBadgePaid: {
-    fontSize: 12,
-    fontWeight: '600',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
+    backgroundColor: '#4C7A57',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
     borderRadius: 20,
-    backgroundColor: '#4CAF50',
-    color: 'white',
-    overflow: 'hidden',
   },
   statusBadgeHalfPaid: {
-    fontSize: 12,
-    fontWeight: '600',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
+    backgroundColor: '#D4A574',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
     borderRadius: 20,
-    backgroundColor: '#FF9800',
-    color: 'white',
-    overflow: 'hidden',
   },
   statusBadgeUnpaid: {
-    fontSize: 12,
-    fontWeight: '600',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
+    backgroundColor: '#E74C3C',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
     borderRadius: 20,
-    backgroundColor: '#f44336',
-    color: 'white',
-    overflow: 'hidden',
+  },
+  statusBadgeContainer: {
+    alignSelf: 'flex-start',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#E8DDD0',
+    marginVertical: 20,
   },
   // No Member Styles
   noMemberContainer: {
@@ -1307,46 +1795,95 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  // Balance Payment Styles
-  balanceInfo: {
-    backgroundColor: '#F0F8F4',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#4CAF50',
+  // Enhanced Payment Section Styles
+  paymentCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 15,
+    padding: 20,
+    marginBottom: 20,
+    marginHorizontal: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 4,
   },
-  balanceInfoText: {
-    fontSize: 14,
-    color: '#333',
-    textAlign: 'center',
+  paymentInputGroup: {
+    marginBottom: 20,
   },
-  balanceAmount: {
-    fontWeight: 'bold',
-    color: 'black',
+  paymentLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#666',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  paymentInput: {
+    backgroundColor: '#F2E8DF',
+    borderRadius: 10,
+    padding: 15,
     fontSize: 16,
+    color: '#333',
   },
-  generateButton: {
-    backgroundColor: '#b48a64',
+  generateVoucherButton: {
+    backgroundColor: '#B48A64',
     borderRadius: 12,
-    padding: 16,
+    height: 55,
+    justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 8,
+    shadowColor: '#B48A64',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 5,
+    marginBottom: 10,
   },
   disabledButton: {
     backgroundColor: '#CCCCCC',
+    shadowOpacity: 0,
   },
-  generateButtonText: {
+  generateVoucherButtonText: {
     color: '#FFF',
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
-  generateNote: {
-    fontSize: 12,
-    color: '#666',
+  paymentNote: {
+    fontSize: 13,
+    color: '#999',
     textAlign: 'center',
-    marginTop: 8,
     fontStyle: 'italic',
+  },
+  // View Monthly Bills Button Styles
+  viewBillsButtonContainer: {
+    marginHorizontal: 15,
+    marginBottom: 20,
+  },
+  viewBillsButton: {
+    backgroundColor: '#B48A64',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#B48A64',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 5,
+  },
+  viewBillsIcon: {
+    marginRight: 12,
+  },
+  viewBillsButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   // Voucher Modal Styles
   voucherModalContent: {
@@ -1490,6 +2027,250 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontStyle: 'italic',
     paddingVertical: 10,
+  },
+  // Tab Switcher Styles - Professional Card
+  tabContainer: {
+    flexDirection: 'row',
+    marginBottom: 10,
+  },
+  tabButton: {
+    flex: 1,
+    paddingVertical: 15,
+    alignItems: 'center',
+    position: 'relative',
+    borderBottomWidth: 3,
+    borderBottomColor: 'transparent',
+  },
+  activeTab: {
+    borderBottomColor: '#B48A64',
+  },
+  tabButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#999',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  activeTabText: {
+    color: '#543A14',
+    fontWeight: '700',
+  },
+  activeTabIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    left: '25%',
+    right: '25%',
+    height: 3,
+    backgroundColor: '#B48A64',
+    borderRadius: 3,
+  },
+  // History Filter Styles - Card Based
+  filterSection: {
+    backgroundColor: '#FFF',
+    borderRadius: 15,
+    padding: 20,
+    marginBottom: 20,
+    marginHorizontal: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  filterField: {
+    flex: 1,
+  },
+  filterLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#999',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  dropdown: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#F2E8DF',
+    padding: 15,
+    borderRadius: 10,
+  },
+  dropdownText: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '600',
+  },
+  membershipInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F0E8E0',
+  },
+  membershipText: {
+    fontSize: 12,
+    color: '#666',
+    marginLeft: 8,
+  },
+  // Bill Card Styles - Professional Horizontal Layout
+  billCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 15,
+    padding: 20,
+    marginBottom: 15,
+    marginHorizontal: 15,
+    borderWidth: 1,
+    borderColor: '#E8DDD0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  billHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  billIconContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#F2E8DF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 15,
+  },
+  billInfo: {
+    flex: 1,
+  },
+  billFilename: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#543A14',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  billPeriod: {
+    fontSize: 12,
+    color: '#999',
+  },
+  billActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  viewButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#B48A64',
+    backgroundColor: 'transparent',
+    gap: 8,
+  },
+  viewButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#B48A64',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  downloadButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    backgroundColor: '#F5E6D3',
+    borderWidth: 2,
+    borderColor: '#B48A64',
+    gap: 8,
+  },
+  downloadButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#B48A64',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  listContent: {
+    padding: 8,
+    paddingBottom: 40,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 80,
+    backgroundColor: '#FFF',
+    borderRadius: 15,
+    marginHorizontal: 15,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#E8DDD0',
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#543A14',
+    marginTop: 16,
+    letterSpacing: 0.5,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#999',
+    textAlign: 'center',
+    marginTop: 8,
+    paddingHorizontal: 32,
+    lineHeight: 20,
+  },
+  loadingBillContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  loadingBillText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666',
+  },
+  // Dropdown Modal Styles
+  monthOption: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  selectedMonthOption: {
+    backgroundColor: '#FFF9F0',
+  },
+  monthOptionText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  yearOption: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  selectedYearOption: {
+    backgroundColor: '#FFF9F0',
+  },
+  yearOptionText: {
+    fontSize: 16,
+    color: '#333',
   },
 });
 

@@ -15,6 +15,7 @@ import {
   Alert,
   ActivityIndicator
 } from 'react-native';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import axios from 'axios';
 import { jwtDecode } from 'jwt-decode'; // Use library instead of custom decoder
 import { storeAuthData, getBaseUrl, userWho, registerFcmToken, removeAuthData, loginAdmin } from '../../config/apis';
@@ -460,7 +461,7 @@ const LoginScr = ({ navigation }) => {
                   {!otpSent ? (
                     <>
                       <View style={styles.inputContainer}>
-                        <Text style={styles.icon}>🪪</Text>
+                        <Icon name="badge-account-horizontal" size={20} color="black" style={styles.icon} />
                         <TextInput
                           placeholder="Enter Member ID"
                           placeholderTextColor="rgba(0,0,0,0.5)"
@@ -489,7 +490,7 @@ const LoginScr = ({ navigation }) => {
                   ) : (
                     <>
                       <View style={styles.inputContainer}>
-                        <Text style={styles.icon}>📧</Text>
+                        <Icon name="email-outline" size={20} color="black" style={styles.icon} />
                         <TextInput
                           placeholder="Enter OTP"
                           placeholderTextColor="rgba(0,0,0,0.5)"
@@ -532,7 +533,7 @@ const LoginScr = ({ navigation }) => {
               ) : (
                 <>
                   <View style={styles.inputContainer}>
-                    <Text style={styles.icon}>📧</Text>
+                    <Icon name="email-outline" size={20} color="black" style={styles.icon} />
                     <TextInput
                       placeholder="Enter Admin Email"
                       placeholderTextColor="rgba(0,0,0,0.5)"
@@ -547,7 +548,7 @@ const LoginScr = ({ navigation }) => {
                   </View>
 
                   <View style={styles.inputContainer}>
-                    <Text style={styles.icon}>🔒</Text>
+                    <Icon name="lock-outline" size={20} color="black" style={styles.icon} />
                     <TextInput
                       placeholder="Enter Password"
                       placeholderTextColor="rgba(0,0,0,0.5)"
@@ -590,7 +591,7 @@ const LoginScr = ({ navigation }) => {
                 onPress={() => navigation.navigate('about')}
                 activeOpacity={0.7}
               >
-                <Text style={styles.aboutIcon}>ℹ️</Text>
+                <Icon name="information-outline" size={20} color="white" style={styles.aboutIcon} />
                 <Text style={styles.aboutText}>About PSC</Text>
               </TouchableOpacity>
             </View>
