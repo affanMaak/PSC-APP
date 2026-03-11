@@ -109,7 +109,6 @@ import ViewProfileScreen from './src/view/ViewProfileScreen';
 import feedbacks from './slides/feedbacks';
 import BillPaymentHistory from './slides/BillPaymentHistory';
 import MonthlyBillHistory from './screens/MonthlyBillHistory';
-import MonthlyBillsScreen from './screens/MonthlyBillsScreen';
 
 // ===== Navigation Setup =====
 enableScreens();
@@ -693,7 +692,6 @@ function AppContent() {
         <Stack.Screen name="RoomBookingScreen" component={RoomBookingScreen} options={{ headerShown: false }} />
         <Stack.Screen name="BillPaymentHistory" component={BillPaymentHistory} options={{ headerShown: false }} />
         <Stack.Screen name="MonthlyBillHistory" component={MonthlyBillHistory} options={{ headerShown: false }} />
-        <Stack.Screen name="MonthlyBillsScreen" component={MonthlyBillsScreen} options={{ headerShown: false }} />
       </Stack.Navigator>
       <BookingSummaryBar />
     </NavigationContainer>

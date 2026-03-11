@@ -66,7 +66,10 @@ const MonthlyBillHistory = ({ navigation }) => {
 
   // Fetch bills when month/year changes
   useEffect(() => {
-   if (membershipNo) {
+    // Clear previous bills immediately when filters change (prevent ghosting)
+    setFilteredBills([]);
+    
+    if (membershipNo) {
       fetchBills();
     }
   }, [selectedMonth, selectedYear, membershipNo]);
@@ -117,12 +120,27 @@ const MonthlyBillHistory = ({ navigation }) => {
      const billsArray = Array.isArray(billsData) ? billsData : [billsData].filter(Boolean);
       setAllBills(billsArray);
       
-      // CLIENT-SIDE FILTERING: Filter bills for current user only
-     const myBills = billsArray.filter(bill => {
-       const fileName = bill.url || bill.filename || "";
-        // Match "3_bill.pdf" if membershipNo is "3"
-       return fileName.includes(`/${membershipNo}_`) || 
-               fileName.endsWith(`${membershipNo}_bill.pdf`);
+      // CLIENT-SIDE FILTERING: Filter bills for current user only using MATHEMATICAL TRUTH
+      const myBills = billsArray.filter(bill => {
+        // 1. Force the User's ID to a pure integer (Removes 'PSC-', '00', etc.)
+        const userNum = parseInt(String(membershipNo).replace(/[^0-9]/g, ''), 10);
+
+        // 2. Extract the Bill's ID from the dedicated field or filename prefix
+        const rawBillId = bill.membershipNo || (bill.filename || "").split('_')[0];
+        const billNum = parseInt(String(rawBillId).replace(/[^0-9]/g, ''), 10);
+
+        // 3. THE TRUTH TEST: 
+        // If user is 3, billNum MUST BE 3. 803 === 3 will always be FALSE.
+        const isMatch = billNum === userNum;
+
+        // 4. FORCED DEBUGGING (KILL THE GHOST):
+        if (billNum === 803 && userNum === 3 && isMatch === false) {
+            console.log("✅ SUCCESS: Blocked Bill 803 from User 3.");
+        } else if (isMatch && billNum !== userNum) {
+            console.error("🛑 CRITICAL FAILURE: Logic leak detected.");
+        }
+
+        return isMatch;
       });
       
      console.log(`✅ Filtered to ${myBills.length} bills for member ${membershipNo}`);

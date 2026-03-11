@@ -233,12 +233,26 @@ const Bills = ({ navigation }) => {
       const billsArray = Array.isArray(billsData) ? billsData : [billsData].filter(Boolean);
       setAllBills(billsArray);
       
-      // CLIENT-SIDE FILTERING: Filter bills for current user only
+      // CLIENT-SIDE FILTERING: Filter bills for current user only using DATA-DRIVEN INTEGER COMPARISON
+      // 1. Sanitize the user's ID to a clean string
+      const targetId = String(membershipNumber).replace(/[^0-9]/g, '');
+      
+      console.log(`🔍 User Membership Number: ${membershipNumber} → Target ID: ${targetId}`);
+      
       const myBills = billsArray.filter(bill => {
-        const fileName = bill.url || bill.filename || "";
-        // Match "3_bill.pdf" if membershipNo is "3"
-        return fileName.includes('/' + membershipNumber + '_') || 
-               fileName.endsWith(membershipNumber + '_bill.pdf');
+        // 2. Use the dedicated membershipNo field from the API if it exists
+        // If not, fall back to extracting it from the filename strictly
+        const billMemberId = bill.membershipNo 
+          ? String(bill.membershipNo).replace(/[^0-9]/g, '')
+          : (bill.filename || "").split('_')[0].replace(/[^0-9]/g, '');
+
+        // 3. EXACT INTEGER COMPARISON
+        // This ensures '3' NEVER matches '803'
+        const isMatch = parseInt(billMemberId, 10) === parseInt(targetId, 10);
+
+        console.log(`Comparing: Bill ID (${billMemberId}) with User ID (${targetId}) -> Match: ${isMatch}`);
+        
+        return isMatch;
       });
       
       console.log(`✅ Filtered to ${myBills.length} bills for member ${membershipNumber}`);
