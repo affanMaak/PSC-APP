@@ -17,10 +17,13 @@ import {
   BackHandler,
   Animated,
   Dimensions,
+  Modal,
+  FlatList,
+  RefreshControl,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getBaseUrl, paymentAPI } from '../config/apis';
+import { getBaseUrl, paymentAPI, listMonthlyBills } from '../config/apis';
 import ViewShot, { captureRef } from 'react-native-view-shot';
 import { CameraRoll } from '@react-native-camera-roll/camera-roll';
 import { permissionService } from '../src/services/PermissionService';
@@ -79,6 +82,18 @@ const Bills = ({ navigation }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [userRole, setUserRole] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
+
+  // Monthly Bill History states
+  const [activeTab, setActiveTab] = useState('pay');
+  const [historyBills, setHistoryBills] = useState([]);
+  const [selectedMonth, setSelectedMonth] = useState('03');
+  const [selectedYear, setSelectedYear] = useState('2026');
+  const [showMonthDropdown, setShowMonthDropdown] = useState(false);
+  const [showYearDropdown, setShowYearDropdown] = useState(false);
+  const [allBills, setAllBills] = useState([]);
+
+  // Current year for dropdown
+  const currentYear = new Date().getFullYear();
 
   // Balance Payment states
   const [amountToPay, setAmountToPay] = useState('');
@@ -199,6 +214,146 @@ const Bills = ({ navigation }) => {
     if (generatedVoucher?.consumer_number) {
       Clipboard.setString(String(generatedVoucher.consumer_number));
       Alert.alert('Copied!', 'Consumer number copied to clipboard');
+    }
+  };
+
+  // Monthly Bill History functions
+  const fetchBills = async () => {
+    if (!membershipNumber) return;
+    
+    try {
+      setLoading(true);
+      console.log(`📋 Fetching all bills for month: ${selectedMonth}, year: ${selectedYear}`);
+      
+      // Fetch ALL bills for the selected month/year
+      const billsData = await listMonthlyBills(selectedMonth, selectedYear);
+      console.log('📦 All bills received:', billsData);
+      
+      // Store all bills
+      const billsArray = Array.isArray(billsData) ? billsData : [billsData].filter(Boolean);
+      setAllBills(billsArray);
+      
+      // CLIENT-SIDE FILTERING: Filter bills for current user only
+      const myBills = billsArray.filter(bill => {
+        const fileName = bill.url || bill.filename || "";
+        // Match "3_bill.pdf" if membershipNo is "3"
+        return fileName.includes('/' + membershipNumber + '_') || 
+               fileName.endsWith(membershipNumber + '_bill.pdf');
+      });
+      
+      console.log(`✅ Filtered to ${myBills.length} bills for member ${membershipNumber}`);
+      setHistoryBills(myBills);
+      
+    } catch (err) {
+      console.error('❌ Error fetching bills:', err);
+      Alert.alert('Error', err.message || 'Failed to fetch bills');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleViewBill = async (bill) => {
+    try {
+      console.log('📄 Opening bill:', bill);
+      
+      // Construct full URL from relative path
+      let fullUrl = bill.url;
+      if (!fullUrl) {
+        Alert.alert('Error', 'Bill URL not available');
+        return;
+      }
+      
+      // Ensure URL starts with http/https - ROBUST URL HANDLING
+      if (fullUrl.startsWith('/')) {
+        // Remove/api from base URL and append the relative path
+        const baseUrl = getBaseUrl().replace('/api', '');
+        fullUrl = `${baseUrl}${fullUrl}`;
+      } else if (!fullUrl.startsWith('http')) {
+        fullUrl = `https://admin.peshawarservicesclub.com${fullUrl}`;
+      }
+      
+      console.log('🔗 Full bill URL:', fullUrl);
+      
+      const supported = await Linking.canOpenURL(fullUrl);
+      if (supported) {
+        await Linking.openURL(fullUrl);
+      } else {
+        // Fallback: Try opening anyway
+        try {
+          await Linking.openURL(fullUrl);
+        } catch (fallbackErr) {
+          Alert.alert(
+            'Cannot Open PDF',
+            'Unable to open the PDF. Please try downloading instead.',
+            [{ text: 'OK' }]
+          );
+          console.error('❌ Fallback also failed:', fallbackErr);
+        }
+      }
+    } catch (err) {
+      console.error('❌ Error opening bill:', err);
+      Alert.alert(
+        'Error', 
+        'Failed to open bill PDF. Please try downloading instead.'
+      );
+    }
+  };
+
+  const handleDownloadBill = async (bill) => {
+    try {
+      console.log('📥 Downloading bill:', bill);
+      
+      // Construct full URL from relative path
+      let fullUrl = bill.url;
+      if (!fullUrl) {
+        Alert.alert('Error', 'Bill URL not available');
+        return;
+      }
+      
+      // Ensure URL starts with http/https - ROBUST URL HANDLING
+      if (fullUrl.startsWith('/')) {
+        // Remove/api from base URL and append the relative path
+        const baseUrl = getBaseUrl().replace('/api', '');
+        fullUrl = `${baseUrl}${fullUrl}`;
+      } else if (!fullUrl.startsWith('http')) {
+        fullUrl = `https://admin.peshawarservicesclub.com${fullUrl}`;
+      }
+      
+      console.log('🔗 Full bill URL for download:', fullUrl);
+      
+      // For React Native without RNFS/ expo-sharing, use this approach
+      // This opens the PDF which user can then save from browser
+      const supported = await Linking.canOpenURL(fullUrl);
+      if (supported) {
+        await Linking.openURL(fullUrl);
+        setTimeout(() => {
+          Alert.alert(
+            'Download Started',
+            'The PDF has been opened in your browser. You can save it from there by:\n\n1. Tapping the share/download icon\n2. Selecting "Save to Files" or "Download"',
+            [{ text: 'OK' }]
+          );
+        }, 500);
+      } else {
+        // Try opening anyway as fallback
+        try {
+          await Linking.openURL(fullUrl);
+          setTimeout(() => {
+            Alert.alert(
+              'Download Started',
+              'The PDF has been opened in your browser. You can save it from there.',
+              [{ text: 'OK' }]
+            );
+          }, 500);
+        } catch (fallbackErr) {
+          Alert.alert('Error', `Cannot open URL: ${fullUrl}`);
+        }
+      }
+    } catch (err) {
+      console.error('❌ Error downloading bill:', err);
+      Alert.alert(
+        'Error', 
+        'Failed to download bill. Please try again later.'
+      );
     }
   };
 
@@ -391,6 +546,13 @@ const Bills = ({ navigation }) => {
     initializeApp();
   }, []);
 
+  // Fetch bills when month/year changes
+  useEffect(() => {
+    if (membershipNumber && activeTab === 'history') {
+      fetchBills();
+    }
+  }, [selectedMonth, selectedYear, membershipNumber, activeTab]);
+
   const getStatusBadge = (status) => {
     switch (status) {
       case 'PAID':
@@ -407,6 +569,61 @@ const Bills = ({ navigation }) => {
         return <Text style={styles.statusBadge}>{status}</Text>;
     }
   };
+
+  // Month names for display
+  const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+
+  // Generate year options (current year ± 2)
+  const yearOptions = [currentYear - 2, currentYear - 1, currentYear, currentYear + 1, currentYear + 2];
+
+  // Render bill item for FlatList
+  const renderBillItem = ({ item }) => (
+    <View style={styles.billCard}>
+      <View style={styles.billHeader}>
+        <Icon name="file-pdf-box" size={28} color="#b48a64" />
+        <View style={styles.billInfo}>
+          <Text style={styles.billFilename} numberOfLines={1}>
+            {item.filename || `Bill_${selectedMonth}_${selectedYear}.pdf`}
+          </Text>
+          <Text style={styles.billPeriod}>
+            {monthNames[parseInt(selectedMonth) - 1]} {selectedYear}
+          </Text>
+        </View>
+      </View>
+      
+      <View style={styles.billActions}>
+        <TouchableOpacity
+          style={[styles.actionButton, styles.viewButton]}
+          onPress={() => handleViewBill(item)}
+        >
+          <Icon name="eye-outline" size={20} color="#fff" />
+          <Text style={styles.actionButtonText}>View</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={[styles.actionButton, styles.downloadButton]}
+          onPress={() => handleDownloadBill(item)}
+        >
+          <Icon name="download" size={20} color="#b48a64" />
+          <Text style={styles.downloadButtonText}>Download</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  const renderEmptyComponent = () => (
+    <View style={styles.emptyContainer}>
+      <Icon name="file-remove-outline" size={80} color="#999" />
+      <Text style={styles.emptyTitle}>No Bills Found</Text>
+      <Text style={styles.emptyText}>
+        There are no bills found for {monthNames[parseInt(selectedMonth) - 1] || ''} {selectedYear || ''}
+        {membershipNumber ? ` for membership ${membershipNumber}` : ''}.
+      </Text>
+    </View>
+  );
 
   if (loading) {
     return (
@@ -602,9 +819,35 @@ const Bills = ({ navigation }) => {
 
         {/* Modal removed — receipt is now a separate screen */}
 
-
-        {/* Payment Section - Only for Members */}
+        {/* Tab Switcher - Pay Current Bill / Monthly History */}
         {!isAdmin && memberData && (
+          <View style={styles.section}>
+            <View style={styles.tabContainer}>
+              <TouchableOpacity
+                style={[styles.tabButton, activeTab === 'pay' && styles.activeTabButton]}
+                onPress={() => setActiveTab('pay')}
+              >
+                <Text style={[styles.tabText, activeTab === 'pay' && styles.activeTabText]}>
+                  Pay Current Bill
+                </Text>
+                {activeTab === 'pay' && <View style={styles.activeTabUnderline} />}
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.tabButton, activeTab === 'history' && styles.activeTabButton]}
+                onPress={() => setActiveTab('history')}
+              >
+                <Text style={[styles.tabText, activeTab === 'history' && styles.activeTabText]}>
+                  Monthly History
+                </Text>
+                {activeTab === 'history' && <View style={styles.activeTabUnderline} />}
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* Tab 1: Pay Current Bill */}
+        {activeTab === 'pay' && !isAdmin && memberData && (
           <>
             {/* BILL PAYMENT VIA MOBILE APP & OTHER PAYMENT MODES */}
             <View style={styles.section}>
@@ -710,6 +953,149 @@ const Bills = ({ navigation }) => {
             </View>
           </>
         )}
+
+        {/* Tab 2: Monthly History */}
+        {activeTab === 'history' && !isAdmin && memberData && (
+          <View style={styles.section}>
+            {/* Filter Section */}
+            <View style={styles.filterSection}>
+              <View style={styles.filterHeader}>
+                <Icon name="filter" size={20} color="#b48a64" />
+                <Text style={styles.filterTitle}>Filter Period</Text>
+              </View>
+
+              <View style={styles.filterRow}>
+                {/* Month Selector */}
+                <View style={styles.filterField}>
+                  <Text style={styles.filterLabel}>Month</Text>
+                  <TouchableOpacity
+                    style={styles.dropdown}
+                    onPress={() => {
+                      setShowMonthDropdown(!showMonthDropdown);
+                      setShowYearDropdown(false);
+                    }}
+                  >
+                    <Text style={styles.dropdownText}>
+                      {monthNames[parseInt(selectedMonth) - 1]}
+                    </Text>
+                    <Icon name="chevron-down" size={20} color="#b48a64" />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Year Selector */}
+                <View style={styles.filterField}>
+                  <Text style={styles.filterLabel}>Year</Text>
+                  <TouchableOpacity
+                    style={styles.dropdown}
+                    onPress={() => {
+                      setShowYearDropdown(!showYearDropdown);
+                      setShowMonthDropdown(false);
+                    }}
+                  >
+                    <Text style={styles.dropdownText}>
+                      {selectedYear}
+                    </Text>
+                    <Icon name="chevron-down" size={20} color="#b48a64" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Membership Info */}
+              <View style={styles.membershipInfo}>
+                <Icon name="account" size={16} color="#b48a64" />
+                <Text style={styles.membershipText}>
+                  Membership: {membershipNumber || 'Loading...'}
+                </Text>
+              </View>
+            </View>
+
+            {/* Bills List */}
+            {loading ? (
+              <View style={styles.loadingBillContainer}>
+                <ActivityIndicator size="large" color="#b48a64" />
+                <Text style={styles.loadingBillText}>Loading Bills...</Text>
+              </View>
+            ) : (
+              <FlatList
+                data={historyBills}
+                renderItem={renderBillItem}
+                keyExtractor={(item, index) => item.id || item.filename || index.toString()}
+                contentContainerStyle={styles.listContent}
+                ListEmptyComponent={renderEmptyComponent}
+              />
+            )}
+          </View>
+        )}
+
+        {/* Month Dropdown Modal */}
+        <Modal
+          visible={showMonthDropdown}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowMonthDropdown(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setShowMonthDropdown(false)}
+          >
+            <View style={styles.modalContent}>
+              <ScrollView>
+                {monthNames.map((month, index) => (
+                  <TouchableOpacity
+                    key={month}
+                    style={[
+                      styles.monthOption,
+                      selectedMonth === (index + 1).toString().padStart(2, '0') && styles.selectedMonthOption
+                    ]}
+                    onPress={() => {
+                      setSelectedMonth((index + 1).toString().padStart(2, '0'));
+                      setShowMonthDropdown(false);
+                    }}
+                  >
+                    <Text style={styles.monthOptionText}>
+                      {month}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          </TouchableOpacity>
+        </Modal>
+
+        {/* Year Dropdown Modal */}
+        <Modal
+          visible={showYearDropdown}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowYearDropdown(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setShowYearDropdown(false)}
+          >
+            <View style={styles.modalContent}>
+              {yearOptions.map((year) => (
+                <TouchableOpacity
+                  key={year}
+                  style={[
+                    styles.yearOption,
+                    selectedYear === year.toString() && styles.selectedYearOption
+                  ]}
+                  onPress={() => {
+                    setSelectedYear(year.toString());
+                    setShowYearDropdown(false);
+                  }}
+                >
+                  <Text style={styles.yearOptionText}>
+                    {year}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </TouchableOpacity>
+        </Modal>
 
 
         {/* Admin Message - Only for admin when member data is loaded */}
@@ -1490,6 +1876,225 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontStyle: 'italic',
     paddingVertical: 10,
+  },
+  // Tab Switcher Styles
+  tabContainer: {
+    flexDirection: 'row',
+    borderBottomWidth: 2,
+    borderBottomColor: '#E0E0E0',
+    marginBottom: 16,
+  },
+  tabButton: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    position: 'relative',
+  },
+  activeTabButton: {
+    backgroundColor: 'transparent',
+  },
+  tabText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#666',
+  },
+  activeTabText: {
+    color: '#b48a64',
+    fontWeight: '700',
+  },
+  activeTabUnderline: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+    backgroundColor: '#b48a64',
+    borderRadius: 3,
+  },
+  // Filter Section Styles
+  filterSection: {
+    backgroundColor: '#FFF9F0',
+    borderRadius: 10,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E8DDD0',
+  },
+  filterHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  filterTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginLeft: 8,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  filterField: {
+    flex: 1,
+    marginHorizontal: 4,
+  },
+  filterLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 6,
+  },
+  dropdown: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 8,
+    backgroundColor: '#FFF',
+  },
+  dropdownText: {
+    fontSize: 14,
+    color: '#333',
+  },
+  membershipInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F0E8E0',
+  },
+  membershipText: {
+    fontSize: 12,
+    color: '#666',
+    marginLeft: 8,
+  },
+  // Bill Card Styles
+  billCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E8DDD0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  billHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  billInfo: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  billFilename: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  billPeriod: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
+  },
+  billActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  viewButton: {
+    backgroundColor: '#b48a64',
+    borderColor: '#b48a64',
+  },
+  downloadButton: {
+    backgroundColor: 'transparent',
+    borderColor: '#b48a64',
+  },
+  actionButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFF',
+    marginLeft: 8,
+  },
+  downloadButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#b48a64',
+    marginLeft: 8,
+  },
+  listContent: {
+    padding: 8,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 80,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#333',
+    marginTop: 16,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 8,
+    paddingHorizontal: 32,
+  },
+  loadingBillContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  loadingBillText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666',
+  },
+  // Dropdown Modal Styles
+  monthOption: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  selectedMonthOption: {
+    backgroundColor: '#FFF9F0',
+  },
+  monthOptionText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  yearOption: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  selectedYearOption: {
+    backgroundColor: '#FFF9F0',
+  },
+  yearOptionText: {
+    fontSize: 16,
+    color: '#333',
   },
 });
 
