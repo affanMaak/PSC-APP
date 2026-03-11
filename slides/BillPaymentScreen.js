@@ -663,7 +663,9 @@ const Bills = ({ navigation }) => {
         </View>
       </ImageBackground>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        {/* Content Container with Beige Background */}
+        <View style={styles.contentWrapper}>
         {/* Role Badge */}
         {/* <View style={styles.roleBadgeContainer}>
           <Text style={[styles.roleBadge, isAdmin ? styles.adminBadge : styles.memberBadge]}>
@@ -698,55 +700,59 @@ const Bills = ({ navigation }) => {
           </View>
         )}
 
-        {/* User Information Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>
+        {/* User Information Section - Enhanced Member Info Card */}
+        <View style={styles.memberInfoCard}>
+          <Text style={styles.cardTitle}>
             {isAdmin ? 'Member Information' : 'Your Information'}
           </Text>
 
           {(!isAdmin || (isAdmin && memberData)) ? (
             <>
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Membership Number</Text>
-                <TextInput
-                  style={styles.input}
-                  value={membershipNumber}
-                  editable={false}
-                  selectTextOnFocus={false}
-                />
+              <View style={styles.infoRow}>
+                <View style={styles.infoLabelContainer}>
+                  <Text style={styles.infoLabel}>Membership Number</Text>
+                </View>
+                <View style={styles.infoValueContainer}>
+                  <TextInput
+                    style={styles.infoInput}
+                    value={membershipNumber}
+                    editable={false}
+                    selectTextOnFocus={false}
+                  />
+                </View>
               </View>
 
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Member Name</Text>
-                <TextInput
-                  style={styles.input}
-                  value={membershipName}
-                  editable={false}
-                  selectTextOnFocus={false}
-                />
+              <View style={styles.infoRow}>
+                <View style={styles.infoLabelContainer}>
+                  <Text style={styles.infoLabel}>Member Name</Text>
+                </View>
+                <View style={styles.infoValueContainer}>
+                  <TextInput
+                    style={styles.infoInput}
+                    value={membershipName}
+                    editable={false}
+                    selectTextOnFocus={false}
+                  />
+                </View>
               </View>
 
               {memberData && (
-                <View style={styles.memberDetailsContainer}>
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Dues</Text>
-                    <Text style={[
-                      styles.detailValue,
-                      memberData.Balance < 0 && styles.negativeBalance
-                    ]}>
-                      Rs {memberData.Balance?.toLocaleString() || 0}
-                    </Text>
-                  </View>
-
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Account Status</Text>
+                <View style={styles.balanceCard}>
+                  <View style={styles.balanceHeader}>
+                    <Text style={styles.balanceLabel}>Current Balance</Text>
                     {getStatusBadge(memberData.Status)}
                   </View>
-
+                  <Text style={[
+                    styles.balanceAmountDisplay,
+                    memberData.Balance < 0 && styles.negativeBalanceDisplay
+                  ]}>
+                    Rs {memberData.Balance?.toLocaleString() || 0}
+                  </Text>
+                  
                   {memberData.totalBookings !== undefined && (
-                    <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>Total Bookings</Text>
-                      <Text style={styles.detailValue}>{memberData.totalBookings || 0}</Text>
+                    <View style={styles.bookingsRow}>
+                      <Text style={styles.bookingsLabel}>Total Bookings:</Text>
+                      <Text style={styles.bookingsValue}>{memberData.totalBookings || 0}</Text>
                     </View>
                   )}
                 </View>
@@ -773,32 +779,27 @@ const Bills = ({ navigation }) => {
           )}
         </View>
 
+        {/* Custom Payment Section - Enhanced Layout */}
         {!isAdmin && memberData && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Custom Payment</Text>
+          <View style={styles.paymentCard}>
+            <Text style={styles.cardTitle}>Custom Payment</Text>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Enter Amount to Pay (Rs)</Text>
+            <View style={styles.paymentInputGroup}>
+              <Text style={styles.paymentLabel}>Amount to Pay (Rs)</Text>
               <TextInput
-                style={styles.input}
+                style={styles.paymentInput}
                 value={amountToPay}
                 onChangeText={setAmountToPay}
-                placeholder="e.g., 5000"
+                placeholder="Enter amount (e.g., 5000)"
                 placeholderTextColor="#999"
                 keyboardType="numeric"
                 editable={!isGeneratingVoucher}
               />
             </View>
 
-            <View style={styles.balanceInfo}>
-              <Text style={styles.balanceInfoText}>
-                Your Current Balance: <Text style={styles.balanceAmount}>Rs {memberData.Balance?.toLocaleString() || 0}</Text>
-              </Text>
-            </View>
-
             <TouchableOpacity
               style={[
-                styles.generateButton,
+                styles.generateVoucherButton,
                 (!amountToPay || Number(amountToPay) <= 0 || Number(amountToPay) > memberData.Balance) && styles.disabledButton
               ]}
               onPress={handleGenerateBalanceVoucher}
@@ -807,42 +808,30 @@ const Bills = ({ navigation }) => {
               {isGeneratingVoucher ? (
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
-                <Text style={styles.generateButtonText}>Generate Consumer Number</Text>
+                <Text style={styles.generateVoucherButtonText}>Generate Consumer Number</Text>
               )}
             </TouchableOpacity>
 
-            <Text style={styles.generateNote}>
-              Enter the amount you wish to pay. The amount cannot exceed your current balance.
+            <Text style={styles.paymentNote}>
+              Amount cannot exceed your current balance
             </Text>
           </View>
         )}
 
-        {/* Modal removed — receipt is now a separate screen */}
-
-        {/* Tab Switcher - Pay Current Bill / Monthly History */}
+        {/* View Monthly Bills Button */}
         {!isAdmin && memberData && (
-          <View style={styles.section}>
-            <View style={styles.tabContainer}>
-              <TouchableOpacity
-                style={[styles.tabButton, activeTab === 'pay' && styles.activeTabButton]}
-                onPress={() => setActiveTab('pay')}
-              >
-                <Text style={[styles.tabText, activeTab === 'pay' && styles.activeTabText]}>
-                  Pay Current Bill
-                </Text>
-                {activeTab === 'pay' && <View style={styles.activeTabUnderline} />}
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[styles.tabButton, activeTab === 'history' && styles.activeTabButton]}
-                onPress={() => setActiveTab('history')}
-              >
-                <Text style={[styles.tabText, activeTab === 'history' && styles.activeTabText]}>
-                  Monthly History
-                </Text>
-                {activeTab === 'history' && <View style={styles.activeTabUnderline} />}
-              </TouchableOpacity>
-            </View>
+          <View style={styles.viewBillsButtonContainer}>
+            <TouchableOpacity
+              style={styles.viewBillsButton}
+              onPress={() => navigation.navigate('MonthlyBillHistory', { 
+                membershipNumber: membershipNumber,
+                membershipName: membershipName 
+              })}
+              activeOpacity={0.7}
+            >
+              <Icon name="file-document-outline" size={24} color="#FFF" style={styles.viewBillsIcon} />
+              <Text style={styles.viewBillsButtonText}>View Monthly Bills</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -1106,6 +1095,7 @@ const Bills = ({ navigation }) => {
             </Text>
           </View>
         )} */}
+        </View>
       </ScrollView>
     </View>
   );
@@ -1125,7 +1115,13 @@ const handleBankSelect = (bank) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9EFE6',
+    backgroundColor: '#F5F1E9',
+  },
+  contentWrapper: {
+    paddingVertical: 20,
+  },
+  scrollView: {
+    backgroundColor: '#F5F1E9',
   },
   loadingContainer: {
     flex: 1,
@@ -1219,12 +1215,25 @@ const styles = StyleSheet.create({
     backgroundColor: '#4CAF50',
     color: '#fff',
   },
-  // Section Styles
+  // Professional Card Style
+  card: {
+    backgroundColor: '#FFF',
+    borderRadius: 15,
+    padding: 20,
+    marginBottom: 20,
+    marginHorizontal: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
   section: {
     backgroundColor: '#FFF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+    borderRadius: 15,
+    padding: 20,
+    marginBottom: 20,
+    marginHorizontal: 15,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -1232,10 +1241,12 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 16,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#543A14',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 15,
   },
   sectionSubtitle: {
     fontSize: 16,
@@ -1291,40 +1302,120 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 8,
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#999',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 5,
   },
   input: {
-    backgroundColor: '#F5F5F5',
-    borderRadius: 8,
-    padding: 12,
+    backgroundColor: '#F2E8DF',
+    borderRadius: 10,
+    padding: 15,
     fontSize: 16,
     color: '#333',
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
   },
-  // Member Details Styles
-  memberDetailsContainer: {
-    backgroundColor: '#FFF9F0',
-    borderRadius: 10,
-    padding: 16,
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: '#E8DDD0',
+  // Enhanced Member Info Card Styles
+  memberInfoCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 15,
+    padding: 20,
+    marginBottom: 20,
+    marginHorizontal: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 4,
   },
-  detailRow: {
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#543A14',
+    marginBottom: 20,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
-    paddingBottom: 12,
+    marginBottom: 15,
+    paddingBottom: 15,
     borderBottomWidth: 1,
     borderBottomColor: '#F0E8E0',
   },
-  detailLabel: {
+  infoLabelContainer: {
+    flex: 1,
+  },
+  infoLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 5,
+  },
+  infoValueContainer: {
+    flex: 1.5,
+  },
+  infoInput: {
+    backgroundColor: '#F2E8DF',
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 15,
+    color: '#333',
+    textAlign: 'right',
+  },
+  balanceCard: {
+    backgroundColor: '#F9EFE6',
+    borderRadius: 12,
+    padding: 20,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: '#E8DDD0',
+  },
+  balanceHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  balanceLabel: {
     fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+  },
+  balanceAmountDisplay: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#B48A64',
+    letterSpacing: 0.5,
+    marginBottom: 10,
+  },
+  negativeBalanceDisplay: {
+    color: '#E74C3C',
+  },
+  bookingsRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#E8DDD0',
+  },
+  bookingsLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#666',
+    marginRight: 8,
+  },
+  bookingsValue: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#333',
+  },
+  detailLabel: {
+    fontSize: 13,
     color: '#666',
   },
   detailValue: {
@@ -1333,48 +1424,45 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   negativeBalance: {
-    color: '#f44336',
+    color: '#E74C3C',
   },
-  // Status Badge Styles
   statusBadge: {
-    fontSize: 12,
-    fontWeight: '600',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
+    backgroundColor: '#4C7A57',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
     borderRadius: 20,
-    backgroundColor: '#e0e0e0',
-    color: '#333',
-    overflow: 'hidden',
+  },
+  statusBadgeText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
   },
   statusBadgePaid: {
-    fontSize: 12,
-    fontWeight: '600',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
+    backgroundColor: '#4C7A57',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
     borderRadius: 20,
-    backgroundColor: '#4CAF50',
-    color: 'white',
-    overflow: 'hidden',
   },
   statusBadgeHalfPaid: {
-    fontSize: 12,
-    fontWeight: '600',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
+    backgroundColor: '#D4A574',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
     borderRadius: 20,
-    backgroundColor: '#FF9800',
-    color: 'white',
-    overflow: 'hidden',
   },
   statusBadgeUnpaid: {
-    fontSize: 12,
-    fontWeight: '600',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
+    backgroundColor: '#E74C3C',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
     borderRadius: 20,
-    backgroundColor: '#f44336',
-    color: 'white',
-    overflow: 'hidden',
+  },
+  statusBadgeContainer: {
+    alignSelf: 'flex-start',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#E8DDD0',
+    marginVertical: 20,
   },
   // No Member Styles
   noMemberContainer: {
@@ -1693,46 +1781,95 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  // Balance Payment Styles
-  balanceInfo: {
-    backgroundColor: '#F0F8F4',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#4CAF50',
+  // Enhanced Payment Section Styles
+  paymentCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 15,
+    padding: 20,
+    marginBottom: 20,
+    marginHorizontal: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 4,
   },
-  balanceInfoText: {
-    fontSize: 14,
-    color: '#333',
-    textAlign: 'center',
+  paymentInputGroup: {
+    marginBottom: 20,
   },
-  balanceAmount: {
-    fontWeight: 'bold',
-    color: 'black',
+  paymentLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#666',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  paymentInput: {
+    backgroundColor: '#F2E8DF',
+    borderRadius: 10,
+    padding: 15,
     fontSize: 16,
+    color: '#333',
   },
-  generateButton: {
-    backgroundColor: '#b48a64',
+  generateVoucherButton: {
+    backgroundColor: '#B48A64',
     borderRadius: 12,
-    padding: 16,
+    height: 55,
+    justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 8,
+    shadowColor: '#B48A64',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 5,
+    marginBottom: 10,
   },
   disabledButton: {
     backgroundColor: '#CCCCCC',
+    shadowOpacity: 0,
   },
-  generateButtonText: {
+  generateVoucherButtonText: {
     color: '#FFF',
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
-  generateNote: {
-    fontSize: 12,
-    color: '#666',
+  paymentNote: {
+    fontSize: 13,
+    color: '#999',
     textAlign: 'center',
-    marginTop: 8,
     fontStyle: 'italic',
+  },
+  // View Monthly Bills Button Styles
+  viewBillsButtonContainer: {
+    marginHorizontal: 15,
+    marginBottom: 20,
+  },
+  viewBillsButton: {
+    backgroundColor: '#B48A64',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#B48A64',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 5,
+  },
+  viewBillsIcon: {
+    marginRight: 12,
+  },
+  viewBillsButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   // Voucher Modal Styles
   voucherModalContent: {
@@ -1877,86 +2014,82 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     paddingVertical: 10,
   },
-  // Tab Switcher Styles
+  // Tab Switcher Styles - Professional Card
   tabContainer: {
     flexDirection: 'row',
-    borderBottomWidth: 2,
-    borderBottomColor: '#E0E0E0',
-    marginBottom: 16,
+    marginBottom: 10,
   },
   tabButton: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 15,
     alignItems: 'center',
     position: 'relative',
+    borderBottomWidth: 3,
+    borderBottomColor: 'transparent',
   },
-  activeTabButton: {
-    backgroundColor: 'transparent',
+  activeTab: {
+    borderBottomColor: '#B48A64',
   },
-  tabText: {
-    fontSize: 15,
+  tabButtonText: {
+    fontSize: 14,
     fontWeight: '600',
-    color: '#666',
+    color: '#999',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   activeTabText: {
-    color: '#b48a64',
+    color: '#543A14',
     fontWeight: '700',
   },
-  activeTabUnderline: {
+  activeTabIndicator: {
     position: 'absolute',
     bottom: 0,
-    left: 0,
-    right: 0,
+    left: '25%',
+    right: '25%',
     height: 3,
-    backgroundColor: '#b48a64',
+    backgroundColor: '#B48A64',
     borderRadius: 3,
   },
-  // Filter Section Styles
+  // History Filter Styles - Card Based
   filterSection: {
-    backgroundColor: '#FFF9F0',
-    borderRadius: 10,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#E8DDD0',
-  },
-  filterHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  filterTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginLeft: 8,
+    backgroundColor: '#FFF',
+    borderRadius: 15,
+    padding: 20,
+    marginBottom: 20,
+    marginHorizontal: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   filterRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    gap: 10,
   },
   filterField: {
     flex: 1,
-    marginHorizontal: 4,
   },
   filterLabel: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 6,
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#999',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 8,
   },
   dropdown: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 8,
-    backgroundColor: '#FFF',
+    backgroundColor: '#F2E8DF',
+    padding: 15,
+    borderRadius: 10,
   },
   dropdownText: {
     fontSize: 14,
     color: '#333',
+    fontWeight: '600',
   },
   membershipInfo: {
     flexDirection: 'row',
@@ -1971,12 +2104,13 @@ const styles = StyleSheet.create({
     color: '#666',
     marginLeft: 8,
   },
-  // Bill Card Styles
+  // Bill Card Styles - Professional Horizontal Layout
   billCard: {
     backgroundColor: '#FFF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: 15,
+    padding: 20,
+    marginBottom: 15,
+    marginHorizontal: 15,
     borderWidth: 1,
     borderColor: '#E8DDD0',
     shadowColor: '#000',
@@ -1988,77 +2122,105 @@ const styles = StyleSheet.create({
   billHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 15,
+  },
+  billIconContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#F2E8DF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 15,
   },
   billInfo: {
     flex: 1,
-    marginLeft: 12,
   },
   billFilename: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
+    fontWeight: '700',
+    color: '#543A14',
+    letterSpacing: 0.5,
+    marginBottom: 4,
   },
   billPeriod: {
     fontSize: 12,
-    color: '#666',
-    marginTop: 4,
+    color: '#999',
   },
   billActions: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
+    gap: 10,
   },
-  actionButton: {
+  viewButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#B48A64',
+    backgroundColor: 'transparent',
+    gap: 8,
   },
-  viewButton: {
-    backgroundColor: '#b48a64',
-    borderColor: '#b48a64',
+  viewButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#B48A64',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   downloadButton: {
-    backgroundColor: 'transparent',
-    borderColor: '#b48a64',
-  },
-  actionButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FFF',
-    marginLeft: 8,
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    backgroundColor: '#F5E6D3',
+    borderWidth: 2,
+    borderColor: '#B48A64',
+    gap: 8,
   },
   downloadButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#b48a64',
-    marginLeft: 8,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#B48A64',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   listContent: {
     padding: 8,
+    paddingBottom: 40,
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: 80,
+    backgroundColor: '#FFF',
+    borderRadius: 15,
+    marginHorizontal: 15,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#E8DDD0',
   },
   emptyTitle: {
     fontSize: 20,
-    fontWeight: '600',
-    color: '#333',
+    fontWeight: '700',
+    color: '#543A14',
     marginTop: 16,
+    letterSpacing: 0.5,
   },
   emptyText: {
     fontSize: 14,
-    color: '#666',
+    color: '#999',
     textAlign: 'center',
     marginTop: 8,
     paddingHorizontal: 32,
+    lineHeight: 20,
   },
   loadingBillContainer: {
     flex: 1,
