@@ -477,37 +477,42 @@ const MonthlyBillHistory = ({ navigation }) => {
 
       {/* Year Dropdown Modal */}
       <Modal
-        visible={showYearDropdown}
-       transparent
-        animationType="fade"
-        onRequestClose={() => setShowYearDropdown(false)}
-      >
-        <TouchableOpacity
-         style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowYearDropdown(false)}
-        >
-          <View style={[styles.modalContent, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            {yearOptions.map((year) => (
-              <TouchableOpacity
-                key={year}
-               style={[
-                 styles.yearOption,
-                  selectedYear === year.toString() && { backgroundColor: theme.primary}
-                ]}
-                onPress={() => {
-                  setSelectedYear(year.toString());
-                  setShowYearDropdown(false);
-                }}
-              >
-                <Text style={[styles.yearOptionText, { color: theme.text }]}>
-                  {year}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </TouchableOpacity>
-      </Modal>
+  visible={showYearDropdown}
+  transparent
+  animationType="fade"
+  onRequestClose={() => setShowYearDropdown(false)}
+>
+  <TouchableOpacity
+    style={styles.modalOverlay}
+    activeOpacity={1}
+    onPress={() => setShowYearDropdown(false)}
+  >
+    {/* Use styles.dropdownModal to ensure a white background and elevation */}
+    <View style={styles.dropdownModal}>
+      <ScrollView>
+        {yearOptions.map((year) => (
+          <TouchableOpacity
+            key={year}
+            style={[
+              styles.dropdownOption,
+              selectedYear === year.toString() && styles.selectedOption
+            ]}
+            onPress={() => {
+              setSelectedYear(year.toString());
+              setShowYearDropdown(false);
+            }}
+          >
+            <Text style={styles.dropdownOptionText}>{year}</Text>
+            {/* Visual indicator for current selection */}
+            {selectedYear === year.toString() && (
+              <Icon name="check" size={20} color="#B48A64" />
+            )}
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    </View>
+  </TouchableOpacity>
+</Modal>
     </View>
   );
 };
